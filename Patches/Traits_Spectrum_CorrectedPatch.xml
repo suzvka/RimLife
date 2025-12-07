@@ -1,0 +1,305 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Patch>
+
+	<!-- Trait: SpeedOffset -->
+	<!-- Reasoning: The SpeedOffset trait affects movement speed and has no direct correlation with personality dimensions, so all dimensions remain neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="SpeedOffset"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: slowpoke -->
+						<li>
+							<degree>-1</degree>
+						</li>
+						<!-- Label: fast walker -->
+						<li>
+							<degree>1</degree>
+						</li>
+						<!-- Label: jogger -->
+						<li>
+							<degree>2</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: DrugDesire -->
+	<!-- Reasoning: The DrugDesire trait involves drug use tendencies. Chemical fascination/interest indicates high openness (trying new things), low conscientiousness (impulsive), and high neuroticism (emotionally unstable); teetotaler indicates low openness (conservative), high conscientiousness (self-disciplined), and low neuroticism (stable). Other dimensions are irrelevant. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="DrugDesire"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: chemical fascination -->
+						<li>
+							<degree>2</degree>
+							<openness>2</openness>
+							<conscientiousness>-2</conscientiousness>
+							<neuroticism>2</neuroticism>
+						</li>
+						<!-- Label: chemical interest -->
+						<li>
+							<degree>1</degree>
+							<openness>1</openness>
+							<conscientiousness>-1</conscientiousness>
+							<neuroticism>1</neuroticism>
+						</li>
+						<!-- Label: teetotaler -->
+						<li>
+							<degree>-1</degree>
+							<openness>-1</openness>
+							<conscientiousness>1</conscientiousness>
+							<neuroticism>-1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: NaturalMood -->
+	<!-- Reasoning: The NaturalMood trait affects natural mood. Sanguine/optimist indicates high extraversion (social), high agreeableness (friendly), and low neuroticism (stable); pessimist/depressive indicates low extraversion (introverted), low agreeableness (irritable), and high neuroticism (unstable). Other dimensions are irrelevant. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="NaturalMood"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: sanguine -->
+						<li>
+							<degree>2</degree>
+							<extraversion>2</extraversion>
+							<agreeableness>2</agreeableness>
+							<neuroticism>-2</neuroticism>
+						</li>
+						<!-- Label: optimist -->
+						<li>
+							<degree>1</degree>
+							<extraversion>1</extraversion>
+							<agreeableness>1</agreeableness>
+							<neuroticism>-1</neuroticism>
+						</li>
+						<!-- Label: pessimist -->
+						<li>
+							<degree>-1</degree>
+							<extraversion>-1</extraversion>
+							<agreeableness>-1</agreeableness>
+							<neuroticism>1</neuroticism>
+						</li>
+						<!-- Label: depressive -->
+						<li>
+							<degree>-2</degree>
+							<extraversion>-2</extraversion>
+							<agreeableness>-2</agreeableness>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: Nerves -->
+	<!-- Reasoning: The Nerves trait affects stress response. Iron-willed/steadfast indicates low neuroticism (stable); nervous/volatile indicates high neuroticism (unstable). Other dimensions are irrelevant. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Nerves"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: iron-willed -->
+						<li>
+							<degree>2</degree>
+							<neuroticism>-3</neuroticism>
+						</li>
+						<!-- Label: steadfast -->
+						<li>
+							<degree>1</degree>
+							<neuroticism>-1</neuroticism>
+						</li>
+						<!-- Label: nervous -->
+						<li>
+							<degree>-1</degree>
+							<neuroticism>1</neuroticism>
+						</li>
+						<!-- Label: volatile -->
+						<li>
+							<degree>-2</degree>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: Neurotic -->
+	<!-- Reasoning: The Neurotic trait directly maps to the neuroticism dimension. Neurotic indicates high neuroticism, and very neurotic is more extreme. Other dimensions are irrelevant. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Neurotic"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: neurotic -->
+						<li>
+							<degree>1</degree>
+							<neuroticism>2</neuroticism>
+						</li>
+						<!-- Label: very neurotic -->
+						<li>
+							<degree>2</degree>
+							<neuroticism>3</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: Industriousness -->
+	<!-- Reasoning: The Industriousness trait is directly related to work diligence. A high degree (industrious, hard worker) indicates high conscientiousness, while a low degree (lazy, slothful) indicates low conscientiousness. Other dimensions are irrelevant and remain neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Industriousness"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: industrious -->
+						<li>
+							<degree>2</degree>
+							<conscientiousness>3</conscientiousness>
+						</li>
+						<!-- Label: hard worker -->
+						<li>
+							<degree>1</degree>
+							<conscientiousness>2</conscientiousness>
+						</li>
+						<!-- Label: lazy -->
+						<li>
+							<degree>-1</degree>
+							<conscientiousness>-2</conscientiousness>
+						</li>
+						<!-- Label: slothful -->
+						<li>
+							<degree>-2</degree>
+							<conscientiousness>-3</conscientiousness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+	<!-- Trait: PsychicSensitivity -->
+	<!-- Reasoning: The PsychicSensitivity trait is related to psychic sensitivity. Dimensions are irrelevant. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="PsychicSensitivity"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: psychically hypersensitive -->
+						<li>
+							<degree>2</degree>
+						</li>
+						<!-- Label: psychically sensitive -->
+						<li>
+							<degree>1</degree>
+						</li>
+						<!-- Label: psychically dull -->
+						<li>
+							<degree>-1</degree>
+						</li>
+						<!-- Label: psychically deaf -->
+						<li>
+							<degree>-2</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+	<!-- Trait: ShootingAccuracy -->
+	<!-- Reasoning: The ShootingAccuracy trait is related to shooting behavior. Careful shooter indicates high conscientiousness (due to being careful and orderly) and low neuroticism (due to being calm), while trigger-happy indicates low conscientiousness (impulsive) and high neuroticism (easily excited). Other dimensions are irrelevant. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="ShootingAccuracy"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: careful shooter -->
+						<li>
+							<degree>1</degree>
+							<conscientiousness>2</conscientiousness>
+							<neuroticism>-2</neuroticism>
+						</li>
+						<!-- Label: trigger-happy -->
+						<li>
+							<degree>-1</degree>
+							<conscientiousness>-2</conscientiousness>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+	<!-- Trait: Beauty -->
+	<!-- Reasoning: The Beauty trait is a physical characteristic. Dimensions are irrelevant, except for 'ugly' which may affect social confidence. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Beauty"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: beautiful -->
+						<li>
+							<degree>2</degree>
+						</li>
+						<!-- Label: pretty -->
+						<li>
+							<degree>1</degree>
+						</li>
+						<!-- Label: ugly -->
+						<li>
+							<degree>-1</degree>
+							<extraversion>-1</extraversion>
+							<neuroticism>1</neuroticism>
+						</li>
+						<!-- Label: staggeringly ugly -->
+						<li>
+							<degree>-2</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+	<!-- Trait: Immunity -->
+	<!-- Reasoning: The Immunity trait is related to the immune system. Dimensions are irrelevant. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Immunity"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: super-immune -->
+						<li>
+							<degree>1</degree>
+						</li>
+						<!-- Label: sickly -->
+						<li>
+							<degree>-1</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+</Patch>

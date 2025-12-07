@@ -1,0 +1,29 @@
+<Defs>
+  <RulePackDef>
+    <defName>RimLife_Bio_Templates</defName>
+    <rulePack>
+      <rulesStrings>
+        <!-- === 根模板 === -->
+        <li>Bio_Root->[Bio_Intro]\n[Bio_Health_Status]\n[Bio_Mood_Status]\n[Bio_Capability_Status]</li>
+
+        <!-- === 1. 身份引入 === -->
+        <li>Bio_Intro->[SUBJECT_Label]，一名[SUBJECT_Age]岁的[SUBJECT_Gender][SUBJECT_Race]。[SUBJECT_Pronoun]曾是一名[BACKSTORY_Childhood]，现在属于[FACTION_Name]派系。</li>
+
+        <!-- === 2. 健康状况 (带条件的分支) === -->
+        <!-- 利用 Constants 进行分支选择 -->
+        <!-- 逻辑：如果 Const(HasInjuries)==True，则使用第一个模板，否则使用第二个 -->
+        <!-- 注意：RimWorld 原生语法对 if-else 支持有限，通常通过 Constraint 实现 -->
+        
+        <!-- 方式 A: 简单拼接 (如你示例所示) -->
+        <!-- 如果 HEALTH_Injuries_Desc 为空字符串，这里就会显示为空，不会报错 -->
+        <li>Bio_Health_Status->目前，[SUBJECT_Pronoun]的身体状况[HEALTH_General_Condition]。[HEALTH_Injuries_Desc]</li>
+
+        <!-- === 3. 心理状态 === -->
+        <li>Bio_Mood_Status->[SUBJECT_Pronoun]性格[TRAIT_List_String]。当前心情[MOOD_General_Level]。[MOOD_Thought_Summary]</li>
+
+        <!-- === 4. 能力 === -->
+        <li>Bio_Capability_Status->在技能方面，[SUBJECT_Pronoun]是[SKILL_Best_String]方面的专家，但[SKILL_Worst_String]不仅糟糕，甚至可能是个灾难。</li>
+      </rulesStrings>
+    </rulePack>
+  </RulePackDef>
+</Defs>

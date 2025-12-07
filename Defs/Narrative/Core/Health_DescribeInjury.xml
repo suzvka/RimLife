@@ -1,0 +1,39 @@
+<Defs>
+
+  <!-- === 模板 1: 严重伤情描述 === -->
+  <RimLife.Narrative.NarrativeTemplateDef>
+    <defName>Health_SevereInjury</defName>
+    
+    <!-- 逻辑元数据 -->
+    <function>Intro</function>
+    <syntacticType>FullSentence</syntacticType>
+    <baseWeight>0.8</baseWeight>
+    <fixedPolarity>Negative</fixedPolarity>
+    <topic>Health</topic> <!-- 话题归属 -->
+
+    <!-- 多语言文本 -->
+    <templates>
+      <en>{SUBJECT_Label} is suffering from a {ADJ_Severity} {NOUN_Injury} on {SUBJECT_Possessive} {NOUN_Part}.</en>
+      <!-- 注意：这里可以直接写复杂的中文语序 -->
+      <zh-cn>{SUBJECT_Label}的{NOUN_Part}受了{ADJ_Severity}{NOUN_Injury}。</zh-cn>
+      <jp>{SUBJECT_Label}の{NOUN_Part}には{ADJ_Severity}{NOUN_Injury}がある。</jp>
+    </templates>
+  </RimLife.Narrative.NarrativeTemplateDef>
+
+
+  <!-- === 模板 2: 包扎情况 (作为补充) === -->
+  <RimLife.Narrative.NarrativeTemplateDef>
+    <defName>Health_TendingStatus</defName>
+    
+    <function>Elaboration</function> <!-- 补充说明 -->
+    <syntacticType>Participle</syntacticType> <!-- 分词/状态描述 -->
+    <baseWeight>0.5</baseWeight>
+    <topic>Health</topic> <!-- 话题归属 -->
+
+    <templates>
+      <en>which has been {ADJ_Tending}.</en>
+      <zh-cn>伤口{ADJ_Tending}。</zh-cn> <!-- 中文习惯另起短句 -->
+    </templates>
+  </RimLife.Narrative.NarrativeTemplateDef>
+
+</Defs>

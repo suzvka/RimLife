@@ -1,0 +1,635 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Patch>
+
+	<!-- Reasoning: Nudist reflects openness to unconventional experiences, so openness positive; other traits neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Nudist"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: nudist -->
+						<li>
+							<degree>0</degree>
+							<openness>2</openness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Bloodlust involves impulsivity (low conscientiousness), low agreeableness (hostility), and high neuroticism (emotional instability); extraversion slightly positive due to combat enjoyment. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Bloodlust"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: bloodlust -->
+						<li>
+							<degree>0</degree>
+							<conscientiousness>-2</conscientiousness>
+							<extraversion>1</extraversion>
+							<agreeableness>-3</agreeableness>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Kindness high in agreeableness and slight extraversion (socialbility), with low neuroticism (calmness); other traits neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Kind"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: kind -->
+						<li>
+							<degree>0</degree>
+							<conscientiousness>1</conscientiousness>
+							<agreeableness>3</agreeableness>
+							<neuroticism>-1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Psychopath shows low agreeableness (lack of empathy), low conscientiousness (disorganized), and low neuroticism (emotional stability); other traits neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Psychopath"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: psychopath -->
+						<li>
+							<degree>0</degree>
+							<conscientiousness>-2</conscientiousness>
+							<extraversion>-1</extraversion>
+							<agreeableness>-3</agreeableness>
+							<neuroticism>-2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Cannibal open to extreme experiences (high openness), low agreeableness (cruelty), and slight neuroticism (unstable); other traits neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Cannibal"]</xpath>
+		<value>
+			<modExtensions>
+				<!-- Reasoning: Cannibal embraces extreme taboo-breaking (high openness), lacks empathy (very low agreeableness), and exhibits psychological instability from moral deviation (slight neuroticism); other traits neutral. -->
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: cannibal -->
+						<li>
+							<degree>0</degree>
+							<openness>2</openness>
+							<agreeableness>-3</agreeableness>
+							<neuroticism>1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The Abrasive trait causes negative social interactions and irritability, thus agreeableness is negative and neuroticism is positive; other dimensions are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Abrasive"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: abrasive -->
+						<li>
+							<degree>0</degree>
+							<agreeableness>-2</agreeableness>
+							<neuroticism>1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The TooSmart trait indicates high intelligence and curiosity, hence high openness; but the increased rest rate may reflect anxiety, so neuroticism is slightly positive; other dimensions are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="TooSmart"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: too smart -->
+						<li>
+							<degree>0</degree>
+							<openness>2</openness>
+							<neuroticism>1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The Brawler trait prefers melee combat and is aggressive, thus agreeableness is negative; may be confident, so extraversion is slightly positive; other dimensions are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Brawler"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: brawler -->
+						<li>
+							<degree>0</degree>
+							<extraversion>1</extraversion>
+							<agreeableness>-2</agreeableness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The Masochist trait derives pleasure from pain, reflecting an openness to unusual experiences, hence openness is slightly positive; emotional abnormality leads to high neuroticism; other dimensions are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Masochist"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: masochist -->
+						<li>
+							<degree>0</degree>
+							<openness>1</openness>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The NightOwl trait prefers nocturnal activities and an unconventional schedule, thus openness is slightly positive; reduced social interaction leads to slightly negative extraversion; other dimensions are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="NightOwl"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: night owl -->
+						<li>
+							<degree>0</degree>
+							<openness>1</openness>
+							<extraversion>-1</extraversion>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Greedy trait implies selfishness and material desire, often leading to competitive behavior and lower cooperativeness, thus reducing agreeableness. Other dimensions are less affected. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Greedy"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: greedy -->
+						<li>
+							<degree>0</degree>
+							<agreeableness>-1</agreeableness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Jealousy involves distrust, social comparison, and emotional instability, resulting in lower agreeableness (due to rivalry) and higher neuroticism (due to anxiety). Other dimensions are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Jealous"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: jealous -->
+						<li>
+							<degree>0</degree>
+							<agreeableness>-1</agreeableness>
+							<neuroticism>1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Asceticism reflects discipline, simplicity, and introversion; it aligns with higher conscientiousness (due to self-control), lower extraversion (preference for solitude), and lower neuroticism (emotional stability). Openness is slightly reduced due to conventional preferences, while agreeableness is neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Ascetic"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: ascetic -->
+						<li>
+							<degree>0</degree>
+							<openness>-1</openness>
+							<conscientiousness>1</conscientiousness>
+							<extraversion>-1</extraversion>
+							<neuroticism>-1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Sexual orientation (gay) does not inherently influence personality dimensions; it is unrelated to OCEAN traits, so all values are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Gay"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: gay -->
+						<li>
+							<degree>0</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Sexual orientation (bisexual) does not inherently influence personality dimensions; it is unrelated to OCEAN traits, so all values are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Bisexual"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: bisexual -->
+						<li>
+							<degree>0</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Asexual trait does not significantly impact personality dimensions as it primarily affects romantic behavior without altering core psychological traits. Thus, all values are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Asexual"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: asexual -->
+						<li>
+							<degree>0</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: AnnoyingVoice is a physical trait that may cause social penalties but does not directly reflect psychological dimensions. Thus, all values are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="AnnoyingVoice"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: annoying voice -->
+						<li>
+							<degree>0</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: CreepyBreathing is a physical trait similar to AnnoyingVoice, with no direct psychological implications. Thus, all values are neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="CreepyBreathing"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: creepy breathing -->
+						<li>
+							<degree>0</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Pyromaniac reflects impulsivity and disorganization, leading to low conscientiousness (disordered) and high neuroticism (emotionally unstable). Agreeableness is neutral as pyromania is a pathological impulse, not necessarily tied to unfriendliness or lack of empathy. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Pyromaniac"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: pyromaniac -->
+						<li>
+							<degree>0</degree>
+							<conscientiousness>-3</conscientiousness>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: Wimp indicates high sensitivity to pain and tendency to break down easily, reflecting high neuroticism (anxiety-prone). Other dimensions are unaffected as it is primarily a physical response trait. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Wimp"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: wimp -->
+						<li>
+							<degree>0</degree>
+							<neuroticism>3</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: Nimble -->
+	<!-- Reasoning: [Correction] Nimble is primarily a pure motor function. A nimble person could be a calm master (low N) or a neurotic individual who reacts quickly due to hyper-vigilance (high N). To maintain character diversity and avoid physical attributes contaminating the psychological profile, this should remain neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Nimble"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: nimble -->
+						<li>
+							<degree>0</degree>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: FastLearner -->
+	<!-- Reasoning: The FastLearner trait increases learning speed, indicating high openness and curiosity (high openness), and may involve some self-discipline (slightly high conscientiousness). It is unrelated to other dimensions like extraversion, agreeableness, or neuroticism, so these remain neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="FastLearner"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: fast learner -->
+						<li>
+							<degree>0</degree>
+							<openness>2</openness>
+							<conscientiousness>1</conscientiousness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: SlowLearner -->
+	<!-- Reasoning: SlowLearner represents a very low rate of experience absorption, core to which is cognitive closure (very low Openness). Correction: Removed the penalty for Conscientiousness. A slow learner can be a diligent cleaner or hauler. Keeping their C-axis neutral allows for narrative archetypes like "the slow bird flies early" or "the industrious fool". -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="SlowLearner"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: slow learner -->
+						<li>
+							<degree>0</degree>
+							<openness>-2</openness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: Undergrounder -->
+	<!-- Reasoning: The Undergrounder trait indicates a preference for underground environments, suggesting conservatism (low openness), introversion (low extraversion), and emotional stability (low neuroticism). It is unrelated to conscientiousness or agreeableness, so these remain neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Undergrounder"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: undergrounder -->
+						<li>
+							<degree>0</degree>
+							<!-- This person has low openness to the natural world, content with artificial environments -->
+							<openness>-1</openness>
+							<!-- Correction: Liking the underground doesn't mean extreme social anxiety, just slightly lowered to reflect a "homebody" attribute -->
+							<extraversion>-1</extraversion>
+							<!-- Correction: Immunity to claustrophobia reflects emotional stability in specific environments -->
+							<neuroticism>-1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Trait: Transhumanist -->
+	<!-- Reasoning: The Transhumanist trait indicates an open attitude towards body modification, reflecting very high openness. It is unrelated to other dimensions like conscientiousness, extraversion, agreeableness, or neuroticism, so these remain neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Transhumanist"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: body modder -->
+						<li>
+							<degree>0</degree>
+							<openness>3</openness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The Body Purist trait indicates a rejection of body modification, preferring conservatism and convention, thus openness is low (-2). Prejudice against bionic users leads to low agreeableness (-1). Their rigid adherence to the "natural body" reflects rigid conscientiousness, so conscientiousness is slightly high (1). Neuroticism is 0, as breakdowns are situational rather than daily emotional instability. Other dimensions are unrelated. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="BodyPurist"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: body purist -->
+						<li>
+							<degree>0</degree>
+							<openness>-2</openness>
+							<conscientiousness>1</conscientiousness>
+							<agreeableness>-1</agreeableness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The DislikesMen trait indicates prejudice against men, leading to social unfriendliness and suspicion, thus agreeableness is low (-2). Prejudice may stem from emotional instability or anxiety, so neuroticism is high (2), and may reduce social interaction, so extraversion is slightly low (-1). Other dimensions are unrelated. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="DislikesMen"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: misandrist -->
+						<li>
+							<degree>0</degree>
+							<extraversion>-1</extraversion>
+							<agreeableness>-2</agreeableness>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The DislikesWomen trait is similar to DislikesMen, indicating prejudice against women, thus agreeableness is low (-2), neuroticism is high (2), and may reduce social interaction, so extraversion is slightly low (-1). Other dimensions are unrelated. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="DislikesWomen"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: misogynist -->
+						<li>
+							<degree>0</degree>
+							<extraversion>-1</extraversion>
+							<agreeableness>-2</agreeableness>
+							<neuroticism>2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The Great Memory trait indicates enhanced memory and learning ability, usually associated with curiosity and openness, thus openness is high (2). Correction: Talent does not equal diligence. Correction: Good memory does not imply strong stress resistance. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="GreatMemory"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: great memory -->
+						<li>
+							<degree>0</degree>
+							<openness>2</openness>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: The Tough trait indicates resilience and damage reduction, reflecting emotional stability and calmness, thus neuroticism is low (-2). Other dimensions have no direct game impact or descriptive association, so they remain neutral. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Tough"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: tough -->
+						<li>
+							<degree>0</degree>
+							<neuroticism>-2</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+	<!-- Reasoning: TorturedArtist exhibits high openness (high creativity, imagination) and high neuroticism (emotional instability, prone to breakdowns), low conscientiousness (disorganized), low extraversion (introverted, focused on art), and low agreeableness (emotional, prone to conflict). -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="TorturedArtist"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: tortured artist -->
+						<li>
+							<degree>0</degree>
+							<openness>3</openness>
+							<conscientiousness>-2</conscientiousness>
+							<extraversion>-2</extraversion>
+							<agreeableness>-1</agreeableness>
+							<neuroticism>3</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+	<!-- Reasoning: Gourmand exhibits moderate openness (curious about food experiences but more physiologically driven), low conscientiousness (impulsive overeating, lack of self-control), slightly high extraversion (possibly social dining), neutral agreeableness (possibly selfish behavior), and neutral neuroticism. -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="Gourmand"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: gourmand -->
+						<li>
+							<degree>0</degree>
+							<openness>1</openness>
+							<conscientiousness>-2</conscientiousness>
+							<extraversion>1</extraversion>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+	<!-- Reasoning: QuickSleeper exhibits high conscientiousness (efficient, organized) and low neuroticism (good sleep, emotionally stable), with other dimensions being neutral (unrelated to openness, extraversion, or agreeableness). -->
+	<Operation Class="PatchOperationAdd">
+		<xpath>Defs/TraitDef[defName="QuickSleeper"]</xpath>
+		<value>
+			<modExtensions>
+				<li Class="RimLife.PersonalityExtension">
+					<data>
+						<!-- Label: quick sleeper -->
+						<li>
+							<degree>0</degree>
+							<conscientiousness>2</conscientiousness>
+							<neuroticism>-1</neuroticism>
+						</li>
+					</data>
+				</li>
+			</modExtensions>
+		</value>
+	</Operation>
+
+</Patch>
