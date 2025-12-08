@@ -73,22 +73,43 @@ namespace RimLife
         // 简单起见，这里可以定死，或者留空由代码动态判断
         public Polarity fixedPolarity = Polarity.Neutral;
 
-        // 获取当前语言模板的便捷方法
+
+        /// <summary>
+        /// 硬约束：Fact 必须包含这些标签，否则不能使用该模板。
+        /// </summary>
+        public List<string> requiredTags = new List<string>();
+
+        /// <summary>
+        /// 软偏好：模板在各个标签维度上的“纯粹性/关联度”，用于打分。
+        /// key: 标签字符串，例如 "health.injury" / "mood.negative"
+        /// value: 0~1 或任意你喜欢的范围
+        /// </summary>
+        public Dictionary<string, float> tagWeights = new Dictionary<string, float>();
+
         public string GetTemplate()
         {
-            // 1. 尝试获取当前激活语言
-            string curLang = LanguageDatabase.activeLanguage.folderName.ToLower();
-            if (templates.TryGetValue(curLang, out string text) && !string.IsNullOrWhiteSpace(text))
-                return text;
+            // 你之前已经实现过的逻辑，保持不变：
+            // 1. 根据当前语言 key 查 templates
+            // 2. 找不到则返回第一个非空模板
+            // 3. 全部为空时返回 "[defName_NoText]"
+            string curLang = LanguageDatabase.activeLanguage.folderName.ToLowerInvariant();
 
-            // 2. 返回第一个非空模板（按语言代码排序）
-            foreach (var kvp in templates.OrderBy(k => k.Key))
+            if (templates != null &&
+                templates.TryGetValue(curLang, out string text) &&
+                !string.IsNullOrWhiteSpace(text))
             {
-                if (!string.IsNullOrWhiteSpace(kvp.Value))
-                    return kvp.Value;
+                return text;
             }
 
-            // 3. 都没有，返回 DefName 以便调试
+            if (templates != null && templates.Count > 0)
+            {
+                foreach (var kvp in templates.OrderBy(k => k.Key))
+                {
+                    if (!string.IsNullOrWhiteSpace(kvp.Value))
+                        return kvp.Value;
+                }
+            }
+
             return $"[{defName}_NoText]";
         }
     }

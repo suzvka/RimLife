@@ -1,39 +1,84 @@
 <Defs>
+	<RimLife.NarrativeTemplateDef>
+		<defName>Health_SevereInjury</defName>
 
-  <!-- === 模板 1: 严重伤情描述 === -->
-  <RimLife.Narrative.NarrativeTemplateDef>
-    <defName>Health_SevereInjury</defName>
-    
-    <!-- 逻辑元数据 -->
-    <function>Intro</function>
-    <syntacticType>FullSentence</syntacticType>
-    <baseWeight>0.8</baseWeight>
-    <fixedPolarity>Negative</fixedPolarity>
-    <topic>Health</topic> <!-- 话题归属 -->
+		<function>Intro</function>
+		<syntacticType>FullSentence</syntacticType>
+		<baseWeight>0.8</baseWeight>
+		<fixedPolarity>Negative</fixedPolarity>
+		<topic>Health</topic>
 
-    <!-- 多语言文本 -->
-    <templates>
-      <en>{SUBJECT_Label} is suffering from a {ADJ_Severity} {NOUN_Injury} on {SUBJECT_Possessive} {NOUN_Part}.</en>
-      <!-- 注意：这里可以直接写复杂的中文语序 -->
-      <zh-cn>{SUBJECT_Label}的{NOUN_Part}受了{ADJ_Severity}{NOUN_Injury}。</zh-cn>
-      <jp>{SUBJECT_Label}の{NOUN_Part}には{ADJ_Severity}{NOUN_Injury}がある。</jp>
-    </templates>
-  </RimLife.Narrative.NarrativeTemplateDef>
+		<!-- 必须是“与健康伤口相关”的事实 -->
+		<requiredTags>
+			<li>health</li>
+			<li>health.injury</li>
+		</requiredTags>
 
+		<!-- 在这些维度上有较高“纯度”的句子 -->
+		<tagWeights>
+			<li>
+				<key>health</key>
+				<value>1.0</value>
+			</li>
+			<li>
+				<key>health.injury</key>
+				<value>1.0</value>
+			</li>
+			<li>
+				<key>health.severe</key>
+				<value>0.8</value>
+			</li>
+			<li>
+				<key>mood.negative</key>
+				<value>0.3</value>
+			</li>
+		</tagWeights>
 
-  <!-- === 模板 2: 包扎情况 (作为补充) === -->
-  <RimLife.Narrative.NarrativeTemplateDef>
-    <defName>Health_TendingStatus</defName>
-    
-    <function>Elaboration</function> <!-- 补充说明 -->
-    <syntacticType>Participle</syntacticType> <!-- 分词/状态描述 -->
-    <baseWeight>0.5</baseWeight>
-    <topic>Health</topic> <!-- 话题归属 -->
+		<!-- 多语言文本：Dictionary 结构 -->
+		<templates>
+			<li>
+				<key>en</key>
+				<value>{SUBJECT_Label} is suffering from a {ADJ_Severity} {NOUN_Injury} on {SUBJECT_Possessive} {NOUN_Part}.</value>
+			</li>
+			<li>
+				<key>zh-cn</key>
+				<value>{SUBJECT_Label}的{NOUN_Part}遭受了{ADJ_Severity}的{NOUN_Injury}。</value>
+			</li>
+		</templates>
+	</RimLife.NarrativeTemplateDef>
 
-    <templates>
-      <en>which has been {ADJ_Tending}.</en>
-      <zh-cn>伤口{ADJ_Tending}。</zh-cn> <!-- 中文习惯另起短句 -->
-    </templates>
-  </RimLife.Narrative.NarrativeTemplateDef>
+	<!-- === 模板 2: 处理情况说明 === -->
+	<RimLife.NarrativeTemplateDef>
+		<requiredTags>
+			<li>health</li>
+			<li>health.injury</li>
+			<li>health.tended</li>
+		</requiredTags>
+		<tagWeights>
+			<li>
+				<key>health</key>
+				<value>1.0</value>
+			</li>
+			<li>
+				<key>health.injury</key>
+				<value>0.7</value>
+			</li>
+			<li>
+				<key>health.tended</key>
+				<value>1.0</value>
+			</li>
+		</tagWeights>
+
+		<templates>
+			<li>
+				<key>en</key>
+				<value>which has been {ADJ_Tending}.</value>
+			</li>
+			<li>
+				<key>zh-cn</key>
+				<value>伤口{ADJ_Tending}。</value>
+			</li>
+		</templates>
+	</RimLife.NarrativeTemplateDef>
 
 </Defs>
