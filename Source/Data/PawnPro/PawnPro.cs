@@ -4,12 +4,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Verse;
-using UnityEngine; // ���� Mathf
+using UnityEngine; // 用于 Mathf
 
 namespace RimLife
 {
     /// <summary>
-    /// ���� Pawn �Ŀ������
+    /// 定义 Pawn 的宽泛类别。
     /// </summary>
     public enum PawnType
     {
@@ -22,11 +22,11 @@ namespace RimLife
     }
 
     /// <summary>
-    /// ��ʾ Pawn ������ϵ�������ϵ�Ĺ�ϵ��
+    /// 表示 Pawn 所在派系与玩家派系的关系。
     /// </summary>
     public enum PawnRelation
     {
-        OurParty, // �����ϵ��Ա
+        OurParty, // 玩家派系成员
         Ally,
         Neutral,
         Enemy,
@@ -34,17 +34,17 @@ namespace RimLife
     }
 
     /// <summary>
-    /// Ϊ Pawn �ṩһ���������������������ڻ�ȡ��ϸ��Ϣ���ӳټ���ģ�顣
-    /// �����ɱ��ͣ�����ļ��㱻�Ƴٵ������ض����ԣ����� .Perspective��ʱ��ִ�С�
-    /// ע�⣺���������ݿ��գ������Զ����¡�����������Ϸ�߳��ϴ����ͷ��ʡ�
-    /// ���ݵ�ʱ��һ���Բ����ϸ�֤���������������Ի�������Ŀ�ģ�����������Ҫʵʱ��֤��ϵͳ��
+    /// 为 Pawn 提供一个轻量级代理，包含用于获取详细信息的延迟加载模块。
+    /// 创建成本低；昂贵的计算被推迟到访问特定属性（例如 .Perspective）时才执行。
+    /// 注意：此类是数据快照，不会自动更新。必须在主游戏线程上创建和访问。
+    /// 数据的时序一致性不被严格保证；它适用于描述性或叙事性目的，不适用于需要实时验证的系统。
     /// </summary>
     public class PawnPro
     {
-        // ԭʼ�� Pawn ���ã����ڰ�����ȡ���ݡ�
+        // 原始的 Pawn 引用，用于按需提取数据。
         private readonly Pawn _sourcePawn;
 
-        // --- 1. ����Ԫ���� ---
+        // --- 1. 基本元数据 ---
         public string ID { get; }
         public string Name { get; }
         public string FullName { get; }
@@ -56,16 +56,16 @@ namespace RimLife
 
         public bool IsDead => _sourcePawn.Dead;
         public bool IsDowned => _sourcePawn.Downed;
-        // ����ʶ״̬�Ŀհ�ȫ��顣
+        // 对意识状态的空安全检查。
         public bool IsAwake => _sourcePawn.jobs?.curDriver?.asleep == false;
 
-        // --- ���캯�� ---
+        // --- 构造函数 ---
         public PawnPro(Pawn pawn)
         {
             if (pawn == null) throw new ArgumentNullException(nameof(pawn));
             _sourcePawn = pawn;
 
-            // ��Ի�е��/����Ŀհ�ȫ��ʼ�����ˡ�
+            // 针对机械体/动物的空安全初始化回退。
             ID = pawn.ThingID;
             Name = pawn.Name?.ToStringShort ?? pawn.LabelShortCap ?? pawn.LabelShort ?? "?";
             FullName = pawn.Name?.ToStringFull ?? pawn.LabelCap ?? Name;
@@ -76,7 +76,7 @@ namespace RimLife
             PawnType = GetPawnType(pawn);
         }
 
-        // --- 2. �ӳټ���ģ�� ---
+        // --- 2. 延迟加载模块 ---
 
         private HealthInfo _health;
         public HealthInfo Health => _health ??= HealthInfo.CreateFrom(_sourcePawn);
@@ -85,7 +85,7 @@ namespace RimLife
         public NeedsInfo Needs => _needs ??= NeedsInfo.CreateFrom(_sourcePawn);
 
         private MoodInfo _mood;
-        // ʹ�ÿ�ֵ�ϲ���ֵ��������л��档
+        // 使用空值合并赋值运算符进行缓存。
         public MoodInfo Mood => _mood ??= (PawnType == PawnType.Character ? MoodInfo.CreateFrom(_sourcePawn) : null);
 
         private SkillsInfo _skills;
@@ -103,7 +103,7 @@ namespace RimLife
         private BackstoryInfo _backstory;
         public BackstoryInfo Backstory => _backstory ??= BackstoryInfo.CreateFrom(_sourcePawn);
 
-        // --- �������� ---
+        // --- 辅助方法 ---
         private static PawnType GetPawnType(Pawn p)
         {
             if (p.RaceProps.Humanlike) return PawnType.Character;
