@@ -43,68 +43,16 @@ namespace RimLife
 
         private string RealizeDomain(SlotRequest slot, Fact fact)
         {
-            if (fact?.SourcePayload is HealthNarrative health)
+            // 1) 只看 Fact 自己的 domainLexemes
+            if (fact != null &&
+                fact.TryGetDomainLexeme(slot.Name, out var value) &&
+                !string.IsNullOrWhiteSpace(value))
             {
-                if (string.Equals(slot.Name, "NOUN_Part", StringComparison.OrdinalIgnoreCase))
-                    return ResolveHealthBodyPart(health);
-
-                if (string.Equals(slot.Name, "NOUN_Injury", StringComparison.OrdinalIgnoreCase))
-                    return ResolveHealthInjuryNoun(health);
+                return value;
             }
 
-            if (fact?.Topic == FactTopic.Health)
-            {
-                if (TryTranslate("RimLife.Health.Domain.Injury", out var localized))
-                    return localized;
-
-                return "injury";
-            }
-
+            // 2) 不再做任何“领域特例”逻辑，这些都应该在构建 Fact 时完成
             return string.Empty;
-        }
-
-        private static string ResolveHealthInjuryNoun(HealthNarrative health)
-        {
-            if (!string.IsNullOrWhiteSpace(health.Noun))
-                return health.Noun;
-
-            if (TryTranslate("RimLife.Health.Domain.Injury", out var localized))
-                return localized;
-
-            return "injury";
-        }
-
-        private static string ResolveHealthBodyPart(HealthNarrative health)
-        {
-            if (health?.RelatedNouns != null &&
-                health.RelatedNouns.TryGetValue("OnPart", out var part) &&
-                !string.IsNullOrWhiteSpace(part))
-            {
-                return part;
-            }
-
-            return TryTranslate("RimLife.Health.Body.Generic", out var localized)
-                ? localized
-                : "body";
-        }
-
-        private static bool TryTranslate(string key, out string text)
-        {
-            text = null;
-            if (string.IsNullOrWhiteSpace(key))
-                return false;
-
-            if (key.CanTranslate())
-            {
-                var resolved = key.Translate().ToString();
-                if (!string.IsNullOrWhiteSpace(resolved))
-                {
-                    text = resolved;
-                    return true;
-                }
-            }
-
-            return false;
         }
 
     }

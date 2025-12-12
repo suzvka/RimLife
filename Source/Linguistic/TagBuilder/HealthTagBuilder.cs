@@ -109,14 +109,45 @@ namespace RimLife
         {
             var profile = BuildSemanticProfile(narrative);
 
+            var domainLexemes = new Dictionary<string, string>();
+
+            domainLexemes["NOUN_Part"] = ResolveHealthBodyPart(narrative);
+            domainLexemes["NOUN_Injury"] = ResolveHealthInjuryNoun(narrative);
+
             return new Fact(
                 topic: FactTopic.Health,
-                subtopic: "Injury", // 或根据 narrative 类型区分
+                subtopic: "Injury",
                 salience: salience,
                 subject: pawn,
                 target: null,
                 semantics: profile,
+                domainLexemes: domainLexemes,
                 sourcePayload: narrative);
+        }
+
+        private static string ResolveHealthInjuryNoun(HealthNarrative health)
+        {
+            if (!string.IsNullOrWhiteSpace(health.Noun))
+                return health.Noun;
+
+            if (Tool.TryTranslate("RimLife.Health.Domain.Injury", out var localized))
+                return localized;
+
+            return "injury";
+        }
+
+        private static string ResolveHealthBodyPart(HealthNarrative health)
+        {
+            if (health?.RelatedNouns != null &&
+                health.RelatedNouns.TryGetValue("OnPart", out var part) &&
+                !string.IsNullOrWhiteSpace(part))
+            {
+                return part;
+            }
+
+            return Tool.TryTranslate("RimLife.Health.Body.Generic", out var localized)
+                ? localized
+                : "body";
         }
     }
 }

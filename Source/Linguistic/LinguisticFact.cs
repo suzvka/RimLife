@@ -1,5 +1,6 @@
-using System;
 using RimWorld;
+using System;
+using System.Collections.Generic;
 using Verse;
 
 namespace RimLife
@@ -48,6 +49,9 @@ namespace RimLife
         /// </summary>
         public TagSet Tags => Semantics.Tags;
 
+        // 新增：Fact 自带的“领域槽位词汇表”
+        public IReadOnlyDictionary<string, string> DomainLexemes { get; }
+
         public Fact(
             FactTopic topic,
             string subtopic,
@@ -55,6 +59,7 @@ namespace RimLife
             PawnPro subject,
             PawnPro target,
             SemanticProfile semantics,
+            IReadOnlyDictionary<string, string> domainLexemes = null,
             object sourcePayload = null)
         {
             Topic = topic;
@@ -64,6 +69,30 @@ namespace RimLife
             Target = target;
             Semantics = semantics ?? throw new ArgumentNullException(nameof(semantics));
             SourcePayload = sourcePayload;
+
+            if (domainLexemes == null || domainLexemes.Count == 0)
+            {
+                DomainLexemes = EmptyDomainLexemes;
+            }
+            else
+            {
+                // 复制一份，确保内部是大小写无关 & 不被外部修改
+                DomainLexemes = new Dictionary<string, string>(domainLexemes,
+                    StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        // 可以在 Fact 类里加一个静态空字典，避免每次都 new：
+        private static readonly IReadOnlyDictionary<string, string> EmptyDomainLexemes =
+            new Dictionary<string, string>(0, StringComparer.OrdinalIgnoreCase);
+
+        public bool TryGetDomainLexeme(string slotName, out string value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(slotName))
+                return false;
+
+            return DomainLexemes != null && DomainLexemes.TryGetValue(slotName, out value);
         }
     }
 
