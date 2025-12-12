@@ -13,145 +13,164 @@ namespace RimLife
     public sealed class SentenceConstraint
     {
         /// <summary>
-        /// 想聊的事实话题，比如 Health / Work / Needs / ...
+        /// 想聊的事实话题，比如 Health / Mood / Environment / Relationship。
         /// </summary>
-        public FactTopic Topic { get; set; } = FactTopic.Health;
+        public FactTopic Topic { get; set; }
 
         /// <summary>
-        /// 希望这句话在篇章中扮演的功能：引入、补充、总结等。
+        /// 可选：子话题字符串，例如 "Injury" / "Tending" / "OverallMood"。
+        /// 可以由 TagBuilder 约定使用。
         /// </summary>
-        public DiscourseFunction Function { get; set; } = DiscourseFunction.Intro;
+        public string Subtopic { get; set; }
 
         /// <summary>
-        /// 限制可选 Fact 的显著度下界（可空）。
+        /// 希望的显著度范围。
+        /// 用于从 Fact 池中挑选更重要/更不重要的事实。
         /// </summary>
         public float? MinSalience { get; set; }
-
-        /// <summary>
-        /// 限制可选 Fact 的显著度上界（可空）。
-        /// </summary>
         public float? MaxSalience { get; set; }
 
         /// <summary>
-        /// 硬约束：Fact 必须包含这些标签（标签来自 Fact.Tags）。
-        /// 比如 "health.injury"、"work.cooking"。
+        /// 要求 Fact 必须包含的标签（硬约束）。
+        /// 例如：health.injury / health.injury.severe。
         /// </summary>
         public List<string> RequiredFactTags { get; } = new List<string>();
 
         /// <summary>
-        /// 软偏好：希望 Fact 在这些标签上权重更高。
-        /// key: 标签；value: 偏好权重。
+        /// 偏好标签（软约束）。
+        /// 例如“优先选严重伤口，但不强制”。
         /// </summary>
-        public Dictionary<string, float> PreferredFactTags { get; } =
-            new Dictionary<string, float>();
+        public List<string> PreferredFactTags { get; } = new List<string>();
 
         /// <summary>
-        /// 硬约束：模板本身必须声称关注这些标签（标签来自模板的 tagWeights）。
-        /// 比如 "health.tended"。
+        /// 话语功能：Intro / Elaboration / Contrast / Result。
+        /// 用于后续排序/风格控制。
         /// </summary>
-        public List<string> RequiredTemplateTags { get; } = new List<string>();
+        public DiscourseFunction? FunctionHint { get; set; }
 
         /// <summary>
-        /// 软偏好：希望模板在这些标签上的权重大。
-        /// key: 标签；value: 偏好权重。
+        /// 句法类型：完整句子 / 碎片 / 修饰语。
         /// </summary>
-        public Dictionary<string, float> PreferredTemplateTags { get; } =
-            new Dictionary<string, float>();
+        public SyntacticType? SyntacticTypeHint { get; set; }
+
+        /// <summary>
+        /// 约束在模板选取时的权重。
+        /// </summary>
+        public float Weight { get; set; } = 1f;
     }
 
     /// <summary>
-    /// Linguistic 核心：给一堆事实 + 一堆句子需求，选出对应的 SentencePlan。
-    /// 不直接接触 Pawn / Hediff 等游戏对象，只依赖 Fact / NarrativeTemplateDef。
+    /// 语言引擎：负责从 Fact 池 + 模板 Def 中，选出一组 SentencePlan。
+    /// 不负责具体文本生成。
     /// </summary>
-    public static class LinguisticEngine
+    public sealed class LinguisticEngine
     {
+        private readonly IEnumerable<NarrativeTemplateDef> _templates;
+
+        public LinguisticEngine(IEnumerable<NarrativeTemplateDef> templates)
+        {
+            _templates = templates ?? throw new ArgumentNullException(nameof(templates));
+        }
+
         /// <summary>
-        /// 构造一组句子计划：
-        /// - facts: 世界适配层构造好的“可说事实”池；
-        /// - constraints: 上层剧本模块给出的句子槽位需求（一个对象对应一句）。
-        /// 返回的 SentencePlan 列表顺序与 constraints 保持一致（过滤掉无法满足的槽位）。
+        /// 根据一组 SentenceConstraint，从 Fact 池中挑选对应的 SentencePlan 列表。
+        /// 每个 constraint 至多生成一个 SentencePlan（也可以允许多个，视需求而定）。
         /// </summary>
-        public static List<SentencePlan> BuildPlans(
+        public IList<SentencePlan> BuildPlans(
             IReadOnlyList<Fact> facts,
             IReadOnlyList<SentenceConstraint> constraints)
         {
             if (facts == null) throw new ArgumentNullException(nameof(facts));
             if (constraints == null) throw new ArgumentNullException(nameof(constraints));
 
-            var plans = new List<SentencePlan>(constraints.Count);
+            var result = new List<SentencePlan>();
 
-            foreach (var constraint in constraints)
+            for (int i = 0; i < constraints.Count; i++)
             {
-                if (constraint == null)
-                    continue;
-
-                var fact = SelectBestFact(facts, constraint);
+                var c = constraints[i];
+                var fact = SelectBestFact(facts, c);
                 if (fact == null)
                     continue;
 
-                var template = TemplateSelector.PickBestTemplateFor(fact, constraint);
+                var template = SelectBestTemplate(fact, c);
                 if (template == null)
                     continue;
 
-                var slots = BuildSlots(fact, template);
-
-                var plan = new SentencePlan(
-                    sourceFact: fact,
-                    template: template,
-                    slots: slots,
-                    priority: (int)Math.Round(fact.Salience));
-
-                plans.Add(plan);
+                // 可以根据约束顺序 + 模板/Fact 打分综合成一个 score。
+                float score = c.Weight;
+                var plan = new SentencePlan(fact, template, score);
+                result.Add(plan);
             }
 
-            return plans;
+            return result;
         }
 
         /// <summary>
-        /// 在 Fact 池中，为一个句子约束挑选最合适的那个 Fact。
-        /// 只看 Topic / 显著度 / 事实标签 + PreferredFactTags。
+        /// 从 Fact 列表中挑选最符合约束的一条。
         /// </summary>
-        private static Fact SelectBestFact(
+        private Fact SelectBestFact(
             IReadOnlyList<Fact> facts,
             SentenceConstraint c)
         {
-            // 先按 Topic 过滤
-            IEnumerable<Fact> candidates = facts.Where(f => f.Topic == c.Topic);
+            // 1. 按 topic + subtopic 粗过滤
+            IEnumerable<Fact> candidates = facts
+                .Where(f => f.Topic == c.Topic);
 
-            // 再按显著度范围过滤
+            if (!string.IsNullOrWhiteSpace(c.Subtopic))
+            {
+                candidates = candidates.Where(f =>
+                    string.Equals(f.Subtopic, c.Subtopic, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // 2. 按显著度范围过滤
             if (c.MinSalience.HasValue)
                 candidates = candidates.Where(f => f.Salience >= c.MinSalience.Value);
             if (c.MaxSalience.HasValue)
                 candidates = candidates.Where(f => f.Salience <= c.MaxSalience.Value);
 
-            // 按 RequiredFactTags 做硬过滤
+            // 3. 按 RequiredFactTags 做硬过滤
             if (c.RequiredFactTags.Count > 0)
             {
                 candidates = candidates.Where(f =>
-                    c.RequiredFactTags.All(tag =>
-                        !string.IsNullOrEmpty(tag) && f.Tags.ContainsKey(tag)));
+                {
+                    var tagSet = f.Tags;
+                    foreach (var tagStr in c.RequiredFactTags)
+                    {
+                        if (string.IsNullOrWhiteSpace(tagStr)) continue;
+                        var tag = new TagId(tagStr);
+                        if (!tagSet.Contains(tag))
+                            return false;
+                    }
+                    return true;
+                });
             }
 
+            // 4. 在剩余候选中，根据 PreferredFactTags + Salience 打一个简单分数
             Fact best = null;
             float bestScore = float.MinValue;
 
-            foreach (var fact in candidates)
+            foreach (var f in candidates)
             {
-                float score = fact.Salience; // 显著度本身就是一个自然的排序依据
+                float score = f.Salience;
 
-                // 对 PreferredFactTags 做一点加成
-                foreach (var kv in c.PreferredFactTags)
+                // 偏好标签加分
+                if (c.PreferredFactTags.Count > 0)
                 {
-                    if (string.IsNullOrEmpty(kv.Key)) continue;
-                    if (!fact.Tags.TryGetValue(kv.Key, out var wFact)) continue;
-
-                    score += wFact * kv.Value;
+                    foreach (var tagStr in c.PreferredFactTags)
+                    {
+                        if (string.IsNullOrWhiteSpace(tagStr)) continue;
+                        var tag = new TagId(tagStr);
+                        if (f.Tags.Contains(tag))
+                        {
+                            score += 0.1f; // 简单加分系数，之后可以调参
+                        }
+                    }
                 }
 
                 if (score > bestScore)
                 {
                     bestScore = score;
-                    best = fact;
+                    best = f;
                 }
             }
 
@@ -159,57 +178,26 @@ namespace RimLife
         }
 
         /// <summary>
-        /// 根据 Fact.Topic 和模板的语篇功能，调用不同的 SlotFiller。
-        /// 当前只实现 Health 的两个分支：Intro / Elaboration。
+        /// 从 NarrativeTemplateDef 列表中挑选最适合某个 Fact + 约束的模板。
+        /// 使用：
+        /// - def.topic
+        /// - def.requiredTags
+        /// - def.tagWeights
+        /// 等字段。
         /// </summary>
-        private static Dictionary<string, string> BuildSlots(
+        private NarrativeTemplateDef SelectBestTemplate(
             Fact fact,
-            NarrativeTemplateDef template)
+            SentenceConstraint c)
         {
-            // 未来扩展其他 Topic 时，在这里加分支即可。
-            switch (fact.Topic)
-            {
-                case FactTopic.Health:
-                    {
-                        if (fact.Payload is not HealthNarrative hn)
-                            return new Dictionary<string, string>();
-
-                        // 简单区分：Intro → 描述伤情；Elaboration → 描述处理情况
-                        return template.function == DiscourseFunction.Elaboration
-                            ? SlotFiller.FillHealthTendingSlots(fact.Subject, hn)
-                            : SlotFiller.FillHealthSeveritySlots(fact.Subject, hn);
-                    }
-
-                default:
-                    return new Dictionary<string, string>();
-            }
-        }
-    }
-
-    /// <summary>
-    /// 通用模板选择器：只依赖 Fact.Tags 和 NarrativeTemplateDef 的 topic / requiredTags / tagWeights，
-    /// 再结合上层给的 SentenceConstraint 做过滤和打分。
-    /// </summary>
-    internal static class TemplateSelector
-    {
-        public static NarrativeTemplateDef PickBestTemplateFor(
-            Fact fact,
-            SentenceConstraint constraint)
-        {
-            if (fact == null) throw new ArgumentNullException(nameof(fact));
-            if (constraint == null) throw new ArgumentNullException(nameof(constraint));
-
-            var allDefs = DefDatabase<NarrativeTemplateDef>.AllDefsListForReading;
-
             NarrativeTemplateDef best = null;
             float bestScore = float.MinValue;
 
-            foreach (var def in allDefs)
+            foreach (var def in _templates)
             {
-                if (!IsCandidate(def, fact, constraint))
+                if (!IsCandidate(def, fact, c))
                     continue;
 
-                float score = ScoreTemplate(def, fact, constraint);
+                float score = ScoreTemplate(def, fact, c);
                 if (score > bestScore)
                 {
                     bestScore = score;
@@ -220,14 +208,14 @@ namespace RimLife
             return best;
         }
 
-        private static bool IsCandidate(
+        private bool IsCandidate(
             NarrativeTemplateDef def,
             Fact fact,
             SentenceConstraint c)
         {
             if (def == null) return false;
 
-            // 如果模板声明了 topic，则要求与 Fact.Topic 名称匹配（忽略大小写）
+            // 1. topic 兼容性
             if (!string.IsNullOrEmpty(def.topic))
             {
                 var topicName = fact.Topic.ToString();
@@ -235,45 +223,22 @@ namespace RimLife
                     return false;
             }
 
-            // 语篇功能必须匹配
-            if (def.function != c.Function)
+            // 2. 话语功能 hint
+            if (c.FunctionHint.HasValue && def.function != c.FunctionHint.Value)
                 return false;
 
-            // 模板自己的 requiredTags：Fact 必须包含
+            // 3. 句法类型 hint
+            if (c.SyntacticTypeHint.HasValue && def.syntacticType != c.SyntacticTypeHint.Value)
+                return false;
+
+            // 4. 模板 requiredTags
             if (def.requiredTags != null && def.requiredTags.Count > 0)
             {
-                foreach (var tag in def.requiredTags)
+                foreach (var tagStr in def.requiredTags)
                 {
-                    if (string.IsNullOrEmpty(tag))
-                        continue;
-                    if (!fact.Tags.ContainsKey(tag))
-                        return false;
-                }
-            }
-
-            // 约束中的 RequiredFactTags：再加一层安全限制（虽然在 SelectBestFact 已经过滤过）
-            if (c.RequiredFactTags.Count > 0)
-            {
-                foreach (var tag in c.RequiredFactTags)
-                {
-                    if (string.IsNullOrEmpty(tag))
-                        continue;
-                    if (!fact.Tags.ContainsKey(tag))
-                        return false;
-                }
-            }
-
-            // 约束中的 RequiredTemplateTags：要求模板在 tagWeights 中显式声明这些标签
-            if (c.RequiredTemplateTags.Count > 0)
-            {
-                if (def.tagWeights == null || def.tagWeights.Count == 0)
-                    return false;
-
-                foreach (var tag in c.RequiredTemplateTags)
-                {
-                    if (string.IsNullOrEmpty(tag))
-                        continue;
-                    if (!def.tagWeights.TryGetValue(tag, out var w) || w <= 0f)
+                    if (string.IsNullOrWhiteSpace(tagStr)) continue;
+                    var tag = new TagId(tagStr);
+                    if (!fact.Tags.Contains(tag))
                         return false;
                 }
             }
@@ -281,165 +246,102 @@ namespace RimLife
             return true;
         }
 
-        /// <summary>
-        /// 模板打分：
-        /// - 基础：Fact.Tags 与模板 tagWeights 的点积；
-        /// - 加成：对约束中 PreferredFactTags / PreferredTemplateTags 的匹配；
-        /// - 再乘上模板的 baseWeight，最后加一点 Fact.Salience 打破平局。
-        /// </summary>
-        private static float ScoreTemplate(
+        private float ScoreTemplate(
             NarrativeTemplateDef def,
             Fact fact,
             SentenceConstraint c)
         {
-            float score = 0f;
+            float score = def.baseWeight;
 
-            // 1) Fact 标签与模板标签的相似度
+            // 1. 模板自己的 tagWeights 与 Fact.Tags 的匹配
             if (def.tagWeights != null && def.tagWeights.Count > 0)
             {
                 foreach (var kv in def.tagWeights)
                 {
-                    if (string.IsNullOrEmpty(kv.Key))
+                    if (string.IsNullOrWhiteSpace(kv.Key))
+                        continue;
+                    if (kv.Value == 0f)
                         continue;
 
-                    if (!fact.Tags.TryGetValue(kv.Key, out var wFact))
-                        continue;
-
-                    score += wFact * kv.Value;
+                    var tag = new TagId(kv.Key);
+                    if (fact.Tags.Contains(tag))
+                    {
+                        score += kv.Value;
+                    }
                 }
             }
 
-            // 2) 剧本偏好的 Fact 标签（可能不是模板声明的标签）
-            foreach (var kv in c.PreferredFactTags)
+            // 2. 约束的 PreferredFactTags 也可以小幅加分
+            if (c.PreferredFactTags.Count > 0)
             {
-                if (string.IsNullOrEmpty(kv.Key)) continue;
-                if (!fact.Tags.TryGetValue(kv.Key, out var wFact)) continue;
-
-                score += wFact * kv.Value;
-            }
-
-            // 3) 剧本偏好的模板标签
-            if (def.tagWeights != null && def.tagWeights.Count > 0)
-            {
-                foreach (var kv in c.PreferredTemplateTags)
+                foreach (var tagStr in c.PreferredFactTags)
                 {
-                    if (string.IsNullOrEmpty(kv.Key)) continue;
-                    if (!def.tagWeights.TryGetValue(kv.Key, out var wTemplate)) continue;
-
-                    score += wTemplate * kv.Value;
+                    if (string.IsNullOrWhiteSpace(tagStr)) continue;
+                    var tag = new TagId(tagStr);
+                    if (fact.Tags.Contains(tag))
+                    {
+                        score += 0.1f;
+                    }
                 }
             }
-
-            // 4) 模板自身权重
-            score *= Math.Max(0.01f, def.baseWeight);
-
-            // 5) 略微加入 Fact 显著度，打破平局
-            score += fact.Salience * 0.01f;
 
             return score;
         }
     }
 
     /// <summary>
-    /// 把 SentencePlan + NarrativeTemplateDef 转成最终字符串。
+    /// 模板引擎：负责把 SentencePlan + ISlotRealizer 转成最终字符串。
+    /// 只关心模板字符串和槽位，不关心游戏细节。
     /// </summary>
-    public static class SurfaceRealizer
-    {
-        public static string Realize(SentencePlan plan)
-        {
-            if (plan == null || plan.Template == null)
-                return string.Empty;
-
-            var templateText = plan.Template.GetTemplate();
-            if (string.IsNullOrEmpty(templateText))
-                return string.Empty;
-
-            return TemplateEngine.Fill(templateText, plan.Slots);
-        }
-    }
-
-    /// <summary>
-    /// 一个极简模板引擎：用 {SLOT_NAME} 占位符做替换。
-    /// </summary>
-    public static class TemplateEngine
+    public sealed class TemplateEngine
     {
         private static readonly Regex SlotRegex =
-            new Regex(@"\{([A-Za-z0-9_]+)\}", RegexOptions.Compiled);
+            new Regex(@"{(?<name>[^{}]+)}", RegexOptions.Compiled);
 
-        public static string Fill(string template, IReadOnlyDictionary<string, string> slots)
+        private readonly ISlotRealizer _slotRealizer;
+
+        public TemplateEngine(ISlotRealizer slotRealizer)
         {
-            if (string.IsNullOrEmpty(template) || slots == null || slots.Count == 0)
-                return template;
+            _slotRealizer = slotRealizer ?? throw new ArgumentNullException(nameof(slotRealizer));
+        }
 
-            return SlotRegex.Replace(template, match =>
+        public string Realize(
+            SentencePlan plan)
+        {
+            if (plan == null) throw new ArgumentNullException(nameof(plan));
+
+            var templateText = plan.Template.GetTemplate();
+            if (string.IsNullOrWhiteSpace(templateText))
+                return $"[{plan.Template.defName}_EmptyTemplate]";
+
+            return RealizeTemplate(templateText, plan.SourceFact);
+        }
+
+        /// <summary>
+        /// 将模板文本中的 {SLOT} 替换为具体词汇。
+        /// </summary>
+        public string RealizeTemplate(
+            string templateText,
+            Fact fact)
+        {
+            if (templateText == null) throw new ArgumentNullException(nameof(templateText));
+            if (fact == null) throw new ArgumentNullException(nameof(fact));
+
+            // 解析所有 {SlotName}
+            var result = SlotRegex.Replace(templateText, match =>
             {
-                var key = match.Groups[1].Value;
-                if (slots.TryGetValue(key, out var value) && !string.IsNullOrEmpty(value))
-                    return value;
+                var name = match.Groups["name"].Value;
+                if (!SlotRequest.TryParse(name, out var request))
+                {
+                    // 未识别槽位，保持原样或返回空字符串
+                    return match.Value;
+                }
 
-                // 没有值就保留原样，方便调试。
-                return match.Value;
+                var text = _slotRealizer.RealizeSlot(request, fact);
+                return text ?? string.Empty;
             });
-        }
-    }
 
-    /// <summary>
-    /// 槽位填充逻辑：把 HealthNarrative 等 payload 映射到模板中的具体插槽。
-    /// 目前只实现了 Health 相关两个分支。
-    /// </summary>
-    public static class SlotFiller
-    {
-        public static Dictionary<string, string> FillHealthSeveritySlots(PawnPro speaker, HealthNarrative narrative)
-        {
-            if (speaker == null) throw new ArgumentNullException(nameof(speaker));
-            if (narrative == null) throw new ArgumentNullException(nameof(narrative));
-
-            var dict = new Dictionary<string, string>();
-
-            var label = !string.IsNullOrWhiteSpace(speaker.FullName)
-                ? speaker.FullName
-                : speaker.Name;
-
-            if (string.IsNullOrWhiteSpace(label))
-                label = "Unknown";
-
-            dict["SUBJECT_Label"] = label;
-            dict["SUBJECT_Possessive"] = label + "'s";
-
-            dict["NOUN_Injury"] = narrative.Noun ?? string.Empty;
-
-            if (narrative.RelatedNouns != null &&
-                narrative.RelatedNouns.TryGetValue("OnPart", out var part) &&
-                !string.IsNullOrWhiteSpace(part))
-            {
-                dict["NOUN_Part"] = part;
-            }
-
-            // 目前直接使用枚举名，你之后可以改成调用翻译表或自定义映射。
-            dict["ADJ_Severity"] = narrative.Severity.ToString();
-
-            return dict;
-        }
-
-        public static Dictionary<string, string> FillHealthTendingSlots(PawnPro speaker, HealthNarrative narrative)
-        {
-            if (speaker == null) throw new ArgumentNullException(nameof(speaker));
-            if (narrative == null) throw new ArgumentNullException(nameof(narrative));
-
-            var dict = new Dictionary<string, string>();
-
-            var label = !string.IsNullOrWhiteSpace(speaker.FullName)
-                ? speaker.FullName
-                : speaker.Name;
-
-            if (string.IsNullOrWhiteSpace(label))
-                label = "Unknown";
-
-            dict["SUBJECT_Label"] = label;
-            dict["SUBJECT_Possessive"] = label + "'s";
-            dict["ADJ_Tending"] = narrative.Tending.ToString();
-
-            return dict;
+            return result;
         }
     }
 }

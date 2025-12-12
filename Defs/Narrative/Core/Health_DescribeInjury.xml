@@ -37,18 +37,24 @@
 		<!-- 多语言文本：Dictionary 结构 -->
 		<templates>
 			<li>
-				<key>en</key>
-				<value>{SUBJECT_Label} is suffering from a {ADJ_Severity} {NOUN_Injury} on {SUBJECT_Possessive} {NOUN_Part}.</value>
+				<key>English</key>
+				<value>{SUBJECT_Label}'s {NOUN_Part} has a {ADJ_Severity} {NOUN_Injury}.</value>
 			</li>
 			<li>
-				<key>zh-cn</key>
-				<value>{SUBJECT_Label}的{NOUN_Part}遭受了{ADJ_Severity}的{NOUN_Injury}。</value>
+				<key>ChineseSimplified</key>
+				<value>{SUBJECT_Label}的{NOUN_Part}遭受了{ADJ_Severity}{NOUN_Injury}。</value>
 			</li>
 		</templates>
 	</RimLife.NarrativeTemplateDef>
 
 	<!-- === 模板 2: 处理情况说明 === -->
 	<RimLife.NarrativeTemplateDef>
+		<defName>Health_InjuryTendedInfo</defName>
+		<function>Elaboration</function>
+		<syntacticType>Fragment</syntacticType>
+		<baseWeight>0.7</baseWeight>
+		<topic>Health</topic>
+
 		<requiredTags>
 			<li>health</li>
 			<li>health.injury</li>
@@ -71,11 +77,11 @@
 
 		<templates>
 			<li>
-				<key>en</key>
+				<key>English</key>
 				<value>which has been {ADJ_Tending}.</value>
 			</li>
 			<li>
-				<key>zh-cn</key>
+				<key>ChineseSimplified</key>
 				<value>伤口{ADJ_Tending}。</value>
 			</li>
 		</templates>

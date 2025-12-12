@@ -1,6 +1,5 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.IO.Ports;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -88,29 +87,58 @@ namespace RimLife
 
         public string GetTemplate()
         {
-            // 你之前已经实现过的逻辑，保持不变：
-            // 1. 根据当前语言 key 查 templates
-            // 2. 找不到则返回第一个非空模板
-            // 3. 全部为空时返回 "[defName_NoText]"
-            string curLang = LanguageDatabase.activeLanguage.folderName.ToLowerInvariant();
+            if (templates == null || templates.Count == 0)
+                return $"[{defName}_NoText]";
 
-            if (templates != null &&
-                templates.TryGetValue(curLang, out string text) &&
-                !string.IsNullOrWhiteSpace(text))
+            var language = LanguageDatabase.activeLanguage;
+            // Use legacyFolderName for a clean, predictable key (e.g., "ChineseSimplified")
+            var langKey = language?.LegacyFolderName;
+
+            if (!string.IsNullOrWhiteSpace(langKey))
             {
-                return text;
+                // 1. Try to get the template for the current language
+                if (TryGetTemplateValue(langKey, out var localized))
+                    return localized;
+
+                // 2. If not found, fall back to English
+                if (TryGetTemplateValue("English", out var english))
+                    return english;
             }
 
-            if (templates != null && templates.Count > 0)
+            // 3. If all else fails, return the first available template
+            foreach (var kvp in templates)
             {
-                foreach (var kvp in templates.OrderBy(k => k.Key))
-                {
-                    if (!string.IsNullOrWhiteSpace(kvp.Value))
-                        return kvp.Value;
-                }
+                if (!string.IsNullOrWhiteSpace(kvp.Value))
+                    return kvp.Value;
             }
 
             return $"[{defName}_NoText]";
+        }
+
+        private bool TryGetTemplateValue(string key, out string value)
+        {
+            value = null;
+            if (string.IsNullOrWhiteSpace(key) || templates == null)
+                return false;
+
+            // First, try a direct, case-sensitive match (most efficient)
+            if (templates.TryGetValue(key, out var direct) && !string.IsNullOrWhiteSpace(direct))
+            {
+                value = direct;
+                return true;
+            }
+
+            // If that fails, try a case-insensitive match
+            foreach (var kvp in templates)
+            {
+                if (string.Equals(kvp.Key, key, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kvp.Value))
+                {
+                    value = kvp.Value;
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

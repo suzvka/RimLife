@@ -1,0 +1,21 @@
+<LanguageData>
+  <RimLife.Health.Severity.Minor>minor</RimLife.Health.Severity.Minor>
+  <RimLife.Health.Severity.Moderate>moderate</RimLife.Health.Severity.Moderate>
+  <RimLife.Health.Severity.Severe>severe</RimLife.Health.Severity.Severe>
+
+  <RimLife.Health.Tending.Untended>untended</RimLife.Health.Tending.Untended>
+  <RimLife.Health.Tending.Poor>poorly treated</RimLife.Health.Tending.Poor>
+  <RimLife.Health.Tending.Good>well tended</RimLife.Health.Tending.Good>
+  <RimLife.Health.Tending.Excellent>skillfully tended</RimLife.Health.Tending.Excellent>
+
+  <!-- Lexicon for adjectives -->
+  <RimLife.Lexicon.AdjIntensity.Negative.Low>minor</RimLife.Lexicon.AdjIntensity.Negative.Low>
+  <RimLife.Lexicon.AdjIntensity.Negative.Mid>moderate</RimLife.Lexicon.AdjIntensity.Negative.Mid>
+  <RimLife.Lexicon.AdjIntensity.Negative.High>severe</RimLife.Lexicon.AdjIntensity.Negative.High>
+  <RimLife.Lexicon.AdjIntensity.Positive.Low>minor</RimLife.Lexicon.AdjIntensity.Positive.Low>
+  <RimLife.Lexicon.AdjIntensity.Positive.Mid>moderate</RimLife.Lexicon.AdjIntensity.Positive.Mid>
+  <RimLife.Lexicon.AdjIntensity.Positive.High>severe</RimLife.Lexicon.AdjIntensity.Positive.High>
+  <RimLife.Lexicon.AdjIntensity.Neutral.Low>minor</RimLife.Lexicon.AdjIntensity.Neutral.Low>
+  <RimLife.Lexicon.AdjIntensity.Neutral.Mid>moderate</RimLife.Lexicon.AdjIntensity.Neutral.Mid>
+  <RimLife.Lexicon.AdjIntensity.Neutral.High>severe</RimLife.Lexicon.AdjIntensity.Neutral.High>
+</LanguageData>

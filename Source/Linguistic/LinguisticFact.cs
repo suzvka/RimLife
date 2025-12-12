@@ -1,0 +1,98 @@
+using System;
+using RimWorld;
+using Verse;
+
+namespace RimLife
+{
+    /// <summary>
+    /// 事实话题类型。
+    /// 尽量保持少量稳定的 Topic，避免后续爆炸。
+    /// </summary>
+    public enum FactTopic
+    {
+        Health,
+        Mood,
+        Environment,
+        Relationship,
+        Activity
+    }
+
+    /// <summary>
+    /// 一个“可以被谈论的事实”。
+    /// 例如：
+    /// - 某个殖民者身上有一处严重伤口
+    /// - 某人心情很差
+    /// - 某个房间很豪华
+    /// 
+    /// 特例（健康/心情/环境等）由各自的 TagBuilder 负责生成 Fact。
+    /// </summary>
+    public sealed class Fact
+    {
+        public FactTopic Topic { get; }
+        public string Subtopic { get; }   // 可选：更细的子话题，例如 "Injury" / "MoodGeneral"
+        public float Salience { get; }    // 显著度，用于筛选/排序
+        public PawnPro Subject { get; }   // 说话者/被描述者
+        public PawnPro Target { get; }    // 关系目标（如描述别人）
+        public object SourcePayload { get; } // 调试/追踪用的原始 Narrative 或数据结构
+
+        /// <summary>
+        /// 对应该 Fact 的语义 profile：
+        /// - Tags: 离散标签，例如 health.injury / polarity.negative
+        /// - Axes: 强度/风险等数值轴
+        /// </summary>
+        public SemanticProfile Semantics { get; }
+
+        /// <summary>
+        /// 方便访问：Fact 的标签集合。
+        /// 等价于 Semantics.Tags。
+        /// </summary>
+        public TagSet Tags => Semantics.Tags;
+
+        public Fact(
+            FactTopic topic,
+            string subtopic,
+            float salience,
+            PawnPro subject,
+            PawnPro target,
+            SemanticProfile semantics,
+            object sourcePayload = null)
+        {
+            Topic = topic;
+            Subtopic = subtopic ?? string.Empty;
+            Salience = salience;
+            Subject = subject ?? throw new ArgumentNullException(nameof(subject));
+            Target = target;
+            Semantics = semantics ?? throw new ArgumentNullException(nameof(semantics));
+            SourcePayload = sourcePayload;
+        }
+    }
+
+    /// <summary>
+    /// 句子计划：选定的 Fact + 模板 +（可选）分数。
+    /// 不包含具体文本，只是“计划说什么 + 用哪个模板”。
+    /// </summary>
+    public sealed class SentencePlan
+    {
+        public Fact SourceFact { get; }
+        public NarrativeTemplateDef Template { get; }
+
+        /// <summary>
+        /// 模板声明的功能/句法类型直接透传。
+        /// </summary>
+        public DiscourseFunction DiscourseFunction => Template.function;
+        public SyntacticType SyntacticType => Template.syntacticType;
+
+        /// <summary>
+        /// 该计划的优先级/分数。
+        /// 可以由 LinguisticEngine 设定，用于排序。
+        /// </summary>
+        public float Score { get; }
+
+        public SentencePlan(Fact sourceFact, NarrativeTemplateDef template, float score)
+        {
+            SourceFact = sourceFact ?? throw new ArgumentNullException(nameof(sourceFact));
+            Template = template ?? throw new ArgumentNullException(nameof(template));
+            Score = score;
+        }
+    }
+}
