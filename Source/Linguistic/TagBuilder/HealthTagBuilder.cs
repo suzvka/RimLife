@@ -30,7 +30,7 @@ namespace RimLife
         /// - Risk: 死亡/恶化风险
         /// - Progress: 治疗/康复进度
         /// </summary>
-        public static SemanticProfile BuildSemanticProfile(HealthNarrative narrative)
+        public static SemanticTemplate BuildSemanticProfile(HealthNarrative narrative)
         {
             if (narrative == null) throw new ArgumentNullException(nameof(narrative));
 
@@ -75,7 +75,7 @@ namespace RimLife
             }
 
             // 语义轴：这里只给个示例，你可以按需要更精细地映射。
-            var axes = new List<AxisValue>();
+            var axes = new List<NarrativeAxisValue>();
 
             // 用严重度映射 Intensity 轴（0..1）
             float intensity = narrative.Severity switch
@@ -85,17 +85,17 @@ namespace RimLife
                 SeverityAdj.Severe => 0.9f,
                 _ => 0.5f
             };
-            axes.Add(new AxisValue(SemanticAxisId.Intensity, intensity));
+            axes.Add(new NarrativeAxisValue(NarrativeAxisId.Intensity, intensity));
 
             // 用是否有生命危险/持续流血等信息映射 Risk 轴
             float risk = 0f;
             if (narrative.IsBleeding) risk += 0.4f;
             // if (narrative.MightBeFatal) risk += 0.5f;
             risk = Math.Min(1f, risk);
-            axes.Add(new AxisValue(SemanticAxisId.Risk, risk));
+            axes.Add(new NarrativeAxisValue(NarrativeAxisId.Risk, risk));
 
             var tagSet = new TagSet(tags);
-            return new SemanticProfile(tagSet, axes);
+            return new SemanticTemplate(tagSet, axes);
         }
 
         /// <summary>

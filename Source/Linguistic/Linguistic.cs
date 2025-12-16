@@ -331,7 +331,7 @@ namespace RimLife
             var result = SlotRegex.Replace(templateText, match =>
             {
                 var name = match.Groups["name"].Value;
-                if (!SlotRequest.TryParse(name, out var request))
+                if (!Word.TryParse(name, out var request))
                 {
                     // 未识别槽位，保持原样或返回空字符串
                     return match.Value;

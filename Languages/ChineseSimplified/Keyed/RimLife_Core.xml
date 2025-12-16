@@ -1,1 +1,122 @@
-﻿
+﻿<?xml version="1.0" encoding="UTF-8" ?>
+<LanguageData>
+
+	<!-- =====================
+       1. 强度形容词（可复用）
+       说明：
+       - Negative/Positive/Neutral 由 Fact 的 polarity 标签驱动
+       - Low/Mid/High 可由 SemanticProfile.GetIntensityBucketTag(...) 得到
+       ===================== -->
+
+	<!-- Negative：负向强度（伤势严重、心情糟糕、环境恶劣） -->
+	<RimLife.Lexicon.AdjIntensity.Negative.Low>轻微的</RimLife.Lexicon.AdjIntensity.Negative.Low>
+	<RimLife.Lexicon.AdjIntensity.Negative.Mid>中等的</RimLife.Lexicon.AdjIntensity.Negative.Mid>
+	<RimLife.Lexicon.AdjIntensity.Negative.High>严重的</RimLife.Lexicon.AdjIntensity.Negative.High>
+
+	<!-- Positive：正向强度（特别好、特别舒适等） -->
+	<RimLife.Lexicon.AdjIntensity.Positive.Low>稍微好一点的</RimLife.Lexicon.AdjIntensity.Positive.Low>
+	<RimLife.Lexicon.AdjIntensity.Positive.Mid>不错的</RimLife.Lexicon.AdjIntensity.Positive.Mid>
+	<RimLife.Lexicon.AdjIntensity.Positive.High>极好的</RimLife.Lexicon.AdjIntensity.Positive.High>
+
+	<!-- Neutral：中性强度（强调程度但不带明显好坏） -->
+	<RimLife.Lexicon.AdjIntensity.Neutral.Low>轻微的</RimLife.Lexicon.AdjIntensity.Neutral.Low>
+	<RimLife.Lexicon.AdjIntensity.Neutral.Mid>明显的</RimLife.Lexicon.AdjIntensity.Neutral.Mid>
+	<RimLife.Lexicon.AdjIntensity.Neutral.High>极为明显的</RimLife.Lexicon.AdjIntensity.Neutral.High>
+
+
+	<!-- =====================
+       2. 程度副词（AdvDegree）
+       通常和 AdjIntensity / AdjQuality 搭配使用
+       ===================== -->
+
+	<!-- Negative 程度（坏得轻/重） -->
+	<RimLife.Lexicon.AdvDegree.Negative.Low>稍微</RimLife.Lexicon.AdvDegree.Negative.Low>
+	<RimLife.Lexicon.AdvDegree.Negative.Mid>相当</RimLife.Lexicon.AdvDegree.Negative.Mid>
+	<RimLife.Lexicon.AdvDegree.Negative.High>非常</RimLife.Lexicon.AdvDegree.Negative.High>
+
+	<!-- Positive 程度（好得轻/重） -->
+	<RimLife.Lexicon.AdvDegree.Positive.Low>有点</RimLife.Lexicon.AdvDegree.Positive.Low>
+	<RimLife.Lexicon.AdvDegree.Positive.Mid>挺</RimLife.Lexicon.AdvDegree.Positive.Mid>
+	<RimLife.Lexicon.AdvDegree.Positive.High>特别</RimLife.Lexicon.AdvDegree.Positive.High>
+
+	<!-- 中性程度 -->
+	<RimLife.Lexicon.AdvDegree.Neutral.Low>略微</RimLife.Lexicon.AdvDegree.Neutral.Low>
+	<RimLife.Lexicon.AdvDegree.Neutral.Mid>很</RimLife.Lexicon.AdvDegree.Neutral.Mid>
+	<RimLife.Lexicon.AdvDegree.Neutral.High>极其</RimLife.Lexicon.AdvDegree.Neutral.High>
+
+
+	<!-- =====================
+       3. 好坏评价形容词（AdjQuality）
+       可和 polarity 标签挂钩：
+       - polarity.positive / polarity.negative
+       ===================== -->
+
+	<!-- 负向评价 -->
+	<RimLife.Lexicon.AdjQuality.Negative.Weak>不太好</RimLife.Lexicon.AdjQuality.Negative.Weak>
+	<RimLife.Lexicon.AdjQuality.Negative.Strong>很糟糕</RimLife.Lexicon.AdjQuality.Negative.Strong>
+
+	<!-- 正向评价 -->
+	<RimLife.Lexicon.AdjQuality.Positive.Weak>还不错</RimLife.Lexicon.AdjQuality.Positive.Weak>
+	<RimLife.Lexicon.AdjQuality.Positive.Strong>非常不错</RimLife.Lexicon.AdjQuality.Positive.Strong>
+
+	<!-- 中性/客观评价 -->
+	<RimLife.Lexicon.AdjQuality.Neutral.Weak>一般</RimLife.Lexicon.AdjQuality.Neutral.Weak>
+	<RimLife.Lexicon.AdjQuality.Neutral.Strong>相当明显</RimLife.Lexicon.AdjQuality.Neutral.Strong>
+
+
+	<!-- =====================
+       4. 风险从句（RiskClause）
+       由 SemanticAxisId.Risk 决定是否输出哪一种
+       ===================== -->
+
+	<RimLife.Lexicon.RiskClause.Low>看起来问题不大。</RimLife.Lexicon.RiskClause.Low>
+	<RimLife.Lexicon.RiskClause.Mid>如果不处理，情况可能会变糟。</RimLife.Lexicon.RiskClause.Mid>
+	<RimLife.Lexicon.RiskClause.High>这可能会带来严重的后果。</RimLife.Lexicon.RiskClause.High>
+
+
+	<!-- =====================
+       5. 时间副词（TimeAdverb）
+       不带具体领域信息，任何 Topic 可用
+       ===================== -->
+
+	<RimLife.Lexicon.Time.Now>现在</RimLife.Lexicon.Time.Now>
+	<RimLife.Lexicon.Time.Recently>最近</RimLife.Lexicon.Time.Recently>
+	<RimLife.Lexicon.Time.Often>经常</RimLife.Lexicon.Time.Often>
+	<RimLife.Lexicon.Time.Sometimes>有时候</RimLife.Lexicon.Time.Sometimes>
+	<RimLife.Lexicon.Time.Still>仍然</RimLife.Lexicon.Time.Still>
+	<RimLife.Lexicon.Time.NoLonger>不再</RimLife.Lexicon.Time.NoLonger>
+
+
+	<!-- =====================
+       6. 连接词（Connective）
+       Discourse 用的纽带词：并列、转折、因果、总结
+       ===================== -->
+
+	<RimLife.Lexicon.Connective.And>而且</RimLife.Lexicon.Connective.And>
+	<RimLife.Lexicon.Connective.But>但是</RimLife.Lexicon.Connective.But>
+	<RimLife.Lexicon.Connective.So>所以</RimLife.Lexicon.Connective.So>
+	<RimLife.Lexicon.Connective.Because>因为</RimLife.Lexicon.Connective.Because>
+	<RimLife.Lexicon.Connective.Overall>总的来说</RimLife.Lexicon.Connective.Overall>
+
+
+	<!-- =====================
+       7. 状态动词（StateVerb）
+       可用于 Health/Mood/Environment 等各种 Topic
+       ===================== -->
+
+	<RimLife.Lexicon.StateVerb.Is>是</RimLife.Lexicon.StateVerb.Is>
+	<RimLife.Lexicon.StateVerb.Has>有</RimLife.Lexicon.StateVerb.Has>
+	<RimLife.Lexicon.StateVerb.Seems>看起来</RimLife.Lexicon.StateVerb.Seems>
+	<RimLife.Lexicon.StateVerb.Becomes>变得</RimLife.Lexicon.StateVerb.Becomes>
+
+
+	<!-- =====================
+       8. 通用名词兜底（DomainNp 的最后防线）
+       当 Fact 没提供 DomainLexemes 时，至少还能说出一句“有些问题/情况”
+       ===================== -->
+
+	<RimLife.Lexicon.Noun.Problem>问题</RimLife.Lexicon.Noun.Problem>
+	<RimLife.Lexicon.Noun.Situation>情况</RimLife.Lexicon.Noun.Situation>
+	<RimLife.Lexicon.Noun.Event>状况</RimLife.Lexicon.Noun.Event>
+
+</LanguageData>

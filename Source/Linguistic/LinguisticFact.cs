@@ -34,20 +34,10 @@ namespace RimLife
         public float Salience { get; }    // 显著度，用于筛选/排序
         public PawnPro Subject { get; }   // 说话者/被描述者
         public PawnPro Target { get; }    // 关系目标（如描述别人）
+        public TagSet Tags { get; }             // 事实的语义标签集
+        public NarrativeAxisMap NarrativeAxis { get; }  // 事实的语义轴强度映射
         public object SourcePayload { get; } // 调试/追踪用的原始 Narrative 或数据结构
 
-        /// <summary>
-        /// 对应该 Fact 的语义 profile：
-        /// - Tags: 离散标签，例如 health.injury / polarity.negative
-        /// - Axes: 强度/风险等数值轴
-        /// </summary>
-        public SemanticProfile Semantics { get; }
-
-        /// <summary>
-        /// 方便访问：Fact 的标签集合。
-        /// 等价于 Semantics.Tags。
-        /// </summary>
-        public TagSet Tags => Semantics.Tags;
 
         // 新增：Fact 自带的“领域槽位词汇表”
         public IReadOnlyDictionary<string, string> DomainLexemes { get; }
@@ -58,7 +48,7 @@ namespace RimLife
             float salience,
             PawnPro subject,
             PawnPro target,
-            SemanticProfile semantics,
+            SemanticTemplate semantics,
             IReadOnlyDictionary<string, string> domainLexemes = null,
             object sourcePayload = null)
         {
@@ -67,7 +57,6 @@ namespace RimLife
             Salience = salience;
             Subject = subject ?? throw new ArgumentNullException(nameof(subject));
             Target = target;
-            Semantics = semantics ?? throw new ArgumentNullException(nameof(semantics));
             SourcePayload = sourcePayload;
 
             if (domainLexemes == null || domainLexemes.Count == 0)
