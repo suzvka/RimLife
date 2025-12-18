@@ -64,7 +64,7 @@
 	<!-- Deploy to RimWorld client (macOS) -->
 	<Target Name="MacDeploy">
 		<PropertyGroup>
-			<DeployPath>$(RimWorldDir)/RimWorldMac.app/Mods/RimTalk/</DeployPath>
+			<DeployPath>$(RimWorldDir)/RimWorldMac.app/Mods/RimLife/</DeployPath>
 		</PropertyGroup>
 		<MakeDir Directories="$(DeployPath)" />
 		<Exec Command="rsync -a --delete --checksum &quot;$(ProjectDir)About/&quot;     &quot;$(DeployPath)About/&quot;" />

@@ -199,6 +199,27 @@ namespace RimLife
             }
         }
 
-        
+        public class RandomInt
+        {
+            private ulong _state;
+
+            public RandomInt(ulong seed = 4101842887655102017UL)
+            {
+                _state = seed == 0 ? 4101842887655102017UL : seed;
+            }
+
+            public int get(int min, int max)
+            {
+                if (min >= max) return 0;
+
+                _state ^= _state >> 12;
+                _state ^= _state << 25;
+                _state ^= _state >> 27;
+
+                uint range = (uint)(max - min);
+                ulong randomValue = _state * 0x2545F4914F6CDD1DUL;
+                return (int)((randomValue >> 32) % range) + min;
+            }
+        }
     }
 }

@@ -9,19 +9,6 @@ using Verse;
 namespace RimLife
 {
     /// <summary>
-    /// 定义人格特质的描述性级别。
-    /// </summary>
-    public enum TraitLevel
-    {
-        Undefined,
-        VeryLow,
-        Low,
-        Average,
-        High,
-        VeryHigh
-    }
-
-    /// <summary>
     /// 一个简单的五维向量，表示 O/C/E/A/N 五个轴的数值贡献。
     /// </summary>
     public struct BigFiveVector
@@ -80,30 +67,18 @@ namespace RimLife
     }
 
     /// <summary>
-    /// 单个 Trait 在人格聚合阶段的贡献快照（仅用于调试输出）。
-    /// </summary>
-    public struct PersonalityTraitContribution
-    {
-        public string DefName;
-        public int Degree;
-        public BigFiveVector Vector;
-
-        public override string ToString() => $"{DefName}({Degree}): {Vector}";
-    }
-
-    /// <summary>
     /// 基于“大五”模型提供 pawn 人格的语言学表述。
     /// 此类将复杂的 pawn 数据（特质、背景故事等）转换为结构化的、描述性的人格维度。
     /// </summary>
-    internal class PersonalityNarrative
+    internal class PersonalityFact
     {
         #region Big Five Personality Traits
 
-        public TraitLevel Openness { get; set; }
-        public TraitLevel Conscientiousness { get; set; }
-        public TraitLevel Extraversion { get; set; }
-        public TraitLevel Agreeableness { get; set; }
-        public TraitLevel Neuroticism { get; set; }
+        public Level Openness { get; set; }
+        public Level Conscientiousness { get; set; }
+        public Level Extraversion { get; set; }
+        public Level Agreeableness { get; set; }
+        public Level Neuroticism { get; set; }
 
         #endregion
 
@@ -111,8 +86,6 @@ namespace RimLife
         private BigFiveVector _baseFromTraits;
         // 外部/动态注入的五维向量，分源存储（便于替换/撤销）
         private readonly Dictionary<string, BigFiveVector> _externals = new Dictionary<string, BigFiveVector>();
-        //贡献明细（调试）
-        private readonly List<PersonalityTraitContribution> _traitContributions = new List<PersonalityTraitContribution>();
 
         //只读数值接口（当前总值 & 基础值 & 外部值）
         public int OpennessScore => GetTotalVector().Openness;
@@ -123,9 +96,8 @@ namespace RimLife
 
         public BigFiveVector BaseVector => _baseFromTraits; // struct copy
         public IReadOnlyDictionary<string, BigFiveVector> ExternalVectors => _externals; // reference safe enough
-        public IReadOnlyList<PersonalityTraitContribution> TraitContributions => _traitContributions;
 
-        public PersonalityNarrative(PawnPro pawnPro)
+        public PersonalityFact(PawnPro pawnPro)
         {
             if (pawnPro == null) throw new ArgumentNullException(nameof(pawnPro));
             //计算基础向量
@@ -137,9 +109,9 @@ namespace RimLife
         /// <summary>
         /// 从 PawnPro 对象创建 PersonalityNarrative 的工厂方法。
         /// </summary>
-        public static PersonalityNarrative From(PawnPro pawnPro)
+        public static PersonalityFact From(PawnPro pawnPro)
         {
-            return new PersonalityNarrative(pawnPro);
+            return new PersonalityFact(pawnPro);
         }
 
         /// <summary>
@@ -148,7 +120,6 @@ namespace RimLife
         public void RecomputeBaseFrom(PawnPro pawnPro)
         {
             _baseFromTraits = BigFiveVector.Zero;
-            _traitContributions.Clear();
             if (pawnPro == null || pawnPro.Mood == null || pawnPro.Mood.Traits == null) return;
 
             // 遍历 Trait 快照
@@ -169,12 +140,6 @@ namespace RimLife
                 {
                     _baseFromTraits.AddInPlace(vec);
                 }
-                _traitContributions.Add(new PersonalityTraitContribution
-                {
-                    DefName = t.DefName,
-                    Degree = t.Degree,
-                    Vector = vec
-                });
             }
         }
 
@@ -256,14 +221,14 @@ namespace RimLife
             Neuroticism = MapFromSum(total.Neuroticism, contribN);
         }
 
-        private static TraitLevel MapFromSum(int sum, bool hadContribution)
+        private static Level MapFromSum(int sum, bool hadContribution)
         {
-            if (!hadContribution) return TraitLevel.Undefined;
-            if (sum <= -4) return TraitLevel.VeryLow;
-            if (sum <= -1) return TraitLevel.Low;
-            if (sum ==0) return TraitLevel.Average;
-            if (sum <=3) return TraitLevel.High;
-            return TraitLevel.VeryHigh;
+            if (!hadContribution) return Level.Undefined;
+            if (sum <= -4) return Level.VeryLow;
+            if (sum <= -1) return Level.Low;
+            if (sum ==0) return Level.Average;
+            if (sum <=3) return Level.High;
+            return Level.VeryHigh;
         }
 
         #region Mapping Rule Signatures (Legacy placeholders)

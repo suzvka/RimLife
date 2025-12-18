@@ -1,0 +1,76 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Defs>
+
+  <!-- 
+    ================================================================
+    Objective (目标/意图)
+    描述 Pawn 当前正在做的事情。
+    ================================================================
+  -->
+
+  <!-- 
+    模板ID: Objective_DescribeJob
+    描述: 一个 Pawn 当前正在进行的工作。
+    功能: 阐述当前状态。
+    句法: 完整句子。
+  -->
+  <Sentence ID="Objective_DescribeJob" Function="Elaboration" Syntactic="Full">
+
+    <!-- 
+      话题标签 (Tags): 用于筛选和分类句子。
+      系统可以根据当前上下文寻找包含特定标签 (如 "Job") 的句子。
+    -->
+    <Tags>
+      <li>Objective</li>
+      <li>Job</li>
+    </Tags>
+    
+    <!-- 
+      本地化文本节点: 每个节点代表一种语言的模板。
+      解析器将根据当前语言设置选择一个，如果找不到则默认使用第一个。
+    -->
+    <ChineseSimplified>{PawnName} 正在 {JobDescription}</ChineseSimplified>
+    <English>{PawnName} is {JobDescription}</English>
+
+    <!-- 
+      偏置 (Bias): 工作的基调通常是中性或略积极的。
+      Valence: +0.1, 代表轻微的积极性 (贡献价值)。
+      Degree: +0.1, 代表这是一个平静、低强度的活动。
+      Dynamic: +0.2, 代表角色在某种程度上掌控着自己的行为。
+    -->
+    <Bias Valence="0.1" Degree="0.1" Dynamic="0.2" />
+
+    <!-- 槽位定义 -->
+    <Slots>
+      <!-- 
+        槽位 "PawnName": 执行工作的角色。
+        type="Agent": 以通用角色类型定义。
+        Tags: 使用自定义标签筛选适配 Pawn 名称的词条。
+        Multiplier: (1,1,1), 名字本身是中性的，不扭曲语义。
+      -->
+      <Slot Name="PawnName" Type="Agent">
+        <Tags>
+          <li>Pawn</li>
+          <li>Name</li>
+        </Tags>
+        <Multiplier Valence="1" Degree="1" Dynamic="1" />
+      </Slot>
+
+      <!-- 
+        槽位 "JobDescription": 对工作的描述。
+        type="Predicate": 描述当前动作/状态的通用谓语。
+        Tags: 使用自定义标签筛选任务描述相关词。
+        Multiplier: (1,1,1), 工作描述本身已经包含了语义，直接使用即可。
+      -->
+      <Slot Name="JobDescription" Type="Predicate">
+        <Tags>
+          <li>Job</li>
+          <li>Activity</li>
+        </Tags>
+        <Multiplier Valence="1" Degree="1" Dynamic="1" />
+      </Slot>
+    </Slots>
+
+  </Sentence>
+
+</Defs>
