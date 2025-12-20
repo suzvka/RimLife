@@ -55,8 +55,6 @@
 		</Reference>
 	</ItemGroup>
 	<ItemGroup>
-	  <Folder Include="Defs\Narrative\" />
-	  <Folder Include="Languages\English\Keyed\" />
 	  <Folder Include="Source\Linguistic\Fact\FactBuild\" />
 	</ItemGroup>
 
