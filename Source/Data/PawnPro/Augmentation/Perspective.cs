@@ -10,7 +10,7 @@ namespace RimLife
     /// 表示 Pawn 能看到的内容快照。
     /// 注意：该数据仅为快照，其时间一致性无法保证。
     /// </summary>
-    public class PerspectiveInfo
+    public class Perspective
     {
         public const float RecognizableRange = 13f; // 识别详细个体信息的有效距离阈值
         public const float VisualRange = 26f;       // 最大视野范围 (用于初步捕获)
@@ -18,12 +18,12 @@ namespace RimLife
         // 统一的可见 Pawn 快照列表：所有在视野与视线(LineOfSight)内的 Pawn（不再拆分）
         public IReadOnlyList<PawnRelationSnapshot> VisiblePawnSnapshots { get; }
 
-        private PerspectiveInfo()
+        private Perspective()
         {
             VisiblePawnSnapshots = new List<PawnRelationSnapshot>();
         }
 
-        private PerspectiveInfo(IReadOnlyList<PawnRelationSnapshot> visiblePawnSnapshots)
+        private Perspective(IReadOnlyList<PawnRelationSnapshot> visiblePawnSnapshots)
         {
             VisiblePawnSnapshots = visiblePawnSnapshots;
         }
@@ -46,11 +46,11 @@ namespace RimLife
                 .Select(p => p.ID);
         }
 
-        public static PerspectiveInfo CreateFrom(Pawn pawn)
+        public static Perspective CreateFrom(Pawn pawn)
         {
             // 1. 基础校验
             if (pawn == null || !pawn.Spawned || pawn.Map == null)
-                return new PerspectiveInfo();
+                return new Perspective();
 
             Map map = pawn.Map;
 
@@ -75,12 +75,12 @@ namespace RimLife
                     visiblePawns.Add(snap);
             }
 
-            return new PerspectiveInfo(visiblePawns);
+            return new Perspective(visiblePawns);
         }
 
-        public static Task<PerspectiveInfo> CreateFromAsync(Pawn p)
+        public static Task<Perspective> CreateFromAsync(Pawn p)
         {
-            if (p == null) return Task.FromResult(new PerspectiveInfo());
+            if (p == null) return Task.FromResult(new Perspective());
 
             return MainThreadDispatcher.EnqueueAsync(() => CreateFrom(p));
         }

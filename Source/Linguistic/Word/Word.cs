@@ -10,7 +10,7 @@ using Verse;
 
 namespace RimLife
 {
-	public enum WordType
+	public enum SemanticRole
 	{
 		None,           // 未指定
 		AGENT,          // 施事者：谁发起动作
@@ -22,6 +22,16 @@ namespace RimLife
 		Error           // 错误类型
 	}
 
+	public enum PartOfSpeech
+	{
+		None,           // 未指定
+		Noun,           // 名词
+		Verb,           // 动词
+		Adjective,      // 形容词
+		Adverb,         // 副词
+        Error           // 错误类型
+    }
+
 	// ==========================================================
 	// 1. 数学核心：支持向量运算的语义轴
 	// ==========================================================
@@ -30,9 +40,9 @@ namespace RimLife
 		[XmlAttribute("Valence")] public float Valence { get; set; }	// 效价：这个词在多大程度上倾向表述积极的状态
 		[XmlAttribute("Degree")] public float Degree { get; set; }		// 程度：这个词在多大程度上倾向表述强烈的状态
 		[XmlAttribute("Dynamic")] public float Dynamic { get; set; }    // 动态：这个词在多大程度上倾向表述正在变化的状态
-        public List<string> Tags { get; set; }
+		public List<string> Tags { get; set; }
 
-        public SemanticAxis(float v, float d, float dyn)
+		public SemanticAxis(float v, float d, float dyn)
 		{
 			Valence = v; Degree = d; Dynamic = dyn;
 		}
@@ -61,15 +71,17 @@ namespace RimLife
 	{
 		public string Text;
 		public List<string> Tags;
-		public WordType Type;
-		public SemanticAxis Semantics;
+		public SemanticRole Role;
+		public PartOfSpeech Type;
+        public SemanticAxis Semantics;
 
 		Word()
 		{
 			Text = string.Empty;
 			Tags = new List<string>();
-			Type = WordType.None;
-			Semantics = SemanticAxis.Zero;
+			Role = SemanticRole.None;
+            Type = PartOfSpeech.None;
+            Semantics = SemanticAxis.Zero;
 		}
 
 		public static implicit operator bool (Word w)

@@ -94,8 +94,8 @@ namespace RimLife
         private ActivityInfo _activity;
         public ActivityInfo Activity => _activity ??= ActivityInfo.CreateFrom(_sourcePawn);
 
-        private PerspectiveInfo _perspective;
-        public PerspectiveInfo Perspective => _perspective ??= PerspectiveInfo.CreateFrom(_sourcePawn);
+        private Perspective _perspective;
+        public Perspective Perspective => _perspective ??= Perspective.CreateFrom(_sourcePawn);
 
         private GearInfo _gear;
         public GearInfo Gear => _gear ??= GearInfo.CreateFrom(_sourcePawn);
