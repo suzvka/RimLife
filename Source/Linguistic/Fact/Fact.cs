@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Runtime.Remoting.Metadata.W3cXsd2001;
 using Verse;
 
 namespace RimLife
@@ -18,99 +19,135 @@ namespace RimLife
 
 	public class Keywords
 	{
-		// 核心槽：允许单值或多值（用 Node 表达）
-		public Node Agent;          // 施事者：谁发起动作
-		public Node Patient;		// 受事者：谁/什么承受动作 
-		public Node Recipient;		// 与事者：谁接收（双宾动词需要）
-		public Node Theme;			// 客体：被移动/传递的事物 
-		public Node Predicate;		// 谓语：动作/状态本身
-		public Node Result;			// 结果：动作导致的终态
-
-		// 额外子句（递归）
-		public List<ClauseNode> Subclauses = new();
-
-		// 截断/诊断
-		public List<Node> Overflow = new();
-		public List<string> Diagnostics = new();
-
-		// 支持 Word、并列短语、介词短语、子句等
-		public abstract class Node
-		{
-			public abstract string Render(RenderContext ctx);
-		}
-
-		public sealed class WordNode : Node
-		{
-			public Word Word;
-			public override string Render(RenderContext ctx) => Word.Text;
-		}
-
-		// 并列短语：A、B和C
-		public sealed class CoordNode : Node
-		{
-			public List<Node> Items = new();
-
-			public override string Render(RenderContext ctx)
-			{
-				// 机械但稳定：2个用“和”，>=3 用顿号+和
-				var parts = Items.Select(i => i.Render(ctx)).Where(s => !string.IsNullOrEmpty(s)).ToList();
-				if (parts.Count == 0) return "";
-				if (parts.Count == 1) return parts[0];
-				if (parts.Count == 2) return $"{parts[0]}和{parts[1]}";
-				return string.Join("、", parts.Take(parts.Count - 1)) + "和" + parts.Last();
-			}
-		}
-
-		// 子句容器
-		public sealed class ClauseNode : Node
-		{
-			public Keywords Child;
-			public string Connector;         // 因为/但是/而/所以…
-			public WordType? SharedRoleHost;   // Relative 时：修饰 AGENT/PATIENT...
-
-			public override string Render(RenderContext ctx)
-			{
-				// 这里调用统一渲染器，但传入 mode/form
-				return ctx.RenderFact(Child, this);
-			}
-		}
-
-		public sealed class RenderContext
-		{
-			public Func<Keywords, ClauseNode, string> RenderFact; // 统一渲染器入口
-		}
-
-		public string GetAgent()
-		{
-			return Agent?.Render(new RenderContext { RenderFact = (keywords, clause) => clause.Render(new RenderContext()) });
-		}
-
-		public string GetPatient()
-		{
-			return Patient?.Render(new RenderContext { RenderFact = (keywords, clause) => clause.Render(new RenderContext()) });
-		}
-
-		public string GetRole()
-		{
-			return Theme?.Render(new RenderContext { RenderFact = (keywords, clause) => clause.Render(new RenderContext()) });
-		}
-
-		public string GetPredicate()
-		{
-			return Predicate?.Render(new RenderContext { RenderFact = (keywords, clause) => clause.Render(new RenderContext()) });
-		}
-
-		public string GetRecipient()
-		{
-			return Recipient?.Render(new RenderContext { RenderFact = (keywords, clause) => clause.Render(new RenderContext()) });
-		}
-
-        public string GetResult()
+        public enum FunctionWord
         {
-            return Result?.Render(new RenderContext { RenderFact = (keywords, clause) => clause.Render(new RenderContext()) });
+            None,   // 零形式
+            Of,     // 的（万金油：所属、属性、关系）
+            In,     // 在（位置、时间、状态）
+            With,   // 用（工具、方式、材料）
+            Give,   // 给（与事、目标、受益）
+            From,   // 从（来源、起点）
+            To,     // 到（目标、终点）
+            By,     // 被（施事标记，被动）
+            And,    // 和（连接词性与语义角色相同的词）
         }
 
-    }
+        public List<string> Tags
+        {
+            get
+            {
+                var allWords = (Agent ?? Enumerable.Empty<Word>())
+                    .Concat(Patient ?? Enumerable.Empty<Word>())
+                    .Concat(Recipient ?? Enumerable.Empty<Word>())
+                    .Concat(Theme ?? Enumerable.Empty<Word>())
+                    .Concat(Predicate ?? Enumerable.Empty<Word>())
+                    .Concat(Result ?? Enumerable.Empty<Word>());
+
+                return allWords
+                    .Where(w => w?.Tags != null)
+                    .SelectMany(w => w.Tags)
+                    .Distinct()
+                    .ToList();
+            }
+        }
+
+        List<Word> Agent;         // 施事者：谁发起动作
+        List<Word> Patient;       // 受事者：谁/什么承受动作 
+        List<Word> Recipient;     // 与事者：谁接收（双宾动词需要）
+        List<Word> Theme;         // 客体：被移动/传递的事物 
+        List<Word> Predicate;     // 谓语：动作/状态本身
+        List<Word> Result;        // 结果：动作导致的终态
+
+		public Keywords() 
+        {
+            Agent = new List<Word>();
+            Patient = new List<Word>();
+            Recipient = new List<Word>();
+            Theme = new List<Word>();
+            Predicate = new List<Word>();
+            Result = new List<Word>();
+        }
+
+        public Keywords AddAgent(Word NewWord) { 
+            Agent.Add(NewWord);
+            return this; 
+        }
+        public Keywords AddPatient(Word NewWord)
+        {
+            Patient.Add(NewWord);
+            return this;
+        }
+        public Keywords AddRecipient(Word NewWord)
+        {
+            Recipient.Add(NewWord);
+            return this;
+        }
+        public Keywords AddTheme(Word NewWord)
+        {
+            Theme.Add(NewWord);
+            return this;
+        }
+        public Keywords AddPredicate(Word NewWord)
+        {
+            Predicate.Add(NewWord);
+            return this;
+        }
+        public Keywords AddResult(Word NewWord)
+        {
+            Result.Add(NewWord);
+            return this;
+        }
+
+        public static FunctionWord GetFunction(Word front, Word after)
+        {
+            if (front == null || after == null)
+            {
+                return FunctionWord.None;
+            }
+
+            switch (front.Type)
+            {
+                case PartOfSpeech.Noun:
+                    switch (after.Type)
+                    {
+                        case PartOfSpeech.Noun:
+                            return FunctionWord.Of; // 名词 + 名词 → "of" (所属/修饰关系)
+                        case PartOfSpeech.Verb:
+                            return FunctionWord.To; // 名词 + 动词 → "to" (目的/不定式)
+                        case PartOfSpeech.Adjective:
+                            return FunctionWord.With; // 名词 + 形容词 → "with" (带有...特征)
+                    }
+                    break;
+
+                case PartOfSpeech.Verb:
+                    switch (after.Type)
+                    {
+                        case PartOfSpeech.Noun:
+                            // 动词 + 名词 的情况很复杂，取决于具体动词。
+                            // "with" 通常表示工具/伴随 (e.g., "cut with knife")
+                            // "to" 通常表示方向/目标 (e.g., "go to school")
+                            // 这里可以根据 front (动词) 的语义角色或类型进一步细分。
+                            // 暂时保留 "With" 作为一种常见情况。
+                            return FunctionWord.With;
+                        case PartOfSpeech.Adverb:
+                            // 副词直接修饰动词，通常不需要介词 (e.g., "run quickly")
+                            return FunctionWord.None;
+                    }
+                    break;
+
+                case PartOfSpeech.Adjective:
+                    if (after.Type == PartOfSpeech.Noun)
+                    {
+                        return FunctionWord.Of; // 形容词 + 名词 → "of" (e.g., "proud of him")
+                    }
+                    break;
+            }
+
+            // 默认情况：无介词
+            // (如：代词+名词，限定词+名词等保持无介词)
+            return FunctionWord.None;
+        }
+	}
 
 	// 叙事轴向量：axisKey -> intensity
 	// 例：need.hunger=0.8, urgency=0.5, valence.neg=0.4, social.request=0.2
@@ -138,44 +175,6 @@ namespace RimLife
 			=> _axes.TryGetValue(axisKey, out var v) ? v : fallback;
 
 		public bool IsEmpty => _axes.Count == 0;
-
-		public IEnumerable<KeyValuePair<string, float>> Pairs() => _axes;
-
-		// 用于配额扣除：只处理正向消耗轴（按你模型：生成 Fact 就扣 quota）。
-		public bool CanPay(AxisVector budget, float eps = 1e-6f)
-		{
-			foreach (var (k, cost) in _axes)
-			{
-				if (cost <= eps) continue;
-				if (budget.Get(k) + eps < cost) return false;
-			}
-			return true;
-		}
-
-		public void PayFrom(ref AxisVector budget)
-		{
-			foreach (var (k, cost) in _axes)
-			{
-				if (cost <= 0f) continue;
-				budget._axes[k] = Math.Max(0f, budget.Get(k) - cost);
-			}
-		}
-
-		public float Dot(AxisVector other)
-		{
-			// 稀疏点积：用于主题偏好/随机倾向评分（仍可保持强随机）。
-			float sum = 0f;
-			// 遍历更小的一方更快；这里简单写。
-			foreach (var (k, v) in _axes)
-				sum += v * other.Get(k);
-			return sum;
-		}
-
-		public override string ToString()
-			=> string.Join(", ",
-				_axes.OrderByDescending(kv => Math.Abs(kv.Value))
-					 .Take(10)
-					 .Select(kv => $"{kv.Key}:{kv.Value:0.##}"));
 	}
 
 	/// <summary>
@@ -185,42 +184,63 @@ namespace RimLife
 	/// </summary>
 	public sealed class Fact
 	{
-		// --- Identity / trace ---
+        // --- Identity / trace ---
+        List<Keywords> Keywords;
 
-		public string SubjectId;
-
-		public string ObjectId;
-
-        public string SchemaId { get; }     // 可扩展事实类型 ID（不枚举），例："pawn.need.hunger"
+        public List<string> Tags
+        {
+            get
+            {
+                if (Keywords == null)
+                {
+                    return new List<string>();
+                }
+                return Keywords
+                    .Where(kw => kw.Tags != null)
+                    .SelectMany(kw => kw.Tags)
+                    .Distinct()
+                    .ToList();
+            }
+        }
 
         // --- Entities / time ---
-        public Keywords keywords;
-		public int GameTick { get; }        // 时间戳（RimWorld tick 或你自己的逻辑时间）
+        public int MapId { get; set; }
+        public int GameTick { get; }					// 时间戳（RimWorld tick 或你自己的逻辑时间）
 
 		// --- Selection metadata for Theme ---
-		public AxisVector NarrativeAxes { get; }                 // 叙事轴/语义轴向量（强度标签）；可用于合并/随机倾向
-		public float Confidence { get; }                // 置信度
+		public AxisVector NarrativeAxes { get; }		// 叙事轴/语义轴向量（强度标签）；可用于合并/随机倾向
+		public float Confidence { get; }				// 置信度
 
-		
-
-        private Fact(
-			string schemaId,
-			string subject,
-			int gameTick,
-			AxisVector narrativeaxes,
-			float confidence =1,
-			string obj = ""
+        public Fact(
+            List<Keywords> keywords = default,
+			AxisVector narrativeaxes = default,
+			float confidence = 1
 		)
 		{
-			SchemaId = schemaId;
-
-			SubjectId = keywords.GetAgent();
-			ObjectId = keywords.GetPatient();
-			GameTick = gameTick;
-
-			NarrativeAxes = narrativeaxes;
-
+			NarrativeAxes = narrativeaxes ?? new AxisVector();
 			Confidence = Math.Clamp(confidence, 0f, 1f);
-		}
-	}
+            Keywords = keywords ?? new List<Keywords>();
+            MapId = Find.CurrentMap.uniqueID;
+            GameTick = MapTick.Get(MapId);
+        }
+
+        public Keywords AddThing()
+		{
+			var NewThing = new Keywords();
+            Keywords.Add(NewThing); 
+			return NewThing;
+        }
+
+		public List<Keywords> GetThing(List<string> Tags = default)
+		{
+            if (Tags == default || !Tags.Any())
+            {
+				return Keywords?.ToList() ?? new List<Keywords>();
+            }
+
+            return Keywords
+                .Where(kw => kw.Tags != null && Tags.All(tag => kw.Tags.Contains(tag)))
+                .ToList();
+        }
+    }
 }

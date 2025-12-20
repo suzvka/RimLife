@@ -70,7 +70,7 @@ namespace RimLife
     /// 基于“大五”模型提供 pawn 人格的语言学表述。
     /// 此类将复杂的 pawn 数据（特质、背景故事等）转换为结构化的、描述性的人格维度。
     /// </summary>
-    internal class PersonalityFact
+    internal class Psychology
     {
         #region Big Five Personality Traits
 
@@ -97,7 +97,7 @@ namespace RimLife
         public BigFiveVector BaseVector => _baseFromTraits; // struct copy
         public IReadOnlyDictionary<string, BigFiveVector> ExternalVectors => _externals; // reference safe enough
 
-        public PersonalityFact(PawnPro pawnPro)
+        public Psychology(PawnPro pawnPro)
         {
             if (pawnPro == null) throw new ArgumentNullException(nameof(pawnPro));
             //计算基础向量
@@ -109,9 +109,9 @@ namespace RimLife
         /// <summary>
         /// 从 PawnPro 对象创建 PersonalityNarrative 的工厂方法。
         /// </summary>
-        public static PersonalityFact From(PawnPro pawnPro)
+        public static Psychology From(PawnPro pawnPro)
         {
-            return new PersonalityFact(pawnPro);
+            return new Psychology(pawnPro);
         }
 
         /// <summary>

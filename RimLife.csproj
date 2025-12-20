@@ -54,6 +54,9 @@
 			<Private>false</Private>
 		</Reference>
 	</ItemGroup>
+	<ItemGroup>
+	  <Folder Include="Source\Linguistic\Fact\FactBuild\" />
+	</ItemGroup>
 
 	<!-- Deploy to RimWorld client -->
 	<Target Name="DeployToModsFolder" AfterTargets="Build" Condition=" '$(BuildingWithScript)' != 'true' AND '$(RimWorldDir)' != '' ">
