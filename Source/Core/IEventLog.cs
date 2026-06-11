@@ -1,3 +1,4 @@
+using RimLife.Cards;
 using System.Collections.Generic;
 
 namespace RimLife.Core

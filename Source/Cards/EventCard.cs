@@ -1,24 +1,25 @@
 using System;
 using System.Collections.Generic;
 
-namespace RimLife
+namespace RimLife.Cards
 {
     /// <summary>
     /// 事件语义分类。
     /// </summary>
     public enum EventCategory
     {
-        Combat,    // 战斗相关（袭击、战斗）
-        Nature,    // 自然事件（天气、灾害）
-        Social,    // 社交事件（结婚、争执）
-        Quest,     // 任务事件
-        Health,    // 健康事件（死亡、倒地、疾病）
-        Economy,   // 经济事件（贸易、空投）
-        Anomaly    // 异常事件
+        Combat,
+        Nature,
+        Social,
+        Quest,
+        Health,
+        Economy,
+        Anomaly
     }
 
     /// <summary>
     /// 游戏事件的标准接口。所有具体事件实现必须实现此接口。
+    /// 纯 DTO 接口，零 RimWorld 依赖。
     /// </summary>
     public interface IGameEvent
     {

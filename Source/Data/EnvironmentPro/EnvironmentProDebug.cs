@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using HarmonyLib;
+using RimLife.Cards;
+using RimLife.Mappers;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -10,11 +12,10 @@ using Verse;
 namespace RimLife
 {
     /// <summary>
-    /// Debug helper: adds a dev-mode gizmo on selected Pawn to dump a formatted EnvironmentPro snapshot to the log.
+    /// Debug helper: adds a dev-mode gizmo on selected Pawn to dump a formatted EnvironmentCard snapshot to the log.
     /// </summary>
     internal static class EnvironmentProDebug
     {
-
         public static IEnumerable<Gizmo> GetDebugGizmos(Pawn pawn)
         {
             if (pawn == null) yield break;
@@ -23,43 +24,43 @@ namespace RimLife
             yield return new Command_Action
             {
                 defaultLabel = "EnvironmentPro Dump",
-                defaultDesc = "Print a structured EnvironmentPro snapshot for this pawn to the game log (Dev Mode).",
+                defaultDesc = "Print a structured EnvironmentCard snapshot for this pawn to the game log (Dev Mode).",
                 icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false),
-                action = () => DumpEnvironmentPro(pawn)
+                action = () => DumpEnvironmentCard(pawn)
             };
         }
 
-        private static void DumpEnvironmentPro(Pawn pawn)
+        private static void DumpEnvironmentCard(Pawn pawn)
         {
             try
             {
-                var ep = new EnvironmentPro(pawn);
+                var ec = EnvironmentCardMapper.CreateFrom(pawn);
                 var sb = new StringBuilder(1024);
-                sb.AppendLine($"[EnvironmentPro Dump] Pawn={pawn.LabelShortCap} ID={pawn.ThingID}");
-                sb.AppendLine($"Type={ep.Type} Temp={ep.Temperature:0.0} Light={ep.LightLevel:0.00}");
+                sb.AppendLine($"[EnvironmentCard Dump] Pawn={pawn.LabelShortCap} ID={pawn.ThingID}");
+                sb.AppendLine($"Type={ec.Type} Temp={ec.Temperature:0.0} Light={ec.LightLevel:0.00}");
 
                 // Room
-                if (ep.Room != null)
+                if (ec.Room != null)
                 {
                     sb.AppendLine("== Room ==");
-                    sb.AppendLine($"Role={ep.Room.RoleLabel}");
-                    var rs = ep.Room.BaseStats;
+                    sb.AppendLine($"Role={ec.Room.RoleLabel}");
+                    var rs = ec.Room.BaseStats;
                     sb.AppendLine($"Impressiveness={rs.Impressiveness:0.00} Beauty={rs.Beauty:0.00} Wealth={rs.Wealth:0.00} Space={rs.Space:0.00} Cleanliness={rs.Cleanliness:0.00}");
                 }
 
                 // Weather
-                if (!string.IsNullOrEmpty(ep.Weather.Label) || !string.IsNullOrEmpty(ep.Weather.Description))
+                if (ec.Weather.Label != null || ec.Weather.Description != null)
                 {
                     sb.AppendLine("== Weather ==");
-                    sb.AppendLine($"{ep.Weather.Label} | {ep.Weather.Description}");
-                    sb.AppendLine($"Rain={ep.Weather.IsRain} Snow={ep.Weather.IsSnow} Wind={ep.Weather.WindSpeed:0.00}");
+                    sb.AppendLine($"{ec.Weather.Label} | {ec.Weather.Description}");
+                    sb.AppendLine($"Rain={ec.Weather.IsRain} Snow={ec.Weather.IsSnow} Wind={ec.Weather.WindSpeed:0.00}");
                 }
 
                 // ThingSummary
                 sb.AppendLine("== ThingSummary ==");
-                if (ep.ThingSummary != null && ep.ThingSummary.Count > 0)
+                if (ec.ThingSummary != null && ec.ThingSummary.Count > 0)
                 {
-                    foreach (var kvp in ep.ThingSummary)
+                    foreach (var kvp in ec.ThingSummary)
                     {
                         sb.AppendLine($"{kvp.Key}: {kvp.Value}");
                     }

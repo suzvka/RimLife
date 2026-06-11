@@ -1,3 +1,4 @@
+using RimLife.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -159,7 +160,7 @@ namespace RimLife.Infrastructure
         {
             if (dict == null || dict.Count == 0) return "{}";
 
-            var writer = new Tool.JsonWriter(dict.Count * 64);
+            var writer = new Framework.JsonWriter(dict.Count * 64);
             foreach (var kv in dict)
             {
                 writer.Prop(kv.Key, kv.Value ?? "");

@@ -1,11 +1,13 @@
 using HarmonyLib;
+using RimLife.Cards;
+using RimLife.Core;
+using RimLife.Infrastructure;
+using RimLife.Mappers;
 using RimWorld;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using RimLife.Core;
-using RimLife.Infrastructure;
 using UnityEngine;
 using Verse;
 
@@ -16,13 +18,12 @@ namespace RimLife
     /// </summary>
     internal static class ColonyDebug
     {
-
         public static IEnumerable<Gizmo> GetDebugGizmos(Pawn pawn)
         {
             if (pawn == null) yield break;
             if (!Prefs.DevMode) yield break;
 
-            // SocialInfo dump
+            // SocialInfo dump (via CharacterCardMapper)
             yield return new Command_Action
             {
                 defaultLabel = "SocialInfo Dump",
@@ -31,22 +32,13 @@ namespace RimLife
                 action = () => DumpSocialInfo(pawn)
             };
 
-            // ColonySnapshot dump (any pawn triggers it)
+            // ColonyContext dump (any pawn triggers it)
             yield return new Command_Action
             {
-                defaultLabel = "ColonySnapshot Dump",
-                defaultDesc = "Print colony-level snapshot.",
+                defaultLabel = "ColonyContext Dump",
+                defaultDesc = "Print colony-level context snapshot.",
                 icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false),
-                action = () => DumpColonySnapshot()
-            };
-
-            // TimeContext dump
-            yield return new Command_Action
-            {
-                defaultLabel = "TimeContext Dump",
-                defaultDesc = "Print current time context.",
-                icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false),
-                action = () => DumpTimeContext()
+                action = () => DumpColonyContext()
             };
 
             // EventLog dump
@@ -58,13 +50,13 @@ namespace RimLife
                 action = () => DumpEventLog()
             };
 
-            // QuestInfo dump
+            // ObjectiveCard dump
             yield return new Command_Action
             {
-                defaultLabel = "QuestInfo Dump",
-                defaultDesc = "Print active quests.",
+                defaultLabel = "ObjectiveCard Dump",
+                defaultDesc = "Print active objectives.",
                 icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false),
-                action = () => DumpQuestInfo()
+                action = () => DumpObjectives()
             };
         }
 
@@ -73,7 +65,10 @@ namespace RimLife
         {
             try
             {
-                var si = SocialInfo.CreateFrom(pawn);
+                var card = CharacterCardMapper.CreateBasic(pawn).WithSocial(pawn);
+                var si = card.Social;
+                if (si == null) { Log.Message("[SocialInfo] (not collected)"); return; }
+
                 var sb = new StringBuilder(1024);
                 sb.AppendLine($"[SocialInfo Dump] {pawn.Name?.ToStringShort ?? pawn.LabelShortCap}");
                 sb.AppendLine($"ColonyOpinionAvg={si.ColonyOpinionAverage:F1}");
@@ -96,25 +91,25 @@ namespace RimLife
             }
         }
 
-        // --- ColonySnapshot ---
-        private static void DumpColonySnapshot()
+        // --- ColonyContext ---
+        private static void DumpColonyContext()
         {
             try
             {
-                var cs = ColonySnapshot.Create();
-                if (cs == null) { Log.Message("[ColonySnapshot] null (no map?)"); return; }
+                var ctx = ColonyContextMapper.Create();
+                if (ctx == null) { Log.Message("[ColonyContext] null (no map?)"); return; }
 
                 var sb = new StringBuilder(2048);
-                sb.AppendLine("[ColonySnapshot Dump]");
-                sb.AppendLine($"Time: tick={cs.Time.CurrentTick} {cs.Time.Season} {cs.Time.TimeOfDay} {cs.Time.Quadrum} Y{cs.Time.Year} D{cs.Time.DayOfQuadrum} H{cs.Time.Hour}");
-                sb.AppendLine($"Pop: alive={cs.PopulationAlive} downed={cs.PopulationDowned} mental={cs.PopulationMentalBreak}");
-                sb.AppendLine($"Wealth={cs.WealthTotal:F0} Food={cs.FoodStatus} Power={cs.PowerStatus}");
-                sb.AppendLine($"Morale: avg={cs.MoraleAverage:F2} tier={cs.MoraleTier}");
+                sb.AppendLine("[ColonyContext Dump]");
+                sb.AppendLine($"Time: tick={ctx.CurrentTick} {ctx.Season} {ctx.TimeOfDay} {ctx.Quadrum} Y{ctx.Year} D{ctx.DayOfQuadrum} H{ctx.Hour}");
+                sb.AppendLine($"Pop: alive={ctx.PopulationAlive} downed={ctx.PopulationDowned} mental={ctx.PopulationMentalBreak}");
+                sb.AppendLine($"Wealth={ctx.WealthTotal:F0} Food={ctx.FoodStatus} Power={ctx.PowerStatus}");
+                sb.AppendLine($"Morale: avg={ctx.MoraleAverage:F2} tier={ctx.MoraleTier}");
 
-                if (cs.Colonists != null && cs.Colonists.Count > 0)
+                if (ctx.Colonists != null && ctx.Colonists.Count > 0)
                 {
                     sb.AppendLine("== Colonists ==");
-                    foreach (var c in cs.Colonists)
+                    foreach (var c in ctx.Colonists)
                     {
                         string flags = "";
                         if (c.IsDowned) flags += " [DOWNED]";
@@ -123,17 +118,17 @@ namespace RimLife
                     }
                 }
 
-                if (cs.FactionRelations != null && cs.FactionRelations.Count > 0)
+                if (ctx.FactionRelations != null && ctx.FactionRelations.Count > 0)
                 {
                     sb.AppendLine("== FactionRelations ==");
-                    foreach (var f in cs.FactionRelations)
+                    foreach (var f in ctx.FactionRelations)
                         sb.AppendLine($"  {f.FactionName}: goodwill={f.Goodwill:F0} ({f.RelationLabel})");
                 }
 
-                if (cs.ActiveThreats != null && cs.ActiveThreats.Count > 0)
+                if (ctx.ActiveThreats != null && ctx.ActiveThreats.Count > 0)
                 {
                     sb.AppendLine("== Threats ==");
-                    foreach (var t in cs.ActiveThreats)
+                    foreach (var t in ctx.ActiveThreats)
                         sb.AppendLine($"  {t}");
                 }
 
@@ -141,25 +136,7 @@ namespace RimLife
             }
             catch (Exception e)
             {
-                Log.Error($"[ColonyDebug] ColonySnapshot dump failed: {e}");
-            }
-        }
-
-        // --- TimeContext ---
-        private static void DumpTimeContext()
-        {
-            try
-            {
-                var tc = TimeContext.Current();
-                var sb = new StringBuilder(256);
-                sb.AppendLine("[TimeContext Dump]");
-                sb.AppendLine($"Tick={tc.CurrentTick} Season={tc.Season} TimeOfDay={tc.TimeOfDay}");
-                sb.AppendLine($"Quadrum={tc.Quadrum} Year={tc.Year} DayOfQuadrum={tc.DayOfQuadrum} Hour={tc.Hour}");
-                Log.Message(sb.ToString());
-            }
-            catch (Exception e)
-            {
-                Log.Error($"[ColonyDebug] TimeContext dump failed: {e}");
+                Log.Error($"[ColonyDebug] ColonyContext dump failed: {e}");
             }
         }
 
@@ -209,26 +186,26 @@ namespace RimLife
             }
         }
 
-        // --- QuestInfo ---
-        private static void DumpQuestInfo()
+        // --- Objectives ---
+        private static void DumpObjectives()
         {
             try
             {
-                var quests = QuestInfo.GetActive();
+                var objectives = ObjectiveCardMapper.GetActive();
                 var sb = new StringBuilder(1024);
-                sb.AppendLine($"[QuestInfo Dump] active={quests.Count}");
+                sb.AppendLine($"[ObjectiveCard Dump] active={objectives.Count}");
 
-                foreach (var q in quests)
+                foreach (var o in objectives)
                 {
-                    sb.AppendLine($"  [{q.Status}] {q.Title} (ID={q.QuestID})");
-                    if (!string.IsNullOrEmpty(q.Description))
-                        sb.AppendLine($"    desc: {q.Description}");
-                    if (q.TimeLimitTick.HasValue)
-                        sb.AppendLine($"    timeLimit: {q.TimeLimitTick.Value} ticks remaining");
-                    if (q.Parts != null && q.Parts.Count > 0)
+                    sb.AppendLine($"  [{o.Status}] {o.Title} (ID={o.ID}) source={o.Source}");
+                    if (!string.IsNullOrEmpty(o.Description))
+                        sb.AppendLine($"    desc: {o.Description}");
+                    if (o.DeadlineTick.HasValue)
+                        sb.AppendLine($"    timeLimit: {o.DeadlineTick.Value} ticks remaining");
+                    if (o.Steps != null && o.Steps.Count > 0)
                     {
-                        foreach (var p in q.Parts)
-                            sb.AppendLine($"    part: {p.PartLabel} completed={p.IsCompleted}");
+                        foreach (var s in o.Steps)
+                            sb.AppendLine($"    step: {s.Label} completed={s.IsCompleted}");
                     }
                 }
 
@@ -236,7 +213,7 @@ namespace RimLife
             }
             catch (Exception e)
             {
-                Log.Error($"[ColonyDebug] QuestInfo dump failed: {e}");
+                Log.Error($"[ColonyDebug] ObjectiveCard dump failed: {e}");
             }
         }
     }

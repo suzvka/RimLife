@@ -2,27 +2,50 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Verse;
 
-namespace RimLife
+namespace RimLife.Framework
 {
     /// <summary>
-    /// Schedules actions to execute on the main game thread. Public API unchanged.
+    /// 主线程任务调度器。零外部依赖。
+    /// 从任意线程 Enqueue action，由主线程周期调用 DrainQueue 执行。
+    /// 日志回调需由宿主层注入（如 RimWorld 适配层设置 LogWarningCallback / LogErrorCallback）。
     /// </summary>
     public static class MainThreadDispatcher
     {
         private static readonly Queue<Action> _executionQueue = new Queue<Action>();
         private static readonly object _queueLock = new object();
 
-        // Main thread tracking & drain state
-        private static int _mainThreadId = -1; // set on first DrainQueue call
+        private static int _mainThreadId = -1;
         private static volatile bool _isDraining;
-        private const int MaxQueueSize = 5000; // soft limit
+        private const int MaxQueueSize = 5000;
+
+        // ================================================================
+        // 可注入日志回调（由宿主层设置）
+        // ================================================================
+
+        /// <summary>警告级别日志回调。不设置则不输出。</summary>
+        public static Action<string> LogWarningCallback;
+
+        /// <summary>错误级别日志回调。不设置则不输出。</summary>
+        public static Action<string> LogErrorCallback;
+
+        private static void LogWarning(string message)
+        {
+            LogWarningCallback?.Invoke(message);
+        }
+
+        private static void LogError(string message)
+        {
+            LogErrorCallback?.Invoke(message);
+        }
+
+        // ================================================================
+        // 公共 API
+        // ================================================================
 
         /// <summary>
-        /// Enqueues an action to be executed on the main thread.
+        /// 将 action 加入主线程执行队列。
         /// </summary>
-        /// <param name="action">The action to execute.</param>
         public static void Enqueue(Action action)
         {
             if (action == null) return;
@@ -30,29 +53,29 @@ namespace RimLife
             {
                 if (_executionQueue.Count >= MaxQueueSize)
                 {
-                    Log.Warning($"[MainThreadDispatcher] Queue size {_executionQueue.Count} exceeded {MaxQueueSize}. Action may be delayed.");
+                    LogWarning($"[MainThreadDispatcher] Queue size {_executionQueue.Count} exceeded {MaxQueueSize}. Action may be delayed.");
                 }
                 _executionQueue.Enqueue(action);
             }
         }
 
         /// <summary>
-        /// Executes all pending actions. Must be called from the main thread update loop.
+        /// 在主线程上执行所有待处理 action。必须从主线程调用。
         /// </summary>
         public static void DrainQueue()
         {
             int currentThread = Thread.CurrentThread.ManagedThreadId;
             if (_mainThreadId == -1)
             {
-                _mainThreadId = currentThread; // first invocation establishes main thread
+                _mainThreadId = currentThread;
             }
             else if (_mainThreadId != currentThread)
             {
-                Log.Error("[MainThreadDispatcher] DrainQueue called from non-main thread. Ignored.");
+                LogError("[MainThreadDispatcher] DrainQueue called from non-main thread. Ignored.");
                 return;
             }
 
-            if (_isDraining) return; // prevent re-entrancy
+            if (_isDraining) return;
 
             List<Action> workItems = null;
             lock (_queueLock)
@@ -77,7 +100,7 @@ namespace RimLife
                     }
                     catch (Exception e)
                     {
-                        Log.Error($"[MainThreadDispatcher] Error executing action: {e}");
+                        LogError($"[MainThreadDispatcher] Error executing action: {e}");
                     }
                 }
             }
@@ -88,14 +111,13 @@ namespace RimLife
         }
 
         /// <summary>
-        /// Enqueues a function to execute on the main thread and returns a Task for the result.
-        /// Executes inline if already on main thread and not draining.
+        /// 将 func 加入主线程执行队列，返回 Task 等待结果。
+        /// 已在主线程且非 draining 状态时同步执行。
         /// </summary>
         public static Task<T> EnqueueAsync<T>(Func<T> func)
         {
             if (func == null) return Task.FromException<T>(new ArgumentNullException(nameof(func)));
 
-            // Fast path: already on main thread and not currently draining => execute immediately.
             if (_mainThreadId != -1 && Thread.CurrentThread.ManagedThreadId == _mainThreadId && !_isDraining)
             {
                 try

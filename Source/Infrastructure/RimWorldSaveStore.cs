@@ -1,6 +1,8 @@
+using RimLife.Framework;
 using System;
 using System.Collections.Generic;
 using RimLife.Core;
+using RimWorld.Planet;
 using Verse;
 
 namespace RimLife.Infrastructure
@@ -114,9 +116,9 @@ namespace RimLife.Infrastructure
             }
         }
 
-        public override void FinalizeInit()
+        public override void FinalizeInit(bool fromLoad)
         {
-            base.FinalizeInit();
+            base.FinalizeInit(fromLoad);
             // 确保 SaveIdResolver 在加载后已设置
             if (_data.TryGetValue(SaveIdKey, out string resolvedId))
             {
@@ -134,7 +136,7 @@ namespace RimLife.Infrastructure
         {
             if (dict == null || dict.Count == 0) return "{}";
 
-            var writer = new Tool.JsonWriter(dict.Count * 64);
+            var writer = new Framework.JsonWriter(dict.Count * 64);
             foreach (var kv in dict)
             {
                 writer.Prop(kv.Key, kv.Value ?? "");

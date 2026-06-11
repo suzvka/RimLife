@@ -1,7 +1,9 @@
 using HarmonyLib;
+using RimLife.Cards;
+using RimLife.Infrastructure;
+using RimLife.Mappers;
 using RimWorld;
 using System;
-using RimLife.Infrastructure;
 using Verse;
 using Verse.AI;
 
@@ -18,8 +20,7 @@ namespace RimLife
             if (!__result) return;
             try
             {
-                var def = __instance.def;
-                RimLifeCore.EventLog?.Append(new IncidentGameEvent(def, parms));
+                RimLifeCore.EventLog?.Append(EventCardMapper.FromIncident(__instance.def, parms));
             }
             catch (Exception e)
             {
@@ -39,7 +40,7 @@ namespace RimLife
             if (__instance == null) return;
             try
             {
-                RimLifeCore.EventLog?.Append(new DeathGameEvent(__instance, dinfo));
+                RimLifeCore.EventLog?.Append(EventCardMapper.FromDeath(__instance, dinfo));
             }
             catch (Exception e)
             {
@@ -60,8 +61,7 @@ namespace RimLife
             if (!__result) return;
             try
             {
-                var mentalState = __instance?.MentalState;
-                RimLifeCore.EventLog?.Append(new MentalBreakGameEvent(__instance, mentalState));
+                RimLifeCore.EventLog?.Append(EventCardMapper.FromMentalBreak(__instance, __instance?.MentalState));
             }
             catch (Exception e)
             {
@@ -84,7 +84,7 @@ namespace RimLife
             {
                 var initiator = Traverse.Create(__instance).Field("pawn").GetValue<Pawn>();
                 if (initiator == null) return;
-                RimLifeCore.EventLog?.Append(new SocialInteractionGameEvent(initiator, recipient, intDef));
+                RimLifeCore.EventLog?.Append(EventCardMapper.FromSocialInteraction(initiator, recipient, intDef));
             }
             catch (Exception e)
             {
@@ -104,7 +104,7 @@ namespace RimLife
             if (__instance == null) return;
             try
             {
-                RimLifeCore.EventLog?.Append(new QuestGameEvent(__instance, outcome.ToString()));
+                RimLifeCore.EventLog?.Append(EventCardMapper.FromQuest(__instance, outcome.ToString()));
             }
             catch (Exception e)
             {
@@ -124,7 +124,7 @@ namespace RimLife
             if (__instance == null) return;
             try
             {
-                RimLifeCore.EventLog?.Append(new FactionChangeGameEvent(__instance, newFaction));
+                RimLifeCore.EventLog?.Append(EventCardMapper.FromFactionChange(__instance, newFaction));
             }
             catch (Exception e)
             {

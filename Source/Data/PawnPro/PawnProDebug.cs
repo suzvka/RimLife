@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using HarmonyLib;
+using RimLife.Cards;
+using RimLife.Mappers;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -10,54 +12,53 @@ using Verse;
 namespace RimLife
 {
     /// <summary>
-    /// Debug helper: adds a dev-mode gizmo on selected Pawn to dump a formatted PawnPro snapshot to the log.
+    /// Debug helper: adds a dev-mode gizmo on selected Pawn to dump a formatted CharacterCard snapshot to the log.
     /// </summary>
     public static class PawnProDebug
     {
-
         /// <summary>
-        /// Returns gizmos (dev mode only) for dumping PawnPro data.
+        /// Returns gizmos (dev mode only) for dumping CharacterCard data.
         /// </summary>
         public static IEnumerable<Gizmo> GetDebugGizmos(Pawn pawn)
         {
             if (pawn == null) yield break;
-            if (!Prefs.DevMode) yield break; // Only show in developer mode.
+            if (!Prefs.DevMode) yield break;
 
             yield return new Command_Action
             {
                 defaultLabel = "PawnPro Dump",
-                defaultDesc = "Print a structured PawnPro snapshot for this pawn to the game log (Dev Mode).",
-                icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false), // Reuse a vanilla icon; optional.
-                action = () => DumpPawnPro(pawn)
+                defaultDesc = "Print a structured CharacterCard snapshot for this pawn to the game log (Dev Mode).",
+                icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false),
+                action = () => DumpCharacterCard(pawn)
             };
         }
 
-        private static void DumpPawnPro(Pawn pawn)
+        private static void DumpCharacterCard(Pawn pawn)
         {
             try
             {
-                var pp = new PawnPro(pawn);
+                var card = CharacterCardMapper.CreateFull(pawn);
                 var sb = new StringBuilder(2048);
-                sb.AppendLine($"[PawnPro Dump] {pp.FullName} ({pp.ID}) | Type={pp.PawnType} Faction={pp.FactionLabel}");
-                sb.AppendLine($"Age={pp.AgeBiologicalYears:0.0} Gender={pp.Gender} Dead={pp.IsDead} Downed={pp.IsDowned} Awake={pp.IsAwake}");
+                sb.AppendLine($"[CharacterCard Dump] {card.FullName} ({card.ID}) | Type={card.PawnType} Faction={card.FactionLabel}");
+                sb.AppendLine($"Age={card.AgeBiologicalYears:0.0} Gender={card.Gender} Dead={card.IsDead} Downed={card.IsDowned} Awake={card.IsAwake}");
                 sb.AppendLine();
 
                 // --- Health ---
-                AppendHealth(pp, sb);
+                AppendHealth(card, sb);
                 // --- Needs ---
-                AppendNeeds(pp, sb);
+                AppendNeeds(card, sb);
                 // --- Mood (only if humanlike) ---
-                AppendMood(pp, sb);
+                AppendMood(card, sb);
                 // --- Activity ---
-                AppendActivity(pp, sb);
+                AppendActivity(card, sb);
                 // --- Perspective ---
-                AppendPerspective(pp, sb);
+                AppendPerspective(card, sb);
                 // --- Skills ---
-                AppendSkills(pp, sb);
+                AppendSkills(card, sb);
                 // --- Gear ---
-                AppendGear(pp, sb);
+                AppendGear(card, sb);
                 // --- Backstory ---
-                AppendBackstory(pp, sb);
+                AppendBackstory(card, sb);
 
                 Log.Message(sb.ToString());
             }
@@ -67,9 +68,11 @@ namespace RimLife
             }
         }
 
-        private static void AppendHealth(PawnPro pp, StringBuilder sb)
+        private static void AppendHealth(CharacterCard card, StringBuilder sb)
         {
-            var h = pp.Health;
+            var h = card.Health;
+            if (h == null) { sb.AppendLine("== Health == (not collected)"); sb.AppendLine(); return; }
+
             sb.AppendLine("== Health ==");
             sb.AppendLine($"Pain={h.SummaryPain:0.00} BleedRate={h.SummaryBleedRate:0.000}");
             if (h.Capacities != null && h.Capacities.Count > 0)
@@ -78,7 +81,6 @@ namespace RimLife
             }
             if (h.Injuries != null && h.Injuries.Count > 0)
             {
-                // Show top8 entries overall.
                 var grouped = h.Injuries.Select(i => $"{(i.Label)}({(i.Part)}:{i.Severity:0.00}{(i.IsBleeding ? "*" : "")}{(i.IsPermanent ? "!" : "")})")
                 .ToList();
                 sb.AppendLine("Injuries:" + string.Join(", ", grouped));
@@ -87,13 +89,14 @@ namespace RimLife
             sb.AppendLine();
         }
 
-        private static void AppendNeeds(PawnPro pp, StringBuilder sb)
+        private static void AppendNeeds(CharacterCard card, StringBuilder sb)
         {
-            var n = pp.Needs;
+            var n = card.Needs;
+            if (n == null) { sb.AppendLine("== Needs == (not collected)"); sb.AppendLine(); return; }
+
             sb.AppendLine("== Needs ==");
             if (n.AllNeeds != null && n.AllNeeds.Count > 0)
             {
-                // Sort by level ascending; show top critical first.
                 var ordered = n.AllNeeds.OrderBy(x => x.CurLevel)
                 .Select(x => $"{(x.Label)}:{x.CurLevel:0.00}{(x.IsCritical ? "!" : "")}");
                 sb.AppendLine(string.Join(" | ", ordered));
@@ -102,9 +105,9 @@ namespace RimLife
             sb.AppendLine();
         }
 
-        private static void AppendMood(PawnPro pp, StringBuilder sb)
+        private static void AppendMood(CharacterCard card, StringBuilder sb)
         {
-            var m = pp.Mood; // may be null for non-humanlike
+            var m = card.Mood; // null for non-humanlike
             sb.AppendLine("== Mood ==");
             if (m == null)
             {
@@ -126,9 +129,11 @@ namespace RimLife
             sb.AppendLine();
         }
 
-        private static void AppendActivity(PawnPro pp, StringBuilder sb)
+        private static void AppendActivity(CharacterCard card, StringBuilder sb)
         {
-            var a = pp.Activity;
+            var a = card.Activity;
+            if (a == null) { sb.AppendLine("== Activity == (not collected)"); sb.AppendLine(); return; }
+
             sb.AppendLine("== Activity ==");
             sb.AppendLine($"Posture={a.Posture ?? "-"}");
             if (a.Activities != null && a.Activities.Count > 0)
@@ -140,24 +145,36 @@ namespace RimLife
             sb.AppendLine();
         }
 
-        private static void AppendPerspective(PawnPro pp, StringBuilder sb)
+        private static void AppendPerspective(CharacterCard card, StringBuilder sb)
         {
-            var p = pp.Perspective;
+            var p = card.Perspective;
+            if (p == null) { sb.AppendLine("== Perspective == (not collected)"); sb.AppendLine(); return; }
+
             sb.AppendLine("== Perspective ==");
             if (p.VisiblePawnSnapshots != null && p.VisiblePawnSnapshots.Count > 0)
             {
-                var recognizables = p.GetRecognizablePawnIDs();
-                var unrec = p.GetUnrecognizableSpeciesCounts();
-                sb.AppendLine("Recognizable:" + (recognizables.Any() ? string.Join(", ", recognizables) : "(none)"));
-                sb.AppendLine("Unrecognizable:" + (unrec.Any() ? string.Join(", ", unrec) : "(none)"));
+                const float recognizableRange = 13f;
+                var recognizableIds = p.VisiblePawnSnapshots
+                    .Where(ps => ps.Distance <= recognizableRange)
+                    .Select(ps => ps.ID);
+                var unrecognizable = p.VisiblePawnSnapshots
+                    .Where(ps => ps.Distance > recognizableRange)
+                    .GroupBy(ps => ps.DefName)
+                    .OrderBy(g => g.Key)
+                    .Select(g => $"{g.Key}:{g.Count()}");
+
+                sb.AppendLine("Recognizable:" + (recognizableIds.Any() ? string.Join(", ", recognizableIds) : "(none)"));
+                sb.AppendLine("Unrecognizable:" + (unrecognizable.Any() ? string.Join(", ", unrecognizable) : "(none)"));
             }
             else sb.AppendLine("(no visible pawns)");
             sb.AppendLine();
         }
 
-        private static void AppendSkills(PawnPro pp, StringBuilder sb)
+        private static void AppendSkills(CharacterCard card, StringBuilder sb)
         {
-            var s = pp.Skills;
+            var s = card.Skills;
+            if (s == null) { sb.AppendLine("== Skills == (not collected)"); sb.AppendLine(); return; }
+
             sb.AppendLine("== Skills ==");
             if (s.AllSkills != null && s.AllSkills.Count > 0)
             {
@@ -168,9 +185,11 @@ namespace RimLife
             sb.AppendLine();
         }
 
-        private static void AppendGear(PawnPro pp, StringBuilder sb)
+        private static void AppendGear(CharacterCard card, StringBuilder sb)
         {
-            var g = pp.Gear;
+            var g = card.Gear;
+            if (g == null) { sb.AppendLine("== Gear == (not collected)"); sb.AppendLine(); return; }
+
             sb.AppendLine("== Gear ==");
             if (g.WornGear != null && g.WornGear.Count > 0)
             {
@@ -187,9 +206,11 @@ namespace RimLife
             sb.AppendLine();
         }
 
-        private static void AppendBackstory(PawnPro pp, StringBuilder sb)
+        private static void AppendBackstory(CharacterCard card, StringBuilder sb)
         {
-            var b = pp.Backstory;
+            var b = card.Backstory;
+            if (b == null) { sb.AppendLine("== Backstory == (not collected)"); sb.AppendLine(); return; }
+
             sb.AppendLine("== Backstory ==");
             if (b.Childhood.HasValue)
             {
@@ -209,12 +230,6 @@ namespace RimLife
             }
             sb.AppendLine();
         }
-
-        private static string Trim(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return s;
-            return s.Length > 28 ? s.Substring(0, 25) + "..." : s;
-        }
     }
 
     /// <summary>
@@ -228,7 +243,6 @@ namespace RimLife
             try
             {
                 if (__instance == null) return;
-                // Only for selected pawns (avoid clutter) and dev mode.
                 if (!Prefs.DevMode) return;
                 if (!Find.Selector.SelectedObjects.Contains(__instance)) return;
 

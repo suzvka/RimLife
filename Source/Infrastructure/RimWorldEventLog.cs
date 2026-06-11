@@ -1,6 +1,8 @@
+using RimLife.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using RimLife.Cards;
 using RimLife.Core;
 using Verse;
 
@@ -172,7 +174,7 @@ namespace RimLife.Infrastructure
 
         private static string SerializeEvent(IGameEvent evt)
         {
-            var writer = new Tool.JsonWriter(512);
+            var writer = new Framework.JsonWriter(512);
             writer.Prop("eventId", evt.EventID);
             writer.Prop("defName", evt.DefName);
             writer.Prop("category", evt.Category.ToString());
@@ -185,7 +187,7 @@ namespace RimLife.Infrastructure
             {
                 var actorJsons = evt.Actors.Select(a =>
                 {
-                    var aw = new Tool.JsonWriter(128);
+                    var aw = new Framework.JsonWriter(128);
                     aw.Prop("id", a.ID);
                     aw.Prop("name", a.Name);
                     aw.Prop("role", a.Role);
@@ -198,7 +200,7 @@ namespace RimLife.Infrastructure
             // Payload
             if (evt.Payload != null && evt.Payload.Count > 0)
             {
-                var pw = new Tool.JsonWriter(256);
+                var pw = new Framework.JsonWriter(256);
                 foreach (var kv in evt.Payload)
                 {
                     pw.Prop(kv.Key, kv.Value ?? "");

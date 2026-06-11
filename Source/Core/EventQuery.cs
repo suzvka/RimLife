@@ -1,3 +1,5 @@
+using RimLife.Cards;
+
 namespace RimLife.Core
 {
     /// <summary>
