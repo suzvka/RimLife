@@ -53,6 +53,7 @@ namespace RimLife
         public float AgeBiologicalYears { get; }
         public string Gender { get; }
         public PawnType PawnType { get; }
+        public PawnRelation PawnRelation { get; }
 
         public bool IsDead => _sourcePawn.Dead;
         public bool IsDowned => _sourcePawn.Downed;
@@ -74,6 +75,7 @@ namespace RimLife
             AgeBiologicalYears = pawn.ageTracker?.AgeBiologicalYearsFloat ??0f;
             Gender = pawn.gender.ToString();
             PawnType = GetPawnType(pawn);
+            PawnRelation = GetPawnRelation(pawn);
         }
 
         // --- 2. 延迟加载模块 ---
@@ -103,7 +105,23 @@ namespace RimLife
         private BackstoryInfo _backstory;
         public BackstoryInfo Backstory => _backstory ??= BackstoryInfo.CreateFrom(_sourcePawn);
 
+        private SocialInfo _social;
+        public SocialInfo Social => _social ??= SocialInfo.CreateFrom(_sourcePawn);
+
         // --- 辅助方法 ---
+        private static PawnRelation GetPawnRelation(Pawn p)
+        {
+            if (p.Faction == null) return PawnRelation.Other;
+            if (p.Faction == Faction.OfPlayer) return PawnRelation.OurParty;
+            var rel = p.Faction.PlayerRelationKind;
+            switch (rel)
+            {
+                case FactionRelationKind.Ally: return PawnRelation.Ally;
+                case FactionRelationKind.Hostile: return PawnRelation.Enemy;
+                default: return PawnRelation.Neutral;
+            }
+        }
+
         private static PawnType GetPawnType(Pawn p)
         {
             if (p.RaceProps.Humanlike) return PawnType.Character;

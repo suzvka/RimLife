@@ -32,6 +32,21 @@ namespace RimLife
         public IReadOnlyDictionary<string, float> Capacities { get; }
 
         /// <summary>
+        /// 疼痛语义标签。
+        /// </summary>
+        public string PainTier;
+
+        /// <summary>
+        /// 失血严重度语义标签。
+        /// </summary>
+        public string BleedTier;
+
+        /// <summary>
+        /// 能力等级语义标签字典 (key 同 Capacities)。
+        /// </summary>
+        public IReadOnlyDictionary<string, string> CapacityTiers { get; }
+
+        /// <summary>
         /// 所有可见的伤害、疾病和其他健康状况（hediffs）的列表。
         /// </summary>
         public IReadOnlyList<HealthEntry> Injuries { get; }
@@ -53,15 +68,21 @@ namespace RimLife
         private HealthInfo()
         {
             Capacities = new Dictionary<string, float>();
+            CapacityTiers = new Dictionary<string, string>();
             Injuries = new List<HealthEntry>();
+            PainTier = "None";
+            BleedTier = "None";
         }
 
-        private HealthInfo(float summaryPain, float summaryBleedRate, IReadOnlyDictionary<string, float> capacities, IReadOnlyList<HealthEntry> injuries)
+        private HealthInfo(float summaryPain, float summaryBleedRate, IReadOnlyDictionary<string, float> capacities, IReadOnlyList<HealthEntry> injuries, string painTier, string bleedTier, IReadOnlyDictionary<string, string> capacityTiers)
         {
             SummaryPain = summaryPain;
             SummaryBleedRate = summaryBleedRate;
             Capacities = capacities;
             Injuries = injuries;
+            PainTier = painTier;
+            BleedTier = bleedTier;
+            CapacityTiers = capacityTiers;
         }
 
         /// <summary>
@@ -70,6 +91,10 @@ namespace RimLife
         public static HealthInfo CreateFrom(Pawn p)
         {
             if (p?.health == null) return new HealthInfo();
+
+            // 缓存身体核心部件的本地化名称，用于 hediff 无部位时的回退。
+            string wholeBodyLabel = p.RaceProps?.body?.corePart?.def?.label
+                ?? "RimLife.Core.WholeBody".Translate().ToString();
 
             // 汇总疼痛和失血率（空安全）。
             var summaryPain = p.health.hediffSet?.PainTotal ?? 0f;
@@ -120,7 +145,7 @@ namespace RimLife
                     var entry = new HealthEntry
                     {
                         Label = h.def?.label ?? h.LabelCap,
-                        Part = h.Part?.Label ?? "Whole body",
+                        Part = h.Part?.Label ?? wholeBodyLabel,
                         Severity = h.Severity,
                         IsBleeding = h.Bleeding,
                         IsPermanent = h.IsPermanent(),
@@ -134,7 +159,16 @@ namespace RimLife
                 }
             }
             
-            return new HealthInfo(summaryPain, summaryBleedRate, capacities, injuries);
+            // 语义标签
+            string painTier = SemanticLabels.MapPainTier(summaryPain);
+            string bleedTier = SemanticLabels.MapBleedSeverity(summaryBleedRate);
+            var capacityTiers = new Dictionary<string, string>();
+            foreach (var kv in capacities)
+            {
+                capacityTiers[kv.Key] = SemanticLabels.MapCapacityTier(kv.Value);
+            }
+
+            return new HealthInfo(summaryPain, summaryBleedRate, capacities, injuries, painTier, bleedTier, capacityTiers);
         }
 
         /// <summary>

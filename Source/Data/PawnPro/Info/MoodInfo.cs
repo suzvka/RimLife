@@ -16,6 +16,7 @@ namespace RimLife
     public class MoodInfo
     {
         public float MoodLevel { get; }            // 当前心情 (0-1)
+        public string MoodTier { get; }              // 心情语义标签
         public string MentalStateLabel { get; }    // 精神崩溃状态 (null if normal)
 
         // 特质/性格列表
@@ -30,9 +31,10 @@ namespace RimLife
             ActiveThoughts = new List<ThoughtEntry>();
         }
 
-        private MoodInfo(float moodLevel, string mentalStateLabel, IReadOnlyList<TraitEntry> traits, IReadOnlyList<ThoughtEntry> activeThoughts)
+        private MoodInfo(float moodLevel, string moodTier, string mentalStateLabel, IReadOnlyList<TraitEntry> traits, IReadOnlyList<ThoughtEntry> activeThoughts)
         {
             MoodLevel = moodLevel;
+            MoodTier = moodTier;
             MentalStateLabel = mentalStateLabel;
             Traits = traits;
             ActiveThoughts = activeThoughts;
@@ -96,7 +98,7 @@ namespace RimLife
                 });
             }
 
-            return new MoodInfo(moodLevel, mentalStateLabel, traits, activeThoughts);
+            return new MoodInfo(moodLevel, SemanticLabels.MapMoodTier(moodLevel), mentalStateLabel, traits, activeThoughts);
         }
 
         public static Task<MoodInfo> CreateFromAsync(Pawn p)

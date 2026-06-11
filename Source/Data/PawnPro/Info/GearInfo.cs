@@ -45,11 +45,19 @@ namespace RimLife
 
         private static GearItem CreateGearItem(Thing thing)
         {
+            // 当物品没有质量组件时，使用 QualityCategory.Normal 的本地化标签而非英文硬编码。
+            string quality = thing.TryGetQuality(out var qc)
+                ? qc.ToString()
+                : QualityCategory.Normal.ToString();
+
+            float durability = thing.def.useHitPoints ? (float)thing.HitPoints / thing.MaxHitPoints : 1f;
+
             return new GearItem
             {
                 Name = thing.LabelCap,
-                Quality = thing.TryGetQuality(out var qc) ? qc.ToString() : "Normal",
-                Durability = thing.def.useHitPoints ? (float)thing.HitPoints / thing.MaxHitPoints : 1f,
+                Quality = quality,
+                Durability = durability,
+                ConditionLabel = SemanticLabels.MapGearCondition(durability),
                 Count = thing.stackCount
             };
         }
@@ -69,6 +77,10 @@ namespace RimLife
         /// 装备物品的耐久度，范围从 0 到 1。
         /// </summary>
         public float Durability;
+        /// <summary>
+        /// 装备物品的耐久语义标签 (例如 "Pristine" / "Broken")。
+        /// </summary>
+        public string ConditionLabel;
         /// <summary>
         /// 装备物品的堆叠数量。
         /// </summary>

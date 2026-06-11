@@ -40,9 +40,16 @@ namespace RimLife
                     if (need == null) continue;
                     try
                     {
-                        float thresholdLow = 0.3f; // 简单阈值占位
                         float cur = need.CurLevelPercentage;
-                        bool critical = cur < (thresholdLow * 0.5f) || cur < 0.15f;
+
+                        // 从 NeedDef 读取阈值：baseLevel 是该需求的自然平衡点，
+                        // 低于此值意味着 pawn 处于匮乏状态。
+                        float thresholdLow = need.def?.baseLevel > 0f
+                            ? need.def.baseLevel
+                            : 0.3f;
+
+                        // 紧急判定：低于阈值的一半，或绝对值极低。
+                        bool critical = cur < thresholdLow * 0.5f || cur < 0.1f;
 
                         var entry = new NeedEntry
                         {
@@ -50,7 +57,8 @@ namespace RimLife
                             Label = need.LabelCap,
                             CurLevel = cur,
                             ThresholdLow = thresholdLow,
-                            IsCritical = critical
+                            IsCritical = critical,
+                            NeedUrgency = SemanticLabels.MapNeedUrgency(need.def?.defName, cur)
                         };
                         allNeedsList.Add(entry);
                     }
@@ -78,7 +86,8 @@ namespace RimLife
         public string DefName;      // 需求ID (例如 "Food", "Beauty")
         public string Label;        // 显示名
         public float CurLevel;      // 当前值 (0-1)
-        public float ThresholdLow;  // 低于此值视为匮乏 (从 XML 读取)
+        public float ThresholdLow;  // 低于此值视为匮乏 (优先读取 NeedDef.baseLevel，无则回退 0.3)
         public bool IsCritical;     // 是否处于极低状态 (Extractor 预判)
+        public string NeedUrgency;  // 语义紧急标签 (例如 "Starving" / "Rested")
     }
 }

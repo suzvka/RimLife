@@ -25,6 +25,10 @@ namespace RimLife
         public float Temperature { get; private set; }
         public float LightLevel { get; private set; } // 0-1
 
+        // --- 语义标签 ---
+        public string ThermalComfort { get; private set; }
+        public string LightLabel { get; private set; }
+
         // --- 室内特有 (Indoors / SemiOutdoors) ---
         // 如果是 Outdoors，这些通常为 null 或默认值
         public RoomInfo Room { get; private set; }
@@ -48,6 +52,10 @@ namespace RimLife
             // 1. 基础物理属性
             Temperature = GenTemperature.GetTemperatureForCell(pos, map);
             LightLevel = map.glowGrid.GroundGlowAt(pos);
+
+            // 1b. 语义标签
+            ThermalComfort = SemanticLabels.MapThermalComfort(Temperature);
+            LightLabel = SemanticLabels.MapLightLevel(LightLevel);
 
             // 2. 判定环境类型
             if (room == null || room.PsychologicallyOutdoors)
