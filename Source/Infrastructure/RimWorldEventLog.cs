@@ -41,6 +41,7 @@ namespace RimLife.Infrastructure
             if (evt == null) return;
 
             _events.Add(evt);
+            TotalAppended++;
             Log.Message($"[RimLife.EventLog] +{evt.Category}/{evt.DefName} tick={evt.Tick} total={TotalAppended}");
 
             // 裁剪旧事件

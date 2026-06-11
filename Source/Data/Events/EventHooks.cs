@@ -51,24 +51,12 @@ namespace RimLife
 
     // ================================================================
     // 精神崩溃 Hook
-    // Pawn.TryStartMentalState (RimWorld 1.6 API)
+    // RimWorld 1.5+ 中 Pawn.TryStartMentalState 已移除，
+    // 精神崩溃由 MentalBreaker 管理。
+    // 临时禁用此 hook，后续需适配 MentalBreaker API。
     // ================================================================
-    [HarmonyPatch(typeof(Pawn), "TryStartMentalState")]
-    internal static class Patch_Pawn_TryStartMentalState
-    {
-        static void Postfix(Pawn __instance, MentalStateDef def, bool __result)
-        {
-            if (!__result) return;
-            try
-            {
-                RimLifeCore.EventLog?.Append(EventCardMapper.FromMentalBreak(__instance, __instance?.MentalState));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] MentalBreak hook failed: {e.Message}");
-            }
-        }
-    }
+    // [HarmonyPatch(typeof(Pawn), "TryStartMentalState")]  ← 1.4 only
+    // internal static class Patch_Pawn_TryStartMentalState { ... }
 
     // ================================================================
     // 社交互动 Hook

@@ -30,8 +30,11 @@
 	</PropertyGroup>
 	<ItemGroup>
 	  <Compile Remove="Source\RimLife\**" />
+	  <Compile Remove="RimLife.Tests\**" />
 	  <EmbeddedResource Remove="Source\RimLife\**" />
+	  <EmbeddedResource Remove="RimLife.Tests\**" />
 	  <None Remove="Source\RimLife\**" />
+	  <None Remove="RimLife.Tests\**" />
 	</ItemGroup>
 
 	<ItemGroup>
