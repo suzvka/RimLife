@@ -12,14 +12,8 @@ namespace RimLife
     /// <summary>
     /// Debug helper: adds a dev-mode gizmo on selected Pawn to dump a formatted EnvironmentPro snapshot to the log.
     /// </summary>
-    [StaticConstructorOnStartup]
     internal static class EnvironmentProDebug
     {
-        static EnvironmentProDebug()
-        {
-            var harmony = new Harmony("RimLife.EnvironmentProDebug");
-            harmony.PatchAll();
-        }
 
         public static IEnumerable<Gizmo> GetDebugGizmos(Pawn pawn)
         {

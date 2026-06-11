@@ -108,6 +108,9 @@ namespace RimLife
         private SocialInfo _social;
         public SocialInfo Social => _social ??= SocialInfo.CreateFrom(_sourcePawn);
 
+        private Psychology _psychology;
+        public Psychology Psychology => _psychology ??= new Psychology(this);
+
         // --- 辅助方法 ---
         private static PawnRelation GetPawnRelation(Pawn p)
         {

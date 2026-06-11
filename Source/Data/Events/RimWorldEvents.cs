@@ -259,4 +259,75 @@ namespace RimLife
             MapHint = "";
         }
     }
+
+    /// <summary>
+    /// Pawn 派系变更事件（殖民者加入/叛逃/被俘/释放）。
+    /// </summary>
+    public class FactionChangeGameEvent : IGameEvent
+    {
+        public string EventID { get; }
+        public string DefName { get; }
+        public EventCategory Category { get; }
+        public int Tick { get; }
+        public string Severity { get; }
+        public IReadOnlyList<EventActorRef> Actors { get; }
+        public string MapHint { get; }
+        public IDictionary<string, string> Payload { get; }
+
+        public FactionChangeGameEvent(Pawn pawn, Faction newFaction)
+        {
+            Tick = Find.TickManager?.TicksGame ?? 0;
+            EventID = $"factionchange_{pawn?.ThingID}_{Tick}";
+            DefName = "FactionChange";
+            Category = EventCategory.Social;
+
+            var actors = new List<EventActorRef>();
+            if (pawn != null)
+            {
+                var oldFaction = pawn.Faction;
+                var role = DetermineRole(oldFaction, newFaction);
+                actors.Add(EventActorRef.Pawn(
+                    pawn.ThingID ?? "?",
+                    pawn.Name?.ToStringShort ?? pawn.LabelShortCap ?? "?",
+                    role));
+            }
+
+            var payload = new Dictionary<string, string>
+            {
+                ["pawnId"] = pawn?.ThingID ?? "?",
+                ["pawnName"] = pawn?.Name?.ToStringShort ?? pawn?.LabelShortCap ?? "?",
+                ["newFaction"] = newFaction?.Name ?? newFaction?.def?.label ?? "None",
+                ["newFactionDef"] = newFaction?.def?.defName ?? "None"
+            };
+
+            var playerFaction = Faction.OfPlayer;
+            if (newFaction == playerFaction)
+            {
+                Severity = "Major";
+                payload["changeType"] = "Joined";
+            }
+            else if (pawn?.Faction == playerFaction)
+            {
+                Severity = "Major";
+                payload["changeType"] = "Left";
+            }
+            else
+            {
+                Severity = "Minor";
+                payload["changeType"] = "FactionSwitch";
+            }
+
+            Actors = actors;
+            Payload = payload;
+            MapHint = pawn?.Map != null ? $"Map:{pawn.Map.uniqueID}" : "";
+        }
+
+        private static string DetermineRole(Faction oldFaction, Faction newFaction)
+        {
+            var player = Faction.OfPlayer;
+            if (newFaction == player) return "Initiator"; // 加入玩家
+            if (oldFaction == player) return "Victim";     // 离开玩家
+            return "Bystander";
+        }
+    }
 }

@@ -10,7 +10,7 @@ using Verse;
 
 namespace RimLife
 {
-    internal class Tool
+    public static class Tool
     {
         public static bool TryTranslate(string key, out string text)
         {

@@ -12,15 +12,8 @@ namespace RimLife
     /// <summary>
     /// Debug helper: adds a dev-mode gizmo on selected Pawn to dump a formatted PawnPro snapshot to the log.
     /// </summary>
-    [StaticConstructorOnStartup]
     public static class PawnProDebug
     {
-        static PawnProDebug()
-        {
-            // Ensure Harmony patch for gizmo injection is applied.
-            var harmony = new Harmony("RimLife.PawnProDebug");
-            harmony.PatchAll();
-        }
 
         /// <summary>
         /// Returns gizmos (dev mode only) for dumping PawnPro data.

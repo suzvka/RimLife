@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using RimLife.Core;
+using RimLife.Infrastructure;
 using UnityEngine;
 using Verse;
 
@@ -12,14 +14,8 @@ namespace RimLife
     /// <summary>
     /// Debug helper: adds dev-mode gizmos for dumping new module data.
     /// </summary>
-    [StaticConstructorOnStartup]
     internal static class ColonyDebug
     {
-        static ColonyDebug()
-        {
-            var harmony = new Harmony("RimLife.ColonyDebug");
-            harmony.PatchAll();
-        }
 
         public static IEnumerable<Gizmo> GetDebugGizmos(Pawn pawn)
         {
@@ -53,13 +49,13 @@ namespace RimLife
                 action = () => DumpTimeContext()
             };
 
-            // EventBuffer dump
+            // EventLog dump
             yield return new Command_Action
             {
-                defaultLabel = "EventBuffer Dump",
-                defaultDesc = "Print recent events from buffer.",
+                defaultLabel = "EventLog Dump",
+                defaultDesc = "Print recent events from log.",
                 icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false),
-                action = () => DumpEventBuffer()
+                action = () => DumpEventLog()
             };
 
             // QuestInfo dump
@@ -167,14 +163,21 @@ namespace RimLife
             }
         }
 
-        // --- EventBuffer ---
-        private static void DumpEventBuffer()
+        // --- EventLog ---
+        private static void DumpEventLog()
         {
             try
             {
-                var events = EventBuffer.Instance.GetAll();
+                var eventLog = RimLifeCore.EventLog;
+                if (eventLog == null)
+                {
+                    Log.Message("[EventLog Dump] (no event log available - game not loaded?)");
+                    return;
+                }
+
+                var events = eventLog.Query(EventQuery.All);
                 var sb = new StringBuilder(2048);
-                sb.AppendLine($"[EventBuffer Dump] count={EventBuffer.Instance.Count} total={EventBuffer.Instance.TotalPushed}");
+                sb.AppendLine($"[EventLog Dump] count={events.Count} total={eventLog.TotalAppended}");
 
                 if (events.Count == 0)
                 {
@@ -202,7 +205,7 @@ namespace RimLife
             }
             catch (Exception e)
             {
-                Log.Error($"[ColonyDebug] EventBuffer dump failed: {e}");
+                Log.Error($"[ColonyDebug] EventLog dump failed: {e}");
             }
         }
 

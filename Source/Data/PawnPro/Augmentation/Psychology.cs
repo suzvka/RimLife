@@ -80,7 +80,7 @@ namespace RimLife
     /// 基于“大五”模型提供 pawn 人格的语言学表述。
     /// 此类将复杂的 pawn 数据（特质、背景故事等）转换为结构化的、描述性的人格维度。
     /// </summary>
-    internal class Psychology
+    public class Psychology
     {
         #region Big Five Personality Traits
 

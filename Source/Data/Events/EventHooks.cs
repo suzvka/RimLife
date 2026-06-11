@@ -1,25 +1,12 @@
 using HarmonyLib;
 using RimWorld;
 using System;
+using RimLife.Infrastructure;
 using Verse;
 using Verse.AI;
 
 namespace RimLife
 {
-    /// <summary>
-    /// Harmony patches 将 RimWorld 游戏事件注入 EventBuffer。
-    /// 沿用项目现有模式：[StaticConstructorOnStartup] + Harmony 初始化。
-    /// </summary>
-    [StaticConstructorOnStartup]
-    public static class EventHooks
-    {
-        static EventHooks()
-        {
-            var harmony = new Harmony("RimLife.EventHooks");
-            harmony.PatchAll();
-        }
-    }
-
     // ================================================================
     // Incident (袭击/事件) Hook
     // ================================================================
@@ -32,7 +19,7 @@ namespace RimLife
             try
             {
                 var def = __instance.def;
-                EventBuffer.Instance.Push(new IncidentGameEvent(def, parms));
+                RimLifeCore.EventLog?.Append(new IncidentGameEvent(def, parms));
             }
             catch (Exception e)
             {
@@ -52,7 +39,7 @@ namespace RimLife
             if (__instance == null) return;
             try
             {
-                EventBuffer.Instance.Push(new DeathGameEvent(__instance, dinfo));
+                RimLifeCore.EventLog?.Append(new DeathGameEvent(__instance, dinfo));
             }
             catch (Exception e)
             {
@@ -74,7 +61,7 @@ namespace RimLife
             try
             {
                 var mentalState = __instance?.MentalState;
-                EventBuffer.Instance.Push(new MentalBreakGameEvent(__instance, mentalState));
+                RimLifeCore.EventLog?.Append(new MentalBreakGameEvent(__instance, mentalState));
             }
             catch (Exception e)
             {
@@ -85,19 +72,19 @@ namespace RimLife
 
     // ================================================================
     // 社交互动 Hook
-    // 使用 Pawn.SocialInteract 作为 hook 点 (RimWorld 1.6)
+    // Hook Pawn_InteractionsTracker.TryInteractWith 以获取 InteractionDef
     // ================================================================
-    [HarmonyPatch(typeof(Pawn), "SocialInteract")]
-    internal static class Patch_Pawn_SocialInteract
+    [HarmonyPatch(typeof(Pawn_InteractionsTracker), "TryInteractWith")]
+    internal static class Patch_InteractionsTracker_TryInteractWith
     {
-        static void Postfix(Pawn __instance, Pawn other)
+        static void Postfix(Pawn_InteractionsTracker __instance, Pawn recipient, InteractionDef intDef)
         {
-            if (__instance == null || other == null) return;
+            if (__instance == null || recipient == null || intDef == null) return;
             try
             {
-                // SocialInteract 不传入 InteractionDef，此处仅记录发生事件
-                // 具体互动类型由 InteractionLog 跟踪（后续版本实现）
-                EventBuffer.Instance.Push(new SocialInteractionGameEvent(__instance, other, null));
+                var initiator = Traverse.Create(__instance).Field("pawn").GetValue<Pawn>();
+                if (initiator == null) return;
+                RimLifeCore.EventLog?.Append(new SocialInteractionGameEvent(initiator, recipient, intDef));
             }
             catch (Exception e)
             {
@@ -117,11 +104,31 @@ namespace RimLife
             if (__instance == null) return;
             try
             {
-                EventBuffer.Instance.Push(new QuestGameEvent(__instance, outcome.ToString()));
+                RimLifeCore.EventLog?.Append(new QuestGameEvent(__instance, outcome.ToString()));
             }
             catch (Exception e)
             {
                 Log.Warning($"[RimLife:EventHooks] Quest end hook failed: {e.Message}");
+            }
+        }
+    }
+
+    // ================================================================
+    // Pawn 派系变更 Hook (殖民者加入/叛逃/被俘)
+    // ================================================================
+    [HarmonyPatch(typeof(Pawn), nameof(Pawn.SetFaction))]
+    internal static class Patch_Pawn_SetFaction
+    {
+        static void Postfix(Pawn __instance, Faction newFaction)
+        {
+            if (__instance == null) return;
+            try
+            {
+                RimLifeCore.EventLog?.Append(new FactionChangeGameEvent(__instance, newFaction));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] SetFaction hook failed: {e.Message}");
             }
         }
     }
