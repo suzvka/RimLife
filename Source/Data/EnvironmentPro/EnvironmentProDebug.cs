@@ -61,17 +61,6 @@ namespace RimLife
                     sb.AppendLine($"Rain={ep.Weather.IsRain} Snow={ep.Weather.IsSnow} Wind={ep.Weather.WindSpeed:0.00}");
                 }
 
-                // Key features
-                sb.AppendLine("== KeyFeatures ==");
-                if (ep.KeyFeatures != null && ep.KeyFeatures.Count > 0)
-                {
-                    foreach (var f in ep.KeyFeatures)
-                    {
-                        sb.AppendLine($"[{f.CategoryTag}] {f.Label} ({f.DefName}) {f.Description}");
-                    }
-                }
-                else sb.AppendLine("(none)");
-
                 // ThingSummary
                 sb.AppendLine("== ThingSummary ==");
                 if (ep.ThingSummary != null && ep.ThingSummary.Count > 0)

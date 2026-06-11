@@ -8,6 +8,16 @@ using Verse;
 
 namespace RimLife
 {
+    public enum Level
+    {
+        Undefined,
+        VeryLow,
+        Low,
+        Average,
+        High,
+        VeryHigh
+    }
+
     /// <summary>
     /// 一个简单的五维向量，表示 O/C/E/A/N 五个轴的数值贡献。
     /// </summary>

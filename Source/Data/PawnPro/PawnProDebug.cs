@@ -85,11 +85,10 @@ namespace RimLife
             }
             if (h.Injuries != null && h.Injuries.Count > 0)
             {
-                // Group by GroupTag for readability, show top8 entries overall.
-                var grouped = h.Injuries.GroupBy(i => i.GroupTag)
-                .Select(g => $"{g.Key}[{g.Count()}]=" + string.Join(", ", g.Select(i => $"{(i.Label)}({(i.Part)}:{i.Severity:0.00}{(i.IsBleeding ? "*" : "")}{(i.IsPermanent ? "!" : "")})")))
+                // Show top8 entries overall.
+                var grouped = h.Injuries.Select(i => $"{(i.Label)}({(i.Part)}:{i.Severity:0.00}{(i.IsBleeding ? "*" : "")}{(i.IsPermanent ? "!" : "")})")
                 .ToList();
-                sb.AppendLine("Injuries:" + string.Join(" | ", grouped));
+                sb.AppendLine("Injuries:" + string.Join(", ", grouped));
             }
             else sb.AppendLine("Injuries: (none)");
             sb.AppendLine();

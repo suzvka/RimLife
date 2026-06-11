@@ -125,7 +125,6 @@ namespace RimLife
                         IsBleeding = h.Bleeding,
                         IsPermanent = h.IsPermanent(),
                         IsInfection = h.def?.isInfection ?? false,
-                        GroupTag = GetHealthGroupTag(h),
                         TendQuality = tendQuality,
                         AgeTicks = h.ageTicks,
                         Immunity = immunity,
@@ -150,26 +149,7 @@ namespace RimLife
         }
 
 
-        private static HealthGroupTag GetHealthGroupTag(Hediff h)
-        {
-            if (h?.def == null) return HealthGroupTag.Other;
-            if (h.def.isInfection) return HealthGroupTag.Disease;
-            if (h.Bleeding) return HealthGroupTag.Trauma;
-            if (h.IsPermanent()) return HealthGroupTag.Permanent;
-            if (h.def.makesSickThought) return HealthGroupTag.Ill;
-            return HealthGroupTag.Other;
-        }
-
         #endregion
-    }
-
-    public enum HealthGroupTag
-    {
-        Other,
-        Disease,
-        Trauma,
-        Permanent,
-        Ill
     }
 
     public struct HealthEntry
@@ -198,10 +178,6 @@ namespace RimLife
         /// 指示状况是否是感染或疾病。
         /// </summary>
         public bool IsInfection;
-        /// <summary>
-        /// 用于分组相似状况的标签（例如，“创伤”、“疾病”）。
-        /// </summary>
-        public HealthGroupTag GroupTag;
         /// <summary>
         /// 医疗处理的质量（如果有）。范围从 0 到 1。
         /// </summary>
