@@ -184,7 +184,7 @@ namespace RimLife.Mappers
                         float level = p.health.capacities?.GetLevel(def) ?? 0f;
                         capacities[def.defName] = Mathf.Clamp01(level);
                     }
-                    catch { }
+                    catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] capacity {def.defName}: {e.Message}"); }
                 }
             }
 
@@ -267,12 +267,14 @@ namespace RimLife.Mappers
 
             var activeThoughts = new List<ThoughtEntry>();
             var allThoughts = new List<Thought>();
-            try { p.needs?.mood?.thoughts?.GetAllMoodThoughts(allThoughts); } catch { }
+            try { p.needs?.mood?.thoughts?.GetAllMoodThoughts(allThoughts); }
+                catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] GetAllMoodThoughts: {e.Message}"); }
             foreach (var t in allThoughts)
             {
                 if (t == null) continue;
                 float offset = 0f;
-                try { offset = t.MoodOffset(); } catch { }
+                try { offset = t.MoodOffset(); }
+                catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] MoodOffset: {e.Message}"); }
                 float durationRatio = 1f;
                 if (t is Thought_Memory mem)
                 {
@@ -313,7 +315,8 @@ namespace RimLife.Mappers
                 {
                     if (sr == null || sr.def == null) continue;
                     Passion passion;
-                    try { passion = sr.passion; } catch { passion = Passion.None; }
+                    try { passion = sr.passion; }
+                    catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] passion {sr.def?.defName}: {e.Message}"); passion = Passion.None; }
                     list.Add(new SkillEntry
                     {
                         DefName = sr.def.defName,
@@ -354,7 +357,7 @@ namespace RimLife.Mappers
                             NeedUrgency = Framework.SemanticLabels.MapNeedUrgency(need.def?.defName, cur)
                         });
                     }
-                    catch { }
+                    catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] need {need.def?.defName}: {e.Message}"); }
                 }
             }
             return new NeedsSection { AllNeeds = allNeedsList };
@@ -365,7 +368,8 @@ namespace RimLife.Mappers
             if (p == null || p.jobs == null) return new ActivitySection { Activities = new List<ActivityEntry>() };
 
             string posture = null;
-            try { posture = p.GetPosture().ToString(); } catch { }
+            try { posture = p.GetPosture().ToString(); }
+                catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] GetPosture: {e.Message}"); }
 
             var activities = new List<ActivityEntry>();
             var jobQueue = p.jobs.jobQueue;
@@ -382,7 +386,7 @@ namespace RimLife.Mappers
                             JobReport = job.job.GetReport(p)
                         });
                     }
-                    catch { }
+                    catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] jobQueue report: {e.Message}"); }
                 }
             }
 
@@ -397,7 +401,7 @@ namespace RimLife.Mappers
                         JobReport = curJob.GetReport(p)
                     });
                 }
-                catch { }
+                catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] curJob report: {e.Message}"); }
             }
 
             return new ActivitySection { Posture = posture, Activities = activities };
@@ -480,7 +484,7 @@ namespace RimLife.Mappers
                             IsReciprocal = reciprocal
                         });
                     }
-                    catch { }
+                    catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] social relation {dr.def?.defName}: {e.Message}"); }
                 }
             }
 
@@ -500,11 +504,12 @@ namespace RimLife.Mappers
                 {
                     if (c == p) continue;
                     if (c?.relations == null) continue;
-                    try { sum += c.relations.OpinionOf(p); count++; } catch { }
+                    try { sum += c.relations.OpinionOf(p); count++; }
+                        catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] OpinionOf({c.ThingID}): {e.Message}"); }
                 }
                 return count > 0 ? sum / count : 0f;
             }
-            catch { return 0f; }
+            catch (Exception e) { Log.Warning($"[RimLife.CharacterCardMapper] CalculateColonyOpinionAverage: {e.Message}"); return 0f; }
         }
 
         private static PerspectiveSection MapPerspective(Pawn pawn)

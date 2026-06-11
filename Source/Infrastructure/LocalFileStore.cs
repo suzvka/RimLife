@@ -35,7 +35,7 @@ namespace RimLife.Infrastructure
         {
             if (string.IsNullOrEmpty(key)) return;
             EnsureLoaded();
-            _cache[key] = SerializeValue(value);
+            _cache[key] = JsonParser.SerializeValue(value);
             SaveToDisk();
         }
 
@@ -55,7 +55,7 @@ namespace RimLife.Infrastructure
             {
                 try
                 {
-                    value = DeserializeValue<T>(json);
+                    value = JsonParser.DeserializeValue<T>(json);
                     return true;
                 }
                 catch (Exception e)
@@ -122,7 +122,7 @@ namespace RimLife.Infrastructure
                 if (File.Exists(_filePath))
                 {
                     string json = File.ReadAllText(_filePath);
-                    _cache = DeserializeDict(json) ?? new Dictionary<string, string>();
+                    _cache = JsonParser.ParseDict(json) ?? new Dictionary<string, string>();
                 }
                 else
                 {
@@ -143,7 +143,7 @@ namespace RimLife.Infrastructure
             try
             {
                 Directory.CreateDirectory(CacheDirectory);
-                string json = SerializeDict(_cache);
+                string json = JsonParser.SerializeDict(_cache);
                 File.WriteAllText(_filePath, json);
             }
             catch (Exception e)
@@ -152,115 +152,6 @@ namespace RimLife.Infrastructure
             }
         }
 
-        // ================================================================
-        // JSON 序列化辅助（与 RimWorldSaveStore 共用相同格式）
-        // ================================================================
-
-        private static string SerializeDict(Dictionary<string, string> dict)
-        {
-            if (dict == null || dict.Count == 0) return "{}";
-
-            var writer = new Framework.JsonWriter(dict.Count * 64);
-            foreach (var kv in dict)
-            {
-                writer.Prop(kv.Key, kv.Value ?? "");
-            }
-            return writer.Close();
-        }
-
-        private static Dictionary<string, string> DeserializeDict(string json)
-        {
-            var result = new Dictionary<string, string>();
-            if (string.IsNullOrEmpty(json) || json == "{}") return result;
-
-            int pos = 1;
-            int len = json.Length;
-
-            while (pos < len)
-            {
-                while (pos < len && (json[pos] == ' ' || json[pos] == '\n' || json[pos] == '\r' || json[pos] == '\t')) pos++;
-                if (pos >= len || json[pos] == '}') break;
-
-                if (json[pos] != '"') break;
-                int keyStart = ++pos;
-                while (pos < len && json[pos] != '"')
-                {
-                    if (json[pos] == '\\') pos++;
-                    pos++;
-                }
-                string key = UnescapeJson(json.Substring(keyStart, pos - keyStart));
-                pos++;
-
-                while (pos < len && (json[pos] == ' ' || json[pos] == ':')) pos++;
-
-                if (pos >= len) break;
-                string value = "";
-                if (json[pos] == '"')
-                {
-                    int valStart = ++pos;
-                    while (pos < len && json[pos] != '"')
-                    {
-                        if (json[pos] == '\\') pos++;
-                        pos++;
-                    }
-                    value = UnescapeJson(json.Substring(valStart, pos - valStart));
-                    pos++;
-                }
-                result[key] = value;
-
-                while (pos < len && (json[pos] == ' ' || json[pos] == ',')) pos++;
-            }
-
-            return result;
-        }
-
-        private static string UnescapeJson(string s)
-        {
-            if (string.IsNullOrEmpty(s) || s.IndexOf('\\') < 0) return s;
-            var sb = new System.Text.StringBuilder(s.Length);
-            for (int i = 0; i < s.Length; i++)
-            {
-                if (s[i] == '\\' && i + 1 < s.Length)
-                {
-                    switch (s[i + 1])
-                    {
-                        case '"': sb.Append('"'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        default: sb.Append(s[i + 1]); break;
-                    }
-                    i++;
-                }
-                else sb.Append(s[i]);
-            }
-            return sb.ToString();
-        }
-
-        private static string SerializeValue<T>(T value)
-        {
-            if (value == null) return "null";
-            if (value is string s) return s;
-            if (value is int i) return i.ToString();
-            if (value is long l) return l.ToString();
-            if (value is float f) return f.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (value is double d) return d.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            if (value is bool b) return b ? "true" : "false";
-            return value.ToString();
-        }
-
-        private static T DeserializeValue<T>(string json)
-        {
-            if (json == null || json == "null") return default;
-            Type t = typeof(T);
-            if (t == typeof(string)) return (T)(object)json;
-            if (t == typeof(int)) return (T)(object)int.Parse(json);
-            if (t == typeof(long)) return (T)(object)long.Parse(json);
-            if (t == typeof(float)) return (T)(object)float.Parse(json, System.Globalization.CultureInfo.InvariantCulture);
-            if (t == typeof(double)) return (T)(object)double.Parse(json, System.Globalization.CultureInfo.InvariantCulture);
-            if (t == typeof(bool)) return (T)(object)bool.Parse(json);
-            return default;
-        }
+        // JSON 序列化已统一至 Framework.JsonParser
     }
 }

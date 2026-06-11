@@ -119,9 +119,12 @@ namespace RimLife.Mappers
                 string painTier = "None";
                 string currentJob = "";
 
-                try { float mood = p.needs?.mood?.CurLevelPercentage ?? 0.5f; moodTier = Framework.SemanticLabels.MapMoodTier(mood); totalMood += mood; moodCount++; } catch { }
-                try { float pain = p.health?.hediffSet?.PainTotal ?? 0f; painTier = Framework.SemanticLabels.MapPainTier(pain); } catch { }
-                try { currentJob = p.CurJob?.def?.defName ?? ""; } catch { }
+                try { float mood = p.needs?.mood?.CurLevelPercentage ?? 0.5f; moodTier = Framework.SemanticLabels.MapMoodTier(mood); totalMood += mood; moodCount++; }
+                    catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] mood {p.ThingID}: {e.Message}"); }
+                try { float pain = p.health?.hediffSet?.PainTotal ?? 0f; painTier = Framework.SemanticLabels.MapPainTier(pain); }
+                    catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] pain {p.ThingID}: {e.Message}"); }
+                try { currentJob = p.CurJob?.def?.defName ?? ""; }
+                    catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] job {p.ThingID}: {e.Message}"); }
 
                 colonists.Add(new ColonistSummary
                 {
@@ -166,7 +169,7 @@ namespace RimLife.Mappers
                     }
                 }
             }
-            catch { }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] MapFactionRelations: {e.Message}"); }
             ctx.FactionRelations = factionRelations;
         }
 
@@ -176,7 +179,8 @@ namespace RimLife.Mappers
 
             // 财富
             float wealth = 0f;
-            try { if (map?.wealthWatcher != null) wealth = map.wealthWatcher.WealthTotal; } catch { }
+            try { if (map?.wealthWatcher != null) wealth = map.wealthWatcher.WealthTotal; }
+                catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] wealth: {e.Message}"); }
             ctx.WealthTotal = wealth;
 
             // 食物
@@ -200,7 +204,7 @@ namespace RimLife.Mappers
                     foodStatus = Framework.SemanticLabels.MapFoodStatus(daysWorth);
                 }
             }
-            catch { }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] food: {e.Message}"); }
             ctx.FoodStatus = foodStatus;
 
             // 电力
@@ -222,7 +226,7 @@ namespace RimLife.Mappers
                     }
                 }
             }
-            catch { }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] power: {e.Message}"); }
             ctx.PowerStatus = powerStatus;
 
             // 威胁
@@ -244,7 +248,7 @@ namespace RimLife.Mappers
                 if (ctx.PopulationMentalBreak > 0) threats.Add($"MentalBreaks:{ctx.PopulationMentalBreak}");
                 if (ctx.PopulationDowned > 0) threats.Add($"DownedColonists:{ctx.PopulationDowned}");
             }
-            catch { }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] threats: {e.Message}"); }
             ctx.ActiveThreats = threats;
         }
 

@@ -34,10 +34,10 @@ namespace RimLife.Mappers
                         var card = CreateFrom(quest);
                         if (card != null) result.Add(card);
                     }
-                    catch { }
+                    catch (Exception e) { Log.Warning($"[RimLife.ObjectiveCardMapper] quest card: {e.Message}"); }
                 }
             }
-            catch { }
+            catch (Exception e) { Log.Warning($"[RimLife.ObjectiveCardMapper] GetActive: {e.Message}"); }
             return result;
         }
 
@@ -62,7 +62,7 @@ namespace RimLife.Mappers
                 if (quest == null) return null;
                 return CreateFrom(quest);
             }
-            catch { return null; }
+            catch (Exception e) { Log.Warning($"[RimLife.ObjectiveCardMapper] GetByID({id}): {e.Message}"); return null; }
         }
 
         // ================================================================
@@ -99,11 +99,11 @@ namespace RimLife.Mappers
                                 IsCompleted = false
                             });
                         }
-                        catch { }
+                        catch (Exception e) { Log.Warning($"[RimLife.ObjectiveCardMapper] quest part: {e.Message}"); }
                     }
                 }
             }
-            catch { }
+            catch (Exception e) { Log.Warning($"[RimLife.ObjectiveCardMapper] quest parts: {e.Message}"); }
 
             string description = "";
             try
@@ -119,7 +119,7 @@ namespace RimLife.Mappers
                     description = quest.name ?? "";
                 }
             }
-            catch { }
+            catch (Exception e) { Log.Warning($"[RimLife.ObjectiveCardMapper] description: {e.Message}"); }
 
             return new ObjectiveCard
             {

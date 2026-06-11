@@ -215,79 +215,10 @@ namespace RimLife.Infrastructure
         {
             if (string.IsNullOrEmpty(json) || json == "{}") return null;
 
-            var data = ParseSimpleJson(json);
+            var data = JsonParser.ParseDict(json);
             if (data.Count == 0) return null;
 
             return new SerializedGameEvent(data);
-        }
-
-        private static Dictionary<string, string> ParseSimpleJson(string json)
-        {
-            var result = new Dictionary<string, string>();
-            if (string.IsNullOrEmpty(json) || json == "{}") return result;
-
-            int pos = 1;
-            int len = json.Length;
-
-            while (pos < len)
-            {
-                while (pos < len && (json[pos] == ' ' || json[pos] == '\n' || json[pos] == '\r' || json[pos] == '\t')) pos++;
-                if (pos >= len || json[pos] == '}') break;
-
-                if (json[pos] != '"') break;
-                int keyStart = ++pos;
-                while (pos < len && json[pos] != '"')
-                {
-                    if (json[pos] == '\\') pos++;
-                    pos++;
-                }
-                string key = json.Substring(keyStart, pos - keyStart);
-                pos++;
-
-                while (pos < len && (json[pos] == ' ' || json[pos] == ':')) pos++;
-
-                if (pos >= len) break;
-                string value = "";
-
-                if (json[pos] == '"')
-                {
-                    int valStart = ++pos;
-                    while (pos < len && json[pos] != '"')
-                    {
-                        if (json[pos] == '\\') pos++;
-                        pos++;
-                    }
-                    value = json.Substring(valStart, pos - valStart);
-                    pos++;
-                }
-                else if (json[pos] == '{' || json[pos] == '[')
-                {
-                    // 嵌套对象/数组：整体截取
-                    int depth = 1;
-                    int valStart = pos;
-                    pos++;
-                    while (pos < len && depth > 0)
-                    {
-                        if (json[pos] == '{' || json[pos] == '[') depth++;
-                        else if (json[pos] == '}' || json[pos] == ']') depth--;
-                        pos++;
-                    }
-                    value = json.Substring(valStart, pos - valStart);
-                }
-                else
-                {
-                    // 裸值（数字、布尔）
-                    int valStart = pos;
-                    while (pos < len && json[pos] != ',' && json[pos] != '}' && json[pos] != ' ' && json[pos] != '\n')
-                        pos++;
-                    value = json.Substring(valStart, pos - valStart);
-                }
-                result[key] = value;
-
-                while (pos < len && (json[pos] == ' ' || json[pos] == ',')) pos++;
-            }
-
-            return result;
         }
 
         /// <summary>
@@ -317,7 +248,7 @@ namespace RimLife.Infrastructure
                 var actors = new List<EventActorRef>();
                 if (data.TryGetValue("actors", out var actorsJson) && !string.IsNullOrEmpty(actorsJson))
                 {
-                    var actorDicts = ParseJsonArray(actorsJson);
+                    var actorDicts = JsonParser.ParseObjectArray(actorsJson);
                     foreach (var ad in actorDicts)
                     {
                         actors.Add(new EventActorRef
@@ -334,42 +265,12 @@ namespace RimLife.Infrastructure
                 // Payload: 嵌套 JSON 对象
                 if (data.TryGetValue("payload", out var payloadJson) && !string.IsNullOrEmpty(payloadJson))
                 {
-                    Payload = ParseSimpleJson(payloadJson);
+                    Payload = JsonParser.ParseDict(payloadJson);
                 }
                 else
                 {
                     Payload = new Dictionary<string, string>();
                 }
-            }
-
-            private static List<Dictionary<string, string>> ParseJsonArray(string json)
-            {
-                var result = new List<Dictionary<string, string>>();
-                if (string.IsNullOrEmpty(json) || json == "[]") return result;
-
-                // 简单按对象边界切分
-                int pos = 1;
-                while (pos < json.Length)
-                {
-                    while (pos < json.Length && (json[pos] == ' ' || json[pos] == ',' || json[pos] == '\n')) pos++;
-                    if (pos >= json.Length || json[pos] == ']') break;
-                    if (json[pos] == '{')
-                    {
-                        int depth = 1;
-                        int start = pos;
-                        pos++;
-                        while (pos < json.Length && depth > 0)
-                        {
-                            if (json[pos] == '{') depth++;
-                            else if (json[pos] == '}') depth--;
-                            pos++;
-                        }
-                        string objJson = json.Substring(start, pos - start);
-                        result.Add(ParseSimpleJson(objJson));
-                    }
-                    else pos++;
-                }
-                return result;
             }
         }
     }
