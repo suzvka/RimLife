@@ -10,74 +10,29 @@ using Verse.AI;
 namespace RimLife
 {
     // ================================================================
-    // Incident (袭击/事件) Hook
+    // 统一信封 Hook（替代逐个事件 Hook，覆盖所有 RimWorld 信封事件）
+    // Letter 自带叙事文案（label / text），天然适配编剧 agent 消费。
     // ================================================================
-    [HarmonyPatch(typeof(IncidentWorker), nameof(IncidentWorker.TryExecute))]
-    internal static class Patch_IncidentWorker_TryExecute
+    [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter))]
+    internal static class Patch_LetterStack_ReceiveLetter
     {
-        static void Postfix(IncidentWorker __instance, IncidentParms parms, bool __result)
+        static void Postfix(LetterStack __instance, TaggedString label, TaggedString text,
+                             LetterDef textLetterDef, LookTargets lookTargets, Faction relatedFaction)
         {
-            if (!__result) return;
             try
             {
-                RimLifeCore.EventLog?.Append(EventCardMapper.FromIncident(__instance.def, parms));
+                RimLifeCore.EventLog?.Append(
+                    EventCardMapper.FromLetter(textLetterDef, label, text, lookTargets, relatedFaction));
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife:EventHooks] Incident hook failed: {e.Message}");
+                Log.Warning($"[RimLife:EventHooks] Letter hook failed: {e.Message}");
             }
         }
     }
 
     // ================================================================
-    // Pawn 死亡 Hook
-    // ================================================================
-    [HarmonyPatch(typeof(Pawn), nameof(Pawn.Kill))]
-    internal static class Patch_Pawn_Kill
-    {
-        static void Prefix(Pawn __instance, DamageInfo? dinfo)
-        {
-            if (__instance == null) return;
-            try
-            {
-                RimLifeCore.EventLog?.Append(EventCardMapper.FromDeath(__instance, dinfo));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] Death hook failed: {e.Message}");
-            }
-        }
-    }
-
-    // ================================================================
-    // 精神崩溃 Hook (RimWorld 1.6: MentalBreaker API)
-    // ================================================================
-    [HarmonyPatch(typeof(MentalBreaker), "TryDoMentalBreak")]
-    internal static class Patch_MentalBreaker_TryDoMentalBreak
-    {
-        static void Postfix(MentalBreaker __instance, string reason, MentalBreakDef breakDef, bool __result)
-        {
-            if (!__result || breakDef == null) return;
-            try
-            {
-                var pawn = AccessTools.Field(typeof(MentalBreaker), "pawn")?.GetValue(__instance) as Pawn;
-                if (pawn == null)
-                {
-                    Log.Warning("[RimLife:EventHooks] MentalBreak: unable to resolve pawn from MentalBreaker");
-                    return;
-                }
-                RimLifeCore.EventLog?.Append(EventCardMapper.FromMentalBreak(pawn, reason, breakDef));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] MentalBreak hook failed: {e.Message}");
-            }
-        }
-    }
-
-    // ================================================================
-    // 社交互动 Hook
-    // Hook Pawn_InteractionsTracker.TryInteractWith 以获取 InteractionDef
+    // 社交互动 Hook（不弹信，需独立 Hook）
     // 双写：EventLog（事件卡）+ InteractionHistoryStore（流水记录）
     // ================================================================
     [HarmonyPatch(typeof(Pawn_InteractionsTracker), "TryInteractWith")]
@@ -107,26 +62,6 @@ namespace RimLife
             catch (Exception e)
             {
                 Log.Warning($"[RimLife:EventHooks] SocialInteract hook failed: {e.Message}");
-            }
-        }
-    }
-
-    // ================================================================
-    // Quest 状态变化 Hook
-    // ================================================================
-    [HarmonyPatch(typeof(Quest), nameof(Quest.End))]
-    internal static class Patch_Quest_End
-    {
-        static void Postfix(Quest __instance, QuestEndOutcome outcome)
-        {
-            if (__instance == null) return;
-            try
-            {
-                RimLifeCore.EventLog?.Append(EventCardMapper.FromQuest(__instance, outcome.ToString()));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] Quest end hook failed: {e.Message}");
             }
         }
     }

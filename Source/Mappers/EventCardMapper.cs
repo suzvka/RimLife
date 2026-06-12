@@ -260,6 +260,47 @@ namespace RimLife.Mappers
         }
 
         // ================================================================
+        // 统一信封映射（替代逐个事件 Hook，覆盖所有 RimWorld 信封事件）
+        // ================================================================
+
+        /// <summary>
+        /// 从 RimWorld 信封创建事件卡。
+        /// Letter 自带叙事文案（label / text），天然适配编剧 agent 消费。
+        /// </summary>
+        public static IGameEvent FromLetter(LetterDef letterDef, TaggedString label, TaggedString text,
+                                              LookTargets lookTargets, Faction relatedFaction)
+        {
+            int tick = Find.TickManager?.TicksGame ?? 0;
+
+            var tags = BuildLetterTags(letterDef);
+            string severity = MapLetterSeverity(letterDef);
+            var actors = ExtractActorsFromLookTargets(lookTargets, relatedFaction);
+            string mapHint = ExtractMapHintFromLookTargets(lookTargets);
+
+            var payload = new Dictionary<string, string>
+            {
+                ["letterLabel"] = label.ToString() ?? "",
+                ["letterText"] = text.ToString() ?? "",
+                ["letterDef"] = letterDef?.defName ?? "Unknown"
+            };
+
+            if (relatedFaction != null)
+                payload["relatedFaction"] = relatedFaction.Name ?? relatedFaction.def?.label ?? "Unknown";
+
+            return new EventCardImpl
+            {
+                EventID = $"letter_{letterDef?.defName ?? "unknown"}_{tick}",
+                DefName = letterDef?.defName ?? "Letter",
+                Tags = tags,
+                Tick = tick,
+                Severity = severity,
+                Actors = actors,
+                MapHint = mapHint,
+                Payload = payload
+            };
+        }
+
+        // ================================================================
         // 私有实现
         // ================================================================
 
@@ -314,6 +355,143 @@ namespace RimLife.Mappers
             }
 
             return tags;
+        }
+
+        // ================================================================
+        // 信封标签/严重度映射
+        // ================================================================
+
+        /// <summary>
+        /// 从 LetterDef.defName 推导语义标签列表。
+        /// 首标签为原始 defName，后续为领域标签。
+        /// </summary>
+        private static List<string> BuildLetterTags(LetterDef letterDef)
+        {
+            var tags = new List<string>();
+
+            string defName = letterDef?.defName ?? "Unknown";
+            tags.Add(defName);
+
+            // 从 defName 推导领域标签
+            if (defName == "ThreatBig" || defName == "ThreatSmall")
+            {
+                tags.Add("Combat");
+                tags.Add("Raid");
+            }
+            else if (defName == "Death")
+            {
+                tags.Add("Death");
+                tags.Add("Health");
+            }
+            else if (defName == "PositiveEvent" || defName == "Good")
+            {
+                tags.Add("PositiveEvent");
+            }
+            else if (defName == "NegativeEvent" || defName == "Bad" || defName == "BadUrgent")
+            {
+                tags.Add("NegativeEvent");
+            }
+            else if (defName == "NeutralEvent")
+            {
+                tags.Add("NeutralEvent");
+            }
+            else
+            {
+                // 尝试从 defName 推断
+                string lower = defName.ToLowerInvariant();
+                if (lower.Contains("threat") || lower.Contains("raid") || lower.Contains("attack"))
+                    tags.Add("Combat");
+                else if (lower.Contains("death"))
+                    tags.Add("Death");
+                else if (lower.Contains("positive") || lower.Contains("good"))
+                    tags.Add("PositiveEvent");
+                else if (lower.Contains("negative") || lower.Contains("bad"))
+                    tags.Add("NegativeEvent");
+                else
+                    tags.Add("NeutralEvent");
+            }
+
+            return tags;
+        }
+
+        /// <summary>
+        /// 从 LetterDef 推导事件严重度。
+        /// </summary>
+        private static string MapLetterSeverity(LetterDef letterDef)
+        {
+            if (letterDef == null) return "Minor";
+
+            string defName = letterDef.defName ?? "";
+
+            if (defName == "ThreatBig" || defName == "Death" || defName == "BadUrgent")
+                return "Extreme";
+            if (defName == "ThreatSmall" || defName == "PositiveEvent" || defName == "NegativeEvent")
+                return "Major";
+
+            return "Minor";
+        }
+
+        /// <summary>
+        /// 从 LookTargets 和 relatedFaction 提取事件 Actor 列表。
+        /// </summary>
+        private static List<EventActorRef> ExtractActorsFromLookTargets(LookTargets lookTargets, Faction relatedFaction)
+        {
+            var actors = new List<EventActorRef>();
+
+            // 从 LookTargets 提取 Pawn
+            if (lookTargets != null && lookTargets.IsValid)
+            {
+                if (lookTargets.PrimaryTarget.HasThing)
+                {
+                    var target = lookTargets.PrimaryTarget;
+                    if (target.Thing is Pawn pawn)
+                    {
+                        actors.Add(EventActorRef.Pawn(
+                            pawn.ThingID ?? "?",
+                            pawn.Name?.ToStringShort ?? pawn.LabelShortCap ?? "?",
+                            "Target"));
+                    }
+                    else if (target.Thing != null)
+                    {
+                        actors.Add(new EventActorRef
+                        {
+                            ID = target.Thing.ThingID ?? "?",
+                            Name = target.Thing.LabelShortCap ?? "?",
+                            Role = "Target",
+                            RefType = "Thing"
+                        });
+                    }
+                }
+            }
+
+            // 从 relatedFaction 添加派系
+            if (relatedFaction != null)
+            {
+                actors.Add(EventActorRef.Faction(
+                    relatedFaction.Name ?? relatedFaction.def?.label ?? "Unknown",
+                    "Initiator"));
+            }
+
+            return actors;
+        }
+
+        /// <summary>
+        /// 从 LookTargets 推导位置提示。
+        /// </summary>
+        private static string ExtractMapHintFromLookTargets(LookTargets lookTargets)
+        {
+            if (lookTargets == null || !lookTargets.IsValid)
+                return "";
+
+            try
+            {
+                var target = lookTargets.PrimaryTarget;
+                if (target.HasThing && target.Thing?.Map != null)
+                    return $"Map:{target.Thing.Map.uniqueID}";
+            }
+            catch { }
+
+            return "";
         }
     }
 }
