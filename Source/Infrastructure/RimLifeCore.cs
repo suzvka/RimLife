@@ -1,12 +1,20 @@
 using RimLife.Core;
+using Verse;
 
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// RimLife 核心服务定位器。提供持久化存储、事件日志和交互历史的全局访问。
+    /// RimLife 核心服务定位器。提供持久化存储、事件日志、交互历史、工作空间和知识库的全局访问。
     /// </summary>
     public static class RimLifeCore
     {
+        static RimLifeCore()
+        {
+            // 注入日志出口：知识库模块通过静态回调输出日志，具体实现由 RimWorld 侧提供
+            Knowledge.BuiltInKnowledgeBase.LogInfo = Log.Message;
+            Knowledge.BuiltInKnowledgeBase.LogWarning = Log.Warning;
+        }
+
         private static IPersistentStore _saveStore;
 
         /// <summary>
@@ -24,6 +32,7 @@ namespace RimLife.Infrastructure
                     _eventLog = null;
                     _interactionStore = null;
                     _workspaces = null;
+                    _knowledgeBase = null;
                 }
             }
         }
@@ -78,6 +87,34 @@ namespace RimLife.Infrastructure
                     }
                 }
                 return _interactionStore;
+            }
+        }
+
+        private static IKnowledgeBase _knowledgeBase;
+        private static readonly object _knowledgeBaseLock = new object();
+
+        /// <summary>
+        /// 知识库实例。首次访问时从 CacheStore 延迟创建 BuiltInKnowledgeBase，
+        /// 并包装在 KnowledgeBaseChain 中（默认仅 L1，后续可追加 L2/L3）。
+        /// CacheStore 不可用时返回 null。
+        /// </summary>
+        public static IKnowledgeBase KnowledgeBase
+        {
+            get
+            {
+                if (_knowledgeBase == null)
+                {
+                    lock (_knowledgeBaseLock)
+                    {
+                        if (_knowledgeBase == null && CacheStore != null)
+                        {
+                            var builtIn = new Knowledge.BuiltInKnowledgeBase(CacheStore);
+                            var gameDef = new Knowledge.GameDefKnowledgeBase();
+                            _knowledgeBase = new Framework.KnowledgeBaseChain(builtIn, gameDef);
+                        }
+                    }
+                }
+                return _knowledgeBase;
             }
         }
 
