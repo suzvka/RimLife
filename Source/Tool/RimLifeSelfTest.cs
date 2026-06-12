@@ -6,7 +6,9 @@ using HarmonyLib;
 using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework;
+using RimLife.Framework.Mcp;
 using RimLife.Infrastructure;
+using RimLife.Infrastructure.Mcp;
 using RimLife.Mappers;
 using RimWorld;
 using UnityEngine;
@@ -105,6 +107,8 @@ namespace RimLife.Tool
             TestMappers();
             TestEventCardMapper();
             TestHarmonyStatus();
+            TestCardSerializer();
+            TestDirectorMcpTools();
             EndSuite();
         }
 
@@ -615,6 +619,353 @@ namespace RimLife.Tool
         }
 
         // ================================================================
+        // 8. CardSerializer 序列化测试
+        // ================================================================
+
+        public static void TestCardSerializer()
+        {
+            Section("8. CardSerializer 序列化");
+
+            var pawn = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.FirstOrDefault();
+
+            // --- ColonyContext ---
+            try
+            {
+                var ctx = ColonyContextMapper.Create();
+                if (ctx != null)
+                {
+                    var json = CardSerializer.SerializeColonyContext(ctx);
+                    if (json.Length > 10 && json.StartsWith("{") && json.EndsWith("}"))
+                    {
+                        Pass($"SerializeColonyContext 成功 ({json.Length} chars)");
+                        DumpObject("  season", ctx.Season);
+                        DumpObject("  populationAlive", ctx.PopulationAlive);
+                    }
+                    else
+                        Fail("SerializeColonyContext 输出异常", $"len={json.Length}");
+                }
+                else
+                    Skip("ColonyContextMapper.Create 返回 null");
+            }
+            catch (Exception e) { Fail("SerializeColonyContext 异常", e.Message); }
+
+            // --- CharacterCard ---
+            if (pawn != null)
+            {
+                try
+                {
+                    var card = CharacterCardMapper.CreateBasic(pawn)
+                        .WithHealth(pawn)
+                        .WithMood(pawn)
+                        .WithSkills(pawn);
+                    var json = CardSerializer.SerializeCharacterCard(card, "health,mood,skills");
+                    if (json.Length > 50 && json.Contains("\"id\""))
+                    {
+                        Pass($"SerializeCharacterCard 成功 ({json.Length} chars)");
+                        DumpObject("  pawn", card.Name);
+                        DumpObject("  sections", "health,mood,skills");
+                    }
+                    else
+                        Fail("SerializeCharacterCard 输出异常");
+                }
+                catch (Exception e) { Fail("SerializeCharacterCard 异常", e.Message); }
+            }
+            else
+                Skip("SerializeCharacterCard — 无可用 Pawn");
+
+            // --- IGameEvent ---
+            try
+            {
+                var evt = MakeTestEvent("serializer_test", new List<string> { "Test" }, 10000, "Major");
+                var json = CardSerializer.SerializeEvent(evt);
+                if (json.Contains("serializer_test") && json.Contains("Test"))
+                {
+                    Pass("SerializeEvent 成功");
+                    DumpObject("  EventID", evt.EventID);
+                }
+                else
+                    Fail("SerializeEvent 输出不完整");
+            }
+            catch (Exception e) { Fail("SerializeEvent 异常", e.Message); }
+
+            // --- EventList ---
+            try
+            {
+                var events = new List<IGameEvent>
+                {
+                    MakeTestEvent("list_1", new List<string>{"A"}, 1, "Minor"),
+                    MakeTestEvent("list_2", new List<string>{"B"}, 2, "Major")
+                };
+                var json = CardSerializer.SerializeEventList(events);
+                if (json.StartsWith("[") && json.Contains("list_1") && json.Contains("list_2"))
+                    Pass("SerializeEventList 成功");
+                else
+                    Fail("SerializeEventList 输出异常");
+            }
+            catch (Exception e) { Fail("SerializeEventList 异常", e.Message); }
+
+            // --- ObjectiveCard ---
+            try
+            {
+                var objectives = ObjectiveCardMapper.GetActive();
+                var json = CardSerializer.SerializeObjectiveList(objectives);
+                if (json.StartsWith("[") && json.EndsWith("]"))
+                    Pass($"SerializeObjectiveList 成功 ({objectives.Count} objectives)");
+                else
+                    Fail("SerializeObjectiveList 输出异常");
+            }
+            catch (Exception e) { Fail("SerializeObjectiveList 异常", e.Message); }
+
+            // --- EnvironmentCard ---
+            if (pawn != null)
+            {
+                try
+                {
+                    var env = EnvironmentCardMapper.CreateFrom(pawn);
+                    var json = CardSerializer.SerializeEnvironment(env);
+                    if (json.Contains("\"type\""))
+                    {
+                        Pass($"SerializeEnvironment 成功 ({env.Type})");
+                    }
+                    else
+                        Fail("SerializeEnvironment 输出不完整");
+                }
+                catch (Exception e) { Fail("SerializeEnvironment 异常", e.Message); }
+            }
+            else
+                Skip("SerializeEnvironment — 无可用 Pawn");
+
+            // --- InteractionRecord ---
+            try
+            {
+                var store = RimLifeCore.InteractionStore;
+                if (store != null && store.TotalAppended > 0)
+                {
+                    var records = store.QueryByPawn("test", null, 3);
+                    var json = CardSerializer.SerializeInteractionList(records);
+                    if (json.StartsWith("["))
+                        Pass($"SerializeInteractionList 成功 ({records.Count} records)");
+                    else
+                        Fail("SerializeInteractionList 输出异常");
+                }
+                else
+                    Skip("SerializeInteractionList — InteractionStore 为空");
+            }
+            catch (Exception e) { Fail("SerializeInteractionList 异常", e.Message); }
+
+            // --- ColonistSummaryList (from ColonyContext) ---
+            try
+            {
+                var ctx = ColonyContextMapper.Create();
+                if (ctx?.Colonists != null && ctx.Colonists.Count > 0)
+                {
+                    var json = CardSerializer.SerializeColonistSummaryList(ctx.Colonists);
+                    if (json.StartsWith("[") && json.Contains(ctx.Colonists[0].Name))
+                        Pass($"SerializeColonistSummaryList 成功 ({ctx.Colonists.Count} colonists)");
+                    else
+                        Fail("SerializeColonistSummaryList 输出异常");
+                }
+                else
+                    Skip("SerializeColonistSummaryList — 无 Colonists 数据");
+            }
+            catch (Exception e) { Fail("SerializeColonistSummaryList 异常", e.Message); }
+        }
+
+        // ================================================================
+        // 9. DirectorMcpTools 工具调用测试
+        // ================================================================
+
+        public static void TestDirectorMcpTools()
+        {
+            Section("9. DirectorMcpTools 工具调用");
+
+            var pawn = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.FirstOrDefault();
+            string pawnId = pawn?.ThingID;
+
+            // --- 9.1 get_colony_overview ---
+            try
+            {
+                var json = DirectorMcpTools.GetColonyOverview();
+                if (json.Length > 20 && json.StartsWith("{") && json.EndsWith("}"))
+                {
+                    Pass($"get_colony_overview 成功 ({json.Length} chars)");
+                    DumpObject("  preview", json.Length > 120 ? json.Substring(0, 120) + "..." : json);
+                }
+                else
+                    Fail("get_colony_overview 输出异常", $"len={json.Length}");
+            }
+            catch (Exception e) { Fail("get_colony_overview 异常", e.Message); }
+
+            // --- 9.2 get_recent_events ---
+            try
+            {
+                var eventLog = RimLifeCore.EventLog;
+                if (eventLog != null && eventLog.TotalAppended > 0)
+                {
+                    var json = DirectorMcpTools.GetRecentEvents(5);
+                    if (json.StartsWith("[") && json.EndsWith("]"))
+                        Pass($"get_recent_events 成功");
+                    else
+                        Fail("get_recent_events 输出异常");
+                }
+                else
+                    Skip("get_recent_events — EventLog 为空");
+            }
+            catch (Exception e) { Fail("get_recent_events 异常", e.Message); }
+
+            // --- 9.3 get_active_objectives ---
+            try
+            {
+                var json = DirectorMcpTools.GetActiveObjectives();
+                if (json.StartsWith("[") && json.EndsWith("]"))
+                    Pass("get_active_objectives 成功");
+                else
+                    Fail("get_active_objectives 输出异常");
+            }
+            catch (Exception e) { Fail("get_active_objectives 异常", e.Message); }
+
+            // --- 9.4 get_character_card ---
+            if (pawnId != null)
+            {
+                try
+                {
+                    var json = DirectorMcpTools.GetCharacterCard(pawnId, "health,mood,skills");
+                    if (json.Length > 50 && json.Contains("\"id\""))
+                        Pass($"get_character_card 成功 ({json.Length} chars)");
+                    else
+                        Fail("get_character_card 输出异常");
+                }
+                catch (Exception e) { Fail("get_character_card 异常", e.Message); }
+
+                try
+                {
+                    var json = DirectorMcpTools.GetCharacterCard(pawnId); // all sections
+                    if (json.Length > 50)
+                        Pass($"get_character_card(all) 成功 ({json.Length} chars)");
+                    else
+                        Fail("get_character_card(all) 输出异常");
+                }
+                catch (Exception e) { Fail("get_character_card(all) 异常", e.Message); }
+            }
+            else
+                Skip("get_character_card — 无可用 Pawn");
+
+            // --- 9.5 find_characters ---
+            try
+            {
+                var json = DirectorMcpTools.FindCharacters(moodTier: "Content", limit: 3);
+                if (json.StartsWith("[") && json.EndsWith("]"))
+                    Pass($"find_characters(moodTier) 成功");
+                else
+                    Fail("find_characters 输出异常");
+            }
+            catch (Exception e) { Fail("find_characters 异常", e.Message); }
+
+            try
+            {
+                var json = DirectorMcpTools.FindCharacters(minSkill: "Shooting=3", limit: 3);
+                if (json.StartsWith("[") && json.EndsWith("]"))
+                    Pass($"find_characters(skill) 成功");
+                else
+                    Fail("find_characters(skill) 输出异常");
+            }
+            catch (Exception e) { Fail("find_characters(skill) 异常", e.Message); }
+
+            try
+            {
+                var json = DirectorMcpTools.FindCharacters(injuredOnly: true, limit: 3);
+                if (json.StartsWith("[") && json.EndsWith("]"))
+                    Pass($"find_characters(injured) 成功");
+                else
+                    Fail("find_characters(injured) 输出异常");
+            }
+            catch (Exception e) { Fail("find_characters(injured) 异常", e.Message); }
+
+            // --- 9.6 query_events ---
+            try
+            {
+                var eventLog = RimLifeCore.EventLog;
+                if (eventLog != null && eventLog.TotalAppended > 0)
+                {
+                    var json = DirectorMcpTools.QueryEvents(tagsAny: "Combat", limit: 5);
+                    if (json.StartsWith("[") && json.EndsWith("]"))
+                        Pass("query_events(Combat) 成功");
+                    else
+                        Fail("query_events 输出异常");
+                }
+                else
+                    Skip("query_events — EventLog 为空");
+            }
+            catch (Exception e) { Fail("query_events 异常", e.Message); }
+
+            // --- 9.7 get_relationships ---
+            if (pawnId != null)
+            {
+                try
+                {
+                    var json = DirectorMcpTools.GetRelationships(pawnId);
+                    if (json.Length > 5 && json.StartsWith("{"))
+                        Pass($"get_relationships 成功 ({json.Length} chars)");
+                    else
+                        Fail("get_relationships 输出异常");
+                }
+                catch (Exception e) { Fail("get_relationships 异常", e.Message); }
+            }
+            else
+                Skip("get_relationships — 无可用 Pawn");
+
+            // --- 9.8 get_interaction_history ---
+            try
+            {
+                var store = RimLifeCore.InteractionStore;
+                if (store != null && store.TotalAppended > 0 && pawnId != null)
+                {
+                    var json = DirectorMcpTools.GetInteractionHistory(pawnId, limit: 5);
+                    if (json.StartsWith("[") && json.EndsWith("]"))
+                        Pass("get_interaction_history 成功");
+                    else
+                        Fail("get_interaction_history 输出异常");
+                }
+                else
+                    Skip("get_interaction_history — InteractionStore 为空");
+            }
+            catch (Exception e) { Fail("get_interaction_history 异常", e.Message); }
+
+            // --- 9.9 get_environment ---
+            if (pawnId != null)
+            {
+                try
+                {
+                    var json = DirectorMcpTools.GetEnvironment(pawnId);
+                    if (json.Contains("\"type\""))
+                        Pass("get_environment 成功");
+                    else
+                        Fail("get_environment 输出异常");
+                }
+                catch (Exception e) { Fail("get_environment 异常", e.Message); }
+            }
+            else
+                Skip("get_environment — 无可用 Pawn");
+
+            // --- MCP 工具定义生成 ---
+            try
+            {
+                var json = McpToolGenerator.SerializeAllFrom(typeof(DirectorMcpTools));
+                if (json.StartsWith("[") && json.EndsWith("]") && json.Length > 100)
+                {
+                    // 计数工具数量
+                    int toolCount = 0;
+                    for (int i = 0; i < json.Length; i++)
+                        if (json[i] == '{') toolCount++;
+                    Pass($"MCP 工具定义生成成功 ({toolCount} tools, {json.Length} chars)");
+                }
+                else
+                    Fail("MCP 工具定义生成异常", $"len={json.Length}");
+            }
+            catch (Exception e) { Fail("MCP 工具定义生成异常", e.Message); }
+        }
+
+        // ================================================================
         // Gizmo 注入 — 获得角色 Gizmo 列表
         // ================================================================
 
@@ -644,6 +995,8 @@ namespace RimLife.Tool
                 new FloatMenuOption("5. Mapper 数据采集 (CharacterCard/EnvironmentCard)", () => TestMappers()),
                 new FloatMenuOption("6. EventCardMapper 构造 (FromDeath/FromSocial/...)", () => TestEventCardMapper()),
                 new FloatMenuOption("7. Harmony Patch 状态", () => TestHarmonyStatus()),
+                new FloatMenuOption("8. CardSerializer 序列化 (ColonyContext/CharacterCard/...)", () => TestCardSerializer()),
+                new FloatMenuOption("9. DirectorMcpTools 工具调用 (所有9个MCP工具)", () => TestDirectorMcpTools()),
             };
             Find.WindowStack.Add(new FloatMenu(options));
         }
