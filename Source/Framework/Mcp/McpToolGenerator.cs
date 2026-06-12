@@ -99,6 +99,16 @@ namespace RimLife.Framework.Mcp
         }
 
         /// <summary>
+        /// 便捷方法：McpTool → JSON 字符串。
+        /// 直接序列化其 Definition，MethodInfo 工具与 Hook 工具通用。
+        /// </summary>
+        public static string Serialize(McpTool tool)
+        {
+            if (tool == null) return "{}";
+            return Serialize(tool.Definition);
+        }
+
+        /// <summary>
         /// 从类型中扫描所有标记 [McpTool] 的静态方法，返回 JSON 数组。
         /// </summary>
         public static string SerializeAllFrom(Type type)

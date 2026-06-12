@@ -92,6 +92,35 @@ namespace RimLife.Infrastructure
             }
         }
 
+        // ----------------------------------------------------------------
+        // Hook Provider 注册
+        // ----------------------------------------------------------------
+
+        /// <summary>
+        /// 注册一个 MCP Hook 提供者。适配器侧实现 IMcpHookProvider，
+        /// 通过此方法将外部工具注册到 Skill 系统中。
+        /// 应在 EnsureSkillRegistryInitialized() 之后调用。
+        /// </summary>
+        /// <param name="provider">Hook 提供者实例。</param>
+        /// <returns>成功注册的工具数。</returns>
+        public static int RegisterHookProvider(IMcpHookProvider provider)
+        {
+            if (provider == null) return 0;
+
+            try
+            {
+                EnsureSkillRegistryInitialized();
+                int count = McpSkillRegistry.RegisterFromProvider(provider);
+                Log.Message($"[RimLife.Core] HookProvider '{provider.HookId}' registered: {count} tools.");
+                return count;
+            }
+            catch (System.Exception e)
+            {
+                Log.Warning($"[RimLife.Core] RegisterHookProvider({provider.HookId}) failed: {e.Message}");
+                return 0;
+            }
+        }
+
         private static IPersistentStore _saveStore;
 
         /// <summary>

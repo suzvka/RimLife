@@ -31,8 +31,8 @@ namespace RimLife.Framework.Mcp
         // skill 元数据
         private static readonly Dictionary<string, SkillMeta> _skillMetas = new(StringComparer.OrdinalIgnoreCase);
 
-        // skill → 工具方法列表
-        private static readonly Dictionary<string, List<MethodInfo>> _skillTools = new(StringComparer.OrdinalIgnoreCase);
+        // skill → McpTool 列表
+        private static readonly Dictionary<string, List<McpTool>> _skillTools = new(StringComparer.OrdinalIgnoreCase);
 
         // 预载集合：agent 指定的高频技能，冷启动自动激活（由 RimLifeCore 持久化到 CacheStore）
         private static readonly HashSet<string> _preloadedSkills = new(StringComparer.OrdinalIgnoreCase);
@@ -88,7 +88,7 @@ namespace RimLife.Framework.Mcp
         {
             _skillMetas[id] = new SkillMeta { Id = id, Name = name, Description = description };
             if (!_skillTools.ContainsKey(id))
-                _skillTools[id] = new List<MethodInfo>();
+                _skillTools[id] = new List<McpTool>();
         }
 
         // ================================================================
@@ -96,29 +96,40 @@ namespace RimLife.Framework.Mcp
         // ================================================================
 
         /// <summary>
-        /// 注册工具方法到指定技能。同一方法不会重复添加。
+        /// 注册 McpTool 到指定技能。同一工具名不会重复添加。
+        /// 这是核心注册入口。
         /// </summary>
-        public static bool RegisterTool(string skillId, MethodInfo method)
+        public static bool RegisterTool(string skillId, McpTool tool)
         {
-            if (string.IsNullOrEmpty(skillId) || method == null) return false;
-            if (method.GetCustomAttribute<McpToolAttribute>() == null) return false;
+            if (string.IsNullOrEmpty(skillId) || tool == null) return false;
 
             lock (_lock)
             {
                 if (!_skillTools.TryGetValue(skillId, out var list))
                 {
-                    list = new List<MethodInfo>();
+                    list = new List<McpTool>();
                     _skillTools[skillId] = list;
                 }
 
-                // 去重
-                if (!list.Any(m => m == method))
+                // 按名称去重
+                if (!list.Any(t => string.Equals(t.Definition.Name, tool.Definition.Name, StringComparison.OrdinalIgnoreCase)))
                 {
-                    list.Add(method);
+                    list.Add(tool);
                     return true;
                 }
                 return false;
             }
+        }
+
+        /// <summary>
+        /// 注册 MethodInfo 工具到指定技能。内部包装为 McpTool。
+        /// 保留此重载以兼容现有调用方。
+        /// </summary>
+        public static bool RegisterTool(string skillId, MethodInfo method)
+        {
+            if (string.IsNullOrEmpty(skillId) || method == null) return false;
+            if (method.GetCustomAttribute<McpToolAttribute>() == null) return false;
+            return RegisterTool(skillId, McpTool.FromMethod(method));
         }
 
         /// <summary>
@@ -144,11 +155,39 @@ namespace RimLife.Framework.Mcp
                 var methodSkill = m.GetCustomAttribute<McpSkillAttribute>();
                 string skillId = methodSkill?.SkillId ?? classSkillId;
 
-                if (!string.IsNullOrEmpty(skillId) && RegisterTool(skillId, m))
+                if (!string.IsNullOrEmpty(skillId) && RegisterTool(skillId, McpTool.FromMethod(m)))
                     count++;
             }
 
             return count;
+        }
+
+        /// <summary>
+        /// 从 Hook 提供者注册工具。自动创建/更新对应 Skill 元数据，
+        /// 并将提供者的工具注册到该 Skill 下。
+        /// </summary>
+        /// <returns>成功注册的工具数。</returns>
+        public static int RegisterFromProvider(IMcpHookProvider provider)
+        {
+            if (provider == null) return 0;
+
+            lock (_lock)
+            {
+                // 确保 Skill 元数据存在（若已存在则覆盖 name/description）
+                RegisterSkill(provider.HookId, provider.HookName, provider.HookDescription);
+
+                int count = 0;
+                var tools = provider.GetTools();
+                if (tools != null)
+                {
+                    foreach (var tool in tools)
+                    {
+                        if (RegisterTool(provider.HookId, tool))
+                            count++;
+                    }
+                }
+                return count;
+            }
         }
 
         // ================================================================
@@ -233,8 +272,8 @@ namespace RimLife.Framework.Mcp
                 {
                     if (_skillTools.TryGetValue(skillId, out var tools))
                     {
-                        foreach (var m in tools)
-                            jsons.Add(McpToolGenerator.SerializeMethod(m));
+                        foreach (var tool in tools)
+                            jsons.Add(McpToolGenerator.Serialize(tool.Definition));
                     }
                 }
 
@@ -262,8 +301,8 @@ namespace RimLife.Framework.Mcp
                     return "[]";
 
                 var jsons = new List<string>();
-                foreach (var m in tools)
-                    jsons.Add(McpToolGenerator.SerializeMethod(m));
+                foreach (var tool in tools)
+                    jsons.Add(McpToolGenerator.Serialize(tool.Definition));
 
                 var sb = new StringBuilder("[");
                 for (int i = 0; i < jsons.Count; i++)
@@ -339,6 +378,49 @@ namespace RimLife.Framework.Mcp
                     return count;
                 }
             }
+        }
+
+        // ================================================================
+        // 工具调用
+        // ================================================================
+
+        /// <summary>
+        /// 在当前已激活技能中查找指定名称的工具并调用。
+        /// 对 MethodInfo 工具和 Hook 工具统一处理。
+        /// </summary>
+        /// <param name="toolName">工具名称（Definition.Name）。</param>
+        /// <param name="jsonArgs">JSON 对象格式的参数字符串。</param>
+        /// <returns>工具返回的 JSON 字符串，未找到或异常时返回 error JSON。</returns>
+        public static string InvokeTool(string toolName, string jsonArgs)
+        {
+            if (string.IsNullOrEmpty(toolName))
+                return MakeError("toolName is required");
+
+            lock (_lock)
+            {
+                foreach (var skillId in _activeSkills)
+                {
+                    if (_skillTools.TryGetValue(skillId, out var tools))
+                    {
+                        foreach (var tool in tools)
+                        {
+                            if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                try
+                                {
+                                    return tool.Invoker(jsonArgs ?? "{}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            return MakeError($"Tool '{toolName}' not found or not active.");
         }
 
         // ================================================================
