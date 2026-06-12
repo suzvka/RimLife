@@ -292,22 +292,35 @@ namespace RimLife.Tool
         {
             Section("4. EventLog 集成");
 
+            DumpObject("SaveStore", RimLifeCore.SaveStore != null ? "已注册" : "null");
+
             var log = RimLifeCore.EventLog;
             if (log == null)
             {
-                Skip("EventLog 为 null，无法测试");
+                Skip("EventLog 为 null，无法测试 (SaveStore 未就绪?)");
                 return;
             }
 
+            DumpObject("EventLog 类型", log.GetType().Name);
+            DumpObject("当前 TotalAppended", log.TotalAppended);
+            DumpObject("当前 _events 数量", log.Count(EventQuery.All));
+
             var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", new List<string> { "Selftest", "Social" }, 9999, "Minor");
+            if (testEvent == null)
+            {
+                Fail("MakeTestEvent 返回 null");
+                return;
+            }
+
             try
             {
                 int before = log.TotalAppended;
                 log.Append(testEvent);
-                if (log.TotalAppended == before + 1)
-                    Pass($"Append 成功 (total: {before} → {log.TotalAppended})");
+                int after = log.TotalAppended;
+                if (after == before + 1)
+                    Pass($"Append 成功 (total: {before} → {after})");
                 else
-                    Fail("Append 后计数不正确", $"before={before} after={log.TotalAppended}");
+                    Fail("Append 后计数不正确", $"before={before} after={after} type={log.GetType().Name}");
             }
             catch (Exception e) { Fail("Append 异常", e.Message); }
 

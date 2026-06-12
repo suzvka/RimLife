@@ -7,8 +7,25 @@ namespace RimLife.Infrastructure
     /// </summary>
     public static class RimLifeCore
     {
-        /// <summary>权威存储（存档文件）。由 RimWorldSaveStore 在初始化时注册。</summary>
-        public static IPersistentStore SaveStore { get; internal set; }
+        private static IPersistentStore _saveStore;
+
+        /// <summary>
+        /// 权威存储（存档文件）。由 RimWorldSaveStore 在初始化时注册。
+        /// 设为新值时自动重置 EventLog 和 InteractionStore，避免跨存档引用失效。
+        /// </summary>
+        public static IPersistentStore SaveStore
+        {
+            get => _saveStore;
+            internal set
+            {
+                if (_saveStore != value)
+                {
+                    _saveStore = value;
+                    _eventLog = null;
+                    _interactionStore = null;
+                }
+            }
+        }
 
         /// <summary>缓存存储（本地文件）。</summary>
         public static IPersistentStore CacheStore { get; } = new LocalFileStore();

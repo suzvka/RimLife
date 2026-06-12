@@ -4,6 +4,7 @@ using RimLife.Infrastructure;
 using RimLife.Mappers;
 using RimWorld;
 using System;
+using System.Collections.Generic;
 using Verse;
 using Verse.AI;
 
@@ -13,7 +14,8 @@ namespace RimLife
     // 统一信封 Hook（替代逐个事件 Hook，覆盖所有 RimWorld 信封事件）
     // Letter 自带叙事文案（label / text），天然适配编剧 agent 消费。
     // ================================================================
-    [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter))]
+    [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter),
+        new Type[] { typeof(TaggedString), typeof(TaggedString), typeof(LetterDef), typeof(LookTargets), typeof(Faction), typeof(Quest), typeof(List<ThingDef>), typeof(string), typeof(int), typeof(bool) })]
     internal static class Patch_LetterStack_ReceiveLetter
     {
         static void Postfix(LetterStack __instance, TaggedString label, TaggedString text,
@@ -69,7 +71,7 @@ namespace RimLife
     // ================================================================
     // Pawn 派系变更 Hook (殖民者加入/叛逃/被俘)
     // ================================================================
-    [HarmonyPatch(typeof(Pawn), nameof(Pawn.SetFaction))]
+    [HarmonyPatch(typeof(Pawn), nameof(Pawn.SetFaction), new Type[] { typeof(Faction), typeof(Pawn) })]
     internal static class Patch_Pawn_SetFaction
     {
         static void Postfix(Pawn __instance, Faction newFaction)

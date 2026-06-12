@@ -135,13 +135,15 @@ namespace RimLife.Infrastructure
         {
             try
             {
-                // 将事件列表序列化为 JSON 字符串数组存入 Store
-                var jsonList = new List<string>();
-                foreach (var evt in _events)
+                // 将事件列表序列化为 JSON 数组字符串（避免 List<string> 经 SerializeValue 退化为 ToString）
+                var sb = new System.Text.StringBuilder("[");
+                for (int i = 0; i < _events.Count; i++)
                 {
-                    jsonList.Add(SerializeEvent(evt));
+                    if (i > 0) sb.Append(',');
+                    sb.Append(SerializeEvent(_events[i]));
                 }
-                _store.Store(StoreKey, jsonList);
+                sb.Append(']');
+                _store.Store(StoreKey, sb.ToString());
             }
             catch (Exception e)
             {
@@ -153,14 +155,33 @@ namespace RimLife.Infrastructure
         {
             try
             {
-                var jsonList = _store.Retrieve<List<string>>(StoreKey, null);
-                if (jsonList != null)
+                // 从 Store 读取 JSON 数组字符串，逐元素反序列化
+                var json = _store.Retrieve<string>(StoreKey, null);
+                if (!string.IsNullOrEmpty(json) && json.Length > 2 && json[0] == '[')
                 {
-                    foreach (var json in jsonList)
+                    // 按顶层 {} 边界拆分 JSON 对象
+                    int depth = 0;
+                    int start = -1;
+                    for (int i = 0; i < json.Length; i++)
                     {
-                        var evt = DeserializeEvent(json);
-                        if (evt != null)
-                            _events.Add(evt);
+                        char c = json[i];
+                        if (c == '{')
+                        {
+                            if (depth == 0) start = i;
+                            depth++;
+                        }
+                        else if (c == '}')
+                        {
+                            depth--;
+                            if (depth == 0 && start >= 0)
+                            {
+                                var eventJson = json.Substring(start, i - start + 1);
+                                var evt = DeserializeEvent(eventJson);
+                                if (evt != null)
+                                    _events.Add(evt);
+                                start = -1;
+                            }
+                        }
                     }
                     TotalAppended = _events.Count;
                     Log.Message($"[RimLife.EventLog] Loaded {_events.Count} events from save.");
