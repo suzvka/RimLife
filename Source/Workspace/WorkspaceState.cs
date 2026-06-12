@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using RimLife.Cards;
 
 namespace RimLife.Workspace
 {
@@ -8,10 +7,10 @@ namespace RimLife.Workspace
     /// </summary>
     public enum WorkspaceStatus
     {
-        /// <summary>活跃中，导演可继续推送事件。</summary>
+        /// <summary>活跃中，导演可继续推送回合。</summary>
         Active,
 
-        /// <summary>暂时挂起，保留数据但暂停事件推送。</summary>
+        /// <summary>暂时挂起，保留数据但暂停回合推送。</summary>
         Suspended,
 
         /// <summary>剧情线已完结。</summary>
@@ -22,56 +21,44 @@ namespace RimLife.Workspace
     }
 
     /// <summary>
-    /// 工作空间内存储的事件快照。从 IGameEvent 展平复制，保证上下文自包含。
+    /// 一个轮次的类型。Normal 为常规叙事轮，Branch/Merge 为结构轮（仅含 recap）。
+    /// </summary>
+    public enum RoundType
+    {
+        /// <summary>常规叙事轮：含前情提要和正式台词。</summary>
+        Normal,
+
+        /// <summary>分支声明轮：仅含分支前情提要，无台词。</summary>
+        Branch,
+
+        /// <summary>合并声明轮：仅含合并前情提要，无台词。</summary>
+        Merge
+    }
+
+    /// <summary>
+    /// 工作空间中单个轮次的 Agent 写作日志。
+    /// 不存储事件数据（事件由 EventLog 权威管理），只存 Agent 自己的创作输出。
     /// 纯 DTO，零 RimWorld 依赖。
     /// </summary>
-    public struct WorkspaceEvent
+    public struct WorkspaceRound
     {
-        /// <summary>原始事件 ID。</summary>
-        public string EventId;
+        /// <summary>轮次序号，从 0 开始递增。</summary>
+        public int Seq;
 
-        /// <summary>事件定义名。</summary>
-        public string DefName;
+        /// <summary>轮次类型。</summary>
+        public RoundType Type;
 
-        /// <summary>语义标签列表。</summary>
-        public List<string> Tags;
+        /// <summary>前情提要：Agent 对本轮叙事起点的总结。</summary>
+        public string Recap;
 
-        /// <summary>发生时刻 (游戏 tick)。</summary>
-        public int Tick;
+        /// <summary>正式台词（Branch/Merge 轮为空）。</summary>
+        public string Narrative;
 
-        /// <summary>严重程度: "Minor"/"Major"/"Extreme"。</summary>
-        public string Severity;
+        /// <summary>创作时刻 (游戏 tick)。</summary>
+        public int CreatedAtTick;
 
-        /// <summary>涉及的实体引用列表。</summary>
-        public List<EventActorRef> Actors;
-
-        /// <summary>空间提示。</summary>
-        public string MapHint;
-
-        /// <summary>松结构扩展参数。</summary>
-        public Dictionary<string, string> Payload;
-
-        /// <summary>
-        /// 从 IGameEvent 创建快照副本。
-        /// </summary>
-        public static WorkspaceEvent From(IGameEvent evt)
-        {
-            if (evt == null) return default;
-
-            return new WorkspaceEvent
-            {
-                EventId = evt.EventID ?? "?",
-                DefName = evt.DefName ?? "?",
-                Tags = evt.Tags != null ? new List<string>(evt.Tags) : new List<string>(),
-                Tick = evt.Tick,
-                Severity = evt.Severity ?? "Minor",
-                Actors = evt.Actors != null ? new List<EventActorRef>(evt.Actors) : new List<EventActorRef>(),
-                MapHint = evt.MapHint ?? "",
-                Payload = evt.Payload != null
-                    ? new Dictionary<string, string>(evt.Payload)
-                    : new Dictionary<string, string>()
-            };
-        }
+        /// <summary>本轮触发的事件 ID 列表。仅作溯源，不注入 prompt。</summary>
+        public List<string> TriggerEventIds;
     }
 
     /// <summary>
@@ -101,8 +88,11 @@ namespace RimLife.Workspace
         /// <summary>语义标签（如 "RaidAftermath", "RomanceArc"）。</summary>
         public List<string> Tags;
 
-        /// <summary>复制进来的事件数据快照列表。</summary>
-        public List<WorkspaceEvent> PinnedEvents;
+        /// <summary>Agent 写作日志：按轮次的 recap + narrative 列表。</summary>
+        public List<WorkspaceRound> Rounds;
+
+        /// <summary>最新一期前情提要。注入下一轮 prompt 的唯一上下文窗口。</summary>
+        public string CurrentRecap;
 
         /// <summary>创建时刻 (游戏 tick)。</summary>
         public int CreatedAtTick;

@@ -1,16 +1,17 @@
-using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using Verse;
 
 namespace RimLife.Workspace
 {
     /// <summary>
     /// 工作空间管理器。负责上下文空间的全部生命周期：
-    /// 创建、查询、挂起/恢复、完成/废弃、分支、合并、事件推送。
+    /// 创建、查询、挂起/恢复、完成/废弃、分支、合并、回合推送。
+    /// 工作空间只存 Agent 的写作日志（Rounds），不重复存储事件数据。
     /// 通过 RimLifeCore.SaveStore 持久化到存档文件。
     /// </summary>
     public class WorkspaceManager
@@ -53,7 +54,8 @@ namespace RimLife.Workspace
                 MergedFromIds = new List<string>(),
                 ColonistIds = colonistIds ?? new List<string>(),
                 Tags = tags ?? new List<string>(),
-                PinnedEvents = new List<WorkspaceEvent>(),
+                Rounds = new List<WorkspaceRound>(),
+                CurrentRecap = "",
                 CreatedAtTick = tick,
                 LastActivityTick = tick,
                 Outcome = null
@@ -124,17 +126,72 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 分支 / 合并
+        // 回合推送
+        // ================================================================
+
+        /// <summary>
+        /// 推送一个新轮次到工作空间。Agent 每轮生成结束后调用。
+        /// </summary>
+        /// <param name="workspaceId">目标工作空间 ID。</param>
+        /// <param name="recap">Agent 写的前情提要。</param>
+        /// <param name="narrative">Agent 写的正式台词。</param>
+        /// <param name="triggerEventIds">本轮触发的事件 ID 列表（溯源用）。</param>
+        /// <returns>是否成功。</returns>
+        public bool PushRound(string workspaceId, string recap, string narrative, List<string> triggerEventIds)
+        {
+            if (string.IsNullOrEmpty(recap) && string.IsNullOrEmpty(narrative)) return false;
+
+            var ws = Get(workspaceId);
+            if (ws == null)
+            {
+                Log.Warning($"[RimLife.Workspace] PushRound failed: workspace '{workspaceId}' not found.");
+                return false;
+            }
+
+            if (ws.Status != WorkspaceStatus.Active)
+            {
+                Log.Warning($"[RimLife.Workspace] PushRound failed: workspace '{ws.Label}' is not Active (status={ws.Status}).");
+                return false;
+            }
+
+            int tick = Find.TickManager?.TicksGame ?? 0;
+            int nextSeq = (ws.Rounds?.Count) ?? 0;
+
+            var round = new WorkspaceRound
+            {
+                Seq = nextSeq,
+                Type = RoundType.Normal,
+                Recap = recap ?? "",
+                Narrative = narrative ?? "",
+                CreatedAtTick = tick,
+                TriggerEventIds = triggerEventIds ?? new List<string>()
+            };
+
+            if (ws.Rounds == null)
+                ws.Rounds = new List<WorkspaceRound>();
+            ws.Rounds.Add(round);
+
+            // 更新 CurrentRecap 供下一轮注入 prompt
+            ws.CurrentRecap = recap ?? "";
+            ws.LastActivityTick = tick;
+
+            SaveToStore();
+            return true;
+        }
+
+        // ================================================================
+        // 分支
         // ================================================================
 
         /// <summary>
         /// 从父工作空间分叉创建新的子工作空间。
-        /// 复制父空间的事件列表和角色列表。
+        /// 拷贝父空间的 Rounds 历史，并追加一条 Branch 轮记录分支声明。
         /// </summary>
         /// <param name="parentId">父工作空间 ID。</param>
         /// <param name="newLabel">新工作空间标签。</param>
+        /// <param name="branchRecap">Agent 写的分支前情提要（作为子空间的初始 CurrentRecap）。</param>
         /// <returns>新创建的子工作空间，失败返回 null。</returns>
-        public WorkspaceState Branch(string parentId, string newLabel)
+        public WorkspaceState Branch(string parentId, string newLabel, string branchRecap)
         {
             var parent = Get(parentId);
             if (parent == null)
@@ -145,6 +202,22 @@ namespace RimLife.Workspace
 
             int tick = Find.TickManager?.TicksGame ?? 0;
 
+            // 拷贝父空间的 Rounds 历史（浅拷贝，WorkspaceRound 是值类型 struct）
+            var copiedRounds = new List<WorkspaceRound>(parent.Rounds ?? new List<WorkspaceRound>());
+
+            // 追加一条 Branch 声明轮
+            int branchSeq = copiedRounds.Count;
+            var branchRound = new WorkspaceRound
+            {
+                Seq = branchSeq,
+                Type = RoundType.Branch,
+                Recap = branchRecap ?? $"Forked from '{parent.Label}'",
+                Narrative = "",
+                CreatedAtTick = tick,
+                TriggerEventIds = new List<string>()
+            };
+            copiedRounds.Add(branchRound);
+
             var child = new WorkspaceState
             {
                 Id = Guid.NewGuid().ToString("D"),
@@ -154,7 +227,8 @@ namespace RimLife.Workspace
                 MergedFromIds = new List<string>(),
                 ColonistIds = new List<string>(parent.ColonistIds ?? new List<string>()),
                 Tags = new List<string>(parent.Tags ?? new List<string>()),
-                PinnedEvents = new List<WorkspaceEvent>(parent.PinnedEvents ?? new List<WorkspaceEvent>()),
+                Rounds = copiedRounds,
+                CurrentRecap = branchRecap ?? "",
                 CreatedAtTick = tick,
                 LastActivityTick = tick,
                 Outcome = null
@@ -167,13 +241,18 @@ namespace RimLife.Workspace
             return child;
         }
 
+        // ================================================================
+        // 合并
+        // ================================================================
+
         /// <summary>
-        /// 将源工作空间的事件合并到目标工作空间，然后废弃源空间。
+        /// 将源空间和目标的 Rounds 按 Seq 合并去重，追加一条 Merge 轮记录合并声明，然后废弃源空间。
         /// </summary>
         /// <param name="sourceId">源工作空间 ID。</param>
         /// <param name="targetId">目标工作空间 ID。</param>
+        /// <param name="mergeRecap">Agent 写的合并前情提要（作为目标空间新的 CurrentRecap）。</param>
         /// <returns>是否成功。</returns>
-        public bool Merge(string sourceId, string targetId)
+        public bool Merge(string sourceId, string targetId, string mergeRecap)
         {
             var source = Get(sourceId);
             var target = Get(targetId);
@@ -190,17 +269,36 @@ namespace RimLife.Workspace
                 return false;
             }
 
-            // 合并事件（按 tick 排序后追加，去重）
-            var existingIds = new HashSet<string>(target.PinnedEvents.Select(e => e.EventId));
-            foreach (var evt in source.PinnedEvents)
+            // 合并 Rounds：按 Seq 去重后排序
+            var mergedRounds = new List<WorkspaceRound>(target.Rounds ?? new List<WorkspaceRound>());
+            var existingSeqs = new HashSet<int>(mergedRounds.Select(r => r.Seq));
+
+            if (source.Rounds != null)
             {
-                if (!existingIds.Contains(evt.EventId))
+                foreach (var r in source.Rounds)
                 {
-                    target.PinnedEvents.Add(evt);
-                    existingIds.Add(evt.EventId);
+                    if (!existingSeqs.Contains(r.Seq))
+                    {
+                        mergedRounds.Add(r);
+                        existingSeqs.Add(r.Seq);
+                    }
                 }
             }
-            target.PinnedEvents = target.PinnedEvents.OrderBy(e => e.Tick).ToList();
+            mergedRounds = mergedRounds.OrderBy(r => r.Seq).ToList();
+
+            // 追加一条 Merge 声明轮
+            int mergeSeq = mergedRounds.Count;
+            int tick = Find.TickManager?.TicksGame ?? 0;
+            var mergeRound = new WorkspaceRound
+            {
+                Seq = mergeSeq,
+                Type = RoundType.Merge,
+                Recap = mergeRecap ?? $"Merged from '{source.Label}' into '{target.Label}'",
+                Narrative = "",
+                CreatedAtTick = tick,
+                TriggerEventIds = new List<string>()
+            };
+            mergedRounds.Add(mergeRound);
 
             // 记录合并来源
             if (target.MergedFromIds == null)
@@ -210,6 +308,8 @@ namespace RimLife.Workspace
             // 合并角色列表（去重）
             if (source.ColonistIds != null)
             {
+                if (target.ColonistIds == null)
+                    target.ColonistIds = new List<string>();
                 foreach (var cid in source.ColonistIds)
                 {
                     if (!target.ColonistIds.Contains(cid))
@@ -217,7 +317,20 @@ namespace RimLife.Workspace
                 }
             }
 
-            int tick = Find.TickManager?.TicksGame ?? 0;
+            // 合并语义标签（去重）
+            if (source.Tags != null)
+            {
+                if (target.Tags == null)
+                    target.Tags = new List<string>();
+                foreach (var tag in source.Tags)
+                {
+                    if (!target.Tags.Contains(tag))
+                        target.Tags.Add(tag);
+                }
+            }
+
+            target.Rounds = mergedRounds;
+            target.CurrentRecap = mergeRecap ?? "";
             target.LastActivityTick = tick;
 
             // 废弃源空间
@@ -227,44 +340,6 @@ namespace RimLife.Workspace
 
             SaveToStore();
             Log.Message($"[RimLife.Workspace] Merged '{source.Label}' into '{target.Label}'");
-            return true;
-        }
-
-        // ================================================================
-        // 事件推送
-        // ================================================================
-
-        /// <summary>
-        /// 将事件数据复制到指定工作空间。
-        /// </summary>
-        /// <param name="workspaceId">目标工作空间 ID。</param>
-        /// <param name="evt">游戏事件。</param>
-        /// <returns>是否成功。</returns>
-        public bool PushEvent(string workspaceId, IGameEvent evt)
-        {
-            if (evt == null) return false;
-
-            var ws = Get(workspaceId);
-            if (ws == null)
-            {
-                Log.Warning($"[RimLife.Workspace] PushEvent failed: workspace '{workspaceId}' not found.");
-                return false;
-            }
-
-            if (ws.Status != WorkspaceStatus.Active)
-            {
-                Log.Warning($"[RimLife.Workspace] PushEvent failed: workspace '{ws.Label}' is not Active (status={ws.Status}).");
-                return false;
-            }
-
-            // 去重：同 eventId 不重复添加
-            if (ws.PinnedEvents.Any(e => e.EventId == evt.EventID))
-                return true;
-
-            ws.PinnedEvents.Add(WorkspaceEvent.From(evt));
-            ws.LastActivityTick = Find.TickManager?.TicksGame ?? ws.LastActivityTick;
-
-            SaveToStore();
             return true;
         }
 
@@ -280,7 +355,7 @@ namespace RimLife.Workspace
                 foreach (var ws in _workspaces)
                     wsJsons.Add(SerializeWorkspace(ws));
 
-                var sb = new System.Text.StringBuilder("[");
+                var sb = new StringBuilder("[");
                 for (int i = 0; i < wsJsons.Count; i++)
                 {
                     if (i > 0) sb.Append(',');
@@ -345,13 +420,17 @@ namespace RimLife.Workspace
             if (ws.Tags != null && ws.Tags.Count > 0)
                 w.Array("tags", ws.Tags);
 
-            // PinnedEvents
-            if (ws.PinnedEvents != null && ws.PinnedEvents.Count > 0)
+            // CurrentRecap
+            if (!string.IsNullOrEmpty(ws.CurrentRecap))
+                w.Prop("currentRecap", ws.CurrentRecap);
+
+            // Rounds
+            if (ws.Rounds != null && ws.Rounds.Count > 0)
             {
-                var eventJsons = new List<string>();
-                foreach (var evt in ws.PinnedEvents)
-                    eventJsons.Add(SerializeWorkspaceEvent(evt));
-                w.ArrayRaw("pinnedEvents", eventJsons);
+                var roundJsons = new List<string>();
+                foreach (var r in ws.Rounds)
+                    roundJsons.Add(SerializeRound(r));
+                w.ArrayRaw("rounds", roundJsons);
             }
 
             w.Prop("createdAtTick", ws.CreatedAtTick);
@@ -362,40 +441,18 @@ namespace RimLife.Workspace
             return w.Close();
         }
 
-        private static string SerializeWorkspaceEvent(WorkspaceEvent evt)
+        private static string SerializeRound(WorkspaceRound r)
         {
-            var w = new JsonWriter(256);
-            w.Prop("eventId", evt.EventId ?? "");
-            w.Prop("defName", evt.DefName ?? "");
-            w.Array("tags", evt.Tags);
-            w.Prop("tick", evt.Tick);
-            w.Prop("severity", evt.Severity ?? "");
-            w.Prop("mapHint", evt.MapHint ?? "");
+            var w = new JsonWriter(512);
+            w.Prop("seq", r.Seq);
+            w.Prop("type", r.Type.ToString());
+            w.Prop("recap", r.Recap ?? "");
+            if (!string.IsNullOrEmpty(r.Narrative))
+                w.Prop("narrative", r.Narrative);
+            w.Prop("createdAtTick", r.CreatedAtTick);
 
-            // Actors
-            if (evt.Actors != null && evt.Actors.Count > 0)
-            {
-                var actorJsons = new List<string>();
-                foreach (var a in evt.Actors)
-                {
-                    var aw = new JsonWriter(128);
-                    aw.Prop("id", a.ID ?? "");
-                    aw.Prop("name", a.Name ?? "");
-                    aw.Prop("role", a.Role ?? "");
-                    aw.Prop("refType", a.RefType ?? "");
-                    actorJsons.Add(aw.Close());
-                }
-                w.ArrayRaw("actors", actorJsons);
-            }
-
-            // Payload
-            if (evt.Payload != null && evt.Payload.Count > 0)
-            {
-                var pw = new JsonWriter(256);
-                foreach (var kv in evt.Payload)
-                    pw.Prop(kv.Key, kv.Value ?? "");
-                w.PropRaw("payload", pw.Close());
-            }
+            if (r.TriggerEventIds != null && r.TriggerEventIds.Count > 0)
+                w.Array("triggerEventIds", r.TriggerEventIds);
 
             return w.Close();
         }
@@ -413,7 +470,8 @@ namespace RimLife.Workspace
                 MergedFromIds = DeserializeStringList(data.TryGetValue("mergedFromIds", out v) ? v : null),
                 ColonistIds = DeserializeStringList(data.TryGetValue("colonistIds", out v) ? v : null),
                 Tags = DeserializeStringList(data.TryGetValue("tags", out v) ? v : null),
-                PinnedEvents = DeserializeWorkspaceEvents(data.TryGetValue("pinnedEvents", out v) ? v : null),
+                CurrentRecap = data.TryGetValue("currentRecap", out v) ? v : "",
+                Rounds = DeserializeRounds(data.TryGetValue("rounds", out v) ? v : null),
                 CreatedAtTick = data.TryGetValue("createdAtTick", out v) && int.TryParse(v, out var tick) ? tick : 0,
                 LastActivityTick = data.TryGetValue("lastActivityTick", out v) && int.TryParse(v, out var lt) ? lt : 0,
                 Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
@@ -422,53 +480,24 @@ namespace RimLife.Workspace
             return ws;
         }
 
-        private static List<WorkspaceEvent> DeserializeWorkspaceEvents(string json)
+        private static List<WorkspaceRound> DeserializeRounds(string json)
         {
-            var result = new List<WorkspaceEvent>();
+            var result = new List<WorkspaceRound>();
             if (string.IsNullOrEmpty(json) || json == "[]") return result;
 
-            var eventDicts = JsonParser.ParseObjectArray(json);
-            foreach (var dict in eventDicts)
+            var roundDicts = JsonParser.ParseObjectArray(json);
+            foreach (var dict in roundDicts)
             {
-                var evt = new WorkspaceEvent
+                var r = new WorkspaceRound
                 {
-                    EventId = dict.TryGetValue("eventId", out var v) ? v : "?",
-                    DefName = dict.TryGetValue("defName", out v) ? v : "?",
-                    Tags = DeserializeStringList(dict.TryGetValue("tags", out v) ? v : null),
-                    Tick = dict.TryGetValue("tick", out v) && int.TryParse(v, out var t) ? t : 0,
-                    Severity = dict.TryGetValue("severity", out v) ? v : "Minor",
-                    MapHint = dict.TryGetValue("mapHint", out v) ? v : ""
+                    Seq = dict.TryGetValue("seq", out var v) && int.TryParse(v, out var s) ? s : result.Count,
+                    Type = ParseRoundType(dict.TryGetValue("type", out v) ? v : "Normal"),
+                    Recap = dict.TryGetValue("recap", out v) ? v : "",
+                    Narrative = dict.TryGetValue("narrative", out v) ? v : "",
+                    CreatedAtTick = dict.TryGetValue("createdAtTick", out v) && int.TryParse(v, out var t) ? t : 0,
+                    TriggerEventIds = DeserializeStringList(dict.TryGetValue("triggerEventIds", out v) ? v : null)
                 };
-
-                // Actors: nested JSON array
-                var actors = new List<EventActorRef>();
-                if (dict.TryGetValue("actors", out var actorsJson) && !string.IsNullOrEmpty(actorsJson))
-                {
-                    var actorDicts = JsonParser.ParseObjectArray(actorsJson);
-                    foreach (var ad in actorDicts)
-                    {
-                        actors.Add(new EventActorRef
-                        {
-                            ID = ad.TryGetValue("id", out var aid) ? aid : "?",
-                            Name = ad.TryGetValue("name", out var nm) ? nm : "?",
-                            Role = ad.TryGetValue("role", out var rl) ? rl : "Bystander",
-                            RefType = ad.TryGetValue("refType", out var rt) ? rt : "Pawn"
-                        });
-                    }
-                }
-                evt.Actors = actors;
-
-                // Payload: nested JSON object
-                if (dict.TryGetValue("payload", out var payloadJson) && !string.IsNullOrEmpty(payloadJson))
-                {
-                    evt.Payload = JsonParser.ParseDict(payloadJson);
-                }
-                else
-                {
-                    evt.Payload = new Dictionary<string, string>();
-                }
-
-                result.Add(evt);
+                result.Add(r);
             }
 
             return result;
@@ -484,6 +513,14 @@ namespace RimLife.Workspace
             if (Enum.TryParse<WorkspaceStatus>(s, true, out var status))
                 return status;
             return WorkspaceStatus.Active;
+        }
+
+        private static RoundType ParseRoundType(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return RoundType.Normal;
+            if (Enum.TryParse<RoundType>(s, true, out var rt))
+                return rt;
+            return RoundType.Normal;
         }
 
         private static List<string> DeserializeStringList(string json)

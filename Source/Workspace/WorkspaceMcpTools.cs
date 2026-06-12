@@ -83,10 +83,10 @@ namespace RimLife.Workspace
         }
 
         /// <summary>
-        /// 获取单个工作空间的完整信息（含事件列表）。
+        /// 获取单个工作空间的完整信息（含轮次列表）。
         /// </summary>
         [McpTool(Name = "get_workspace",
-                 Description = "获取指定工作空间的完整信息，包括关联角色、标签和全部事件列表。")]
+                 Description = "获取指定工作空间的完整信息，包括关联角色、标签、当前前情提要和全部轮次记录。")]
         public static string GetWorkspace(
             [McpParam(Description = "工作空间唯一 ID")] string workspaceId)
         {
@@ -108,40 +108,37 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 事件推送
+        // 回合推送
         // ================================================================
 
         /// <summary>
-        /// 将事件推送到指定工作空间。
+        /// 推送一个新轮次到工作空间。Agent 每轮生成结束后调用。
         /// </summary>
-        [McpTool(Name = "push_event_to_workspace",
-                 Description = "从 EventLog 中查找事件并复制到指定工作空间（仅 Active 空间可推送）。")]
-        public static string PushEventToWorkspace(
+        [McpTool(Name = "push_round",
+                 Description = "向工作空间推送一个新轮次：前情提要 + 正式台词。只有 Active 空间可推送。推送后 CurrentRecap 自动更新。")]
+        public static string PushRound(
             [McpParam(Description = "目标工作空间 ID")] string workspaceId,
-            [McpParam(Description = "事件 ID（eventId）")] string eventId)
+            [McpParam(Description = "本轮前情提要：Agent 对本轮叙事起点的总结。建议包含主要角色状态和当前剧情线。")]
+            string recap,
+            [McpParam(Description = "正式台词：Agent 的叙事输出。")]
+            string narrative,
+            [McpParam(Description = "本轮触发的事件 ID 列表，逗号分隔。仅作溯源，不注入 prompt。",
+                      Required = McpRequired.False)] string triggerEventIds = null)
         {
             try
             {
                 var manager = Infrastructure.RimLifeCore.Workspaces;
-                var eventLog = Infrastructure.RimLifeCore.EventLog;
-                if (manager == null || eventLog == null) return "{}";
+                if (manager == null) return "{}";
 
-                // 从 EventLog 中查找事件
-                var query = new Core.EventQuery { Limit = 1 };
-                var allEvents = eventLog.Query(Core.EventQuery.All);
-                var evt = allEvents.FirstOrDefault(e => e.EventID == eventId);
-                if (evt == null)
-                {
-                    Log.Warning($"[RimLife.WorkspaceMcp] push_event: event '{eventId}' not found in EventLog.");
-                    return "{}";
-                }
+                var eventIdList = ParseStringList(triggerEventIds);
+                bool ok = manager.PushRound(workspaceId, recap, narrative, eventIdList);
+                if (!ok) return "{}";
 
-                bool ok = manager.PushEvent(workspaceId, evt);
-                return ok ? SerializeWorkspace(manager.Get(workspaceId)) : "{}";
+                return SerializeWorkspace(manager.Get(workspaceId));
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.WorkspaceMcp] push_event_to_workspace failed: {e.Message}");
+                Log.Warning($"[RimLife.WorkspaceMcp] push_round failed: {e.Message}");
                 return "{}";
             }
         }
@@ -154,7 +151,7 @@ namespace RimLife.Workspace
         /// 挂起工作空间。
         /// </summary>
         [McpTool(Name = "suspend_workspace",
-                 Description = "挂起指定工作空间，保留数据但停止事件推送。")]
+                 Description = "挂起指定工作空间，保留数据但停止回合推送。")]
         public static string SuspendWorkspace(
             [McpParam(Description = "工作空间 ID")] string workspaceId)
         {
@@ -178,7 +175,7 @@ namespace RimLife.Workspace
         /// 恢复已挂起的工作空间。
         /// </summary>
         [McpTool(Name = "resume_workspace",
-                 Description = "恢复已挂起的工作空间，重新开始接受事件推送。")]
+                 Description = "恢复已挂起的工作空间，重新开始接受回合推送。")]
         public static string ResumeWorkspace(
             [McpParam(Description = "工作空间 ID")] string workspaceId)
         {
@@ -244,17 +241,19 @@ namespace RimLife.Workspace
         /// 从现有工作空间分叉出新空间。
         /// </summary>
         [McpTool(Name = "branch_workspace",
-                 Description = "从父工作空间分叉创建新的子工作空间，复制父空间的事件和角色列表。")]
+                 Description = "从父工作空间分叉创建新的子工作空间。需要 Agent 提供分支前情提要作为新空间的初始上下文。拷贝父空间的轮次历史，追加一条 Branch 轮。")]
         public static string BranchWorkspace(
             [McpParam(Description = "父工作空间 ID")] string parentWorkspaceId,
-            [McpParam(Description = "新工作空间标签")] string label)
+            [McpParam(Description = "新工作空间标签")] string label,
+            [McpParam(Description = "分支前情提要：Agent 对为什么要开分支以及新线当前状态的总结。将作为子空间的初始 CurrentRecap。")]
+            string branchRecap)
         {
             try
             {
                 var manager = Infrastructure.RimLifeCore.Workspaces;
                 if (manager == null) return "{}";
 
-                var child = manager.Branch(parentWorkspaceId, label);
+                var child = manager.Branch(parentWorkspaceId, label, branchRecap);
                 return child != null ? SerializeWorkspace(child) : "{}";
             }
             catch (Exception e)
@@ -268,17 +267,19 @@ namespace RimLife.Workspace
         /// 合并两个工作空间。
         /// </summary>
         [McpTool(Name = "merge_workspaces",
-                 Description = "将源空间的事件和角色合并到目标空间，源空间标记为 Abandoned。")]
+                 Description = "将源空间的轮次合并到目标空间，然后废弃源空间。需要 Agent 提供合并前情提要作为合并后的起点。按 Seq 去重，追加一条 Merge 轮。")]
         public static string MergeWorkspaces(
             [McpParam(Description = "源工作空间 ID（将被合并并废弃）")] string sourceWorkspaceId,
-            [McpParam(Description = "目标工作空间 ID（接收数据）")] string targetWorkspaceId)
+            [McpParam(Description = "目标工作空间 ID（接收数据）")] string targetWorkspaceId,
+            [McpParam(Description = "合并前情提要：Agent 对两条线合并后的叙事状态总结。将作为目标空间的新 CurrentRecap。")]
+            string mergeRecap)
         {
             try
             {
                 var manager = Infrastructure.RimLifeCore.Workspaces;
                 if (manager == null) return "{}";
 
-                bool ok = manager.Merge(sourceWorkspaceId, targetWorkspaceId);
+                bool ok = manager.Merge(sourceWorkspaceId, targetWorkspaceId, mergeRecap);
                 if (!ok) return "{}";
                 return SerializeWorkspace(manager.Get(targetWorkspaceId));
             }
@@ -294,7 +295,7 @@ namespace RimLife.Workspace
         // ================================================================
 
         /// <summary>
-        /// 完整序列化单个工作空间。
+        /// 完整序列化单个工作空间（含轮次列表）。
         /// </summary>
         private static string SerializeWorkspace(WorkspaceState ws)
         {
@@ -315,20 +316,23 @@ namespace RimLife.Workspace
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
-            // PinnedEvents
-            if (ws.PinnedEvents != null && ws.PinnedEvents.Count > 0)
+            // CurrentRecap — 核心上下文窗口
+            w.Prop("currentRecap", ws.CurrentRecap ?? "");
+
+            // Rounds — Agent 写作日志
+            if (ws.Rounds != null && ws.Rounds.Count > 0)
             {
-                var eventJsons = new List<string>();
-                foreach (var evt in ws.PinnedEvents)
-                    eventJsons.Add(SerializeEventSummary(evt));
-                w.ArrayRaw("pinnedEvents", eventJsons);
+                var roundJsons = new List<string>();
+                foreach (var r in ws.Rounds)
+                    roundJsons.Add(SerializeRound(r));
+                w.ArrayRaw("rounds", roundJsons);
             }
 
             return w.Close();
         }
 
         /// <summary>
-        /// 工作空间摘要列表（不含事件详情）。
+        /// 工作空间摘要列表（不含轮次详情，仅统计）。
         /// </summary>
         private static string SerializeWorkspaceSummaryList(IReadOnlyList<WorkspaceState> workspaces)
         {
@@ -345,7 +349,7 @@ namespace RimLife.Workspace
         }
 
         /// <summary>
-        /// 工作空间摘要序列化（轻量，不含事件列表）。
+        /// 工作空间摘要序列化（轻量，不含轮次内容，仅含统计和当前 recap 摘要）。
         /// </summary>
         private static string SerializeWorkspaceSummary(WorkspaceState ws)
         {
@@ -356,57 +360,33 @@ namespace RimLife.Workspace
             if (ws.ParentId != null)
                 w.Prop("parentId", ws.ParentId);
             w.Prop("colonistCount", ws.ColonistIds?.Count ?? 0);
-            w.Prop("eventCount", ws.PinnedEvents?.Count ?? 0);
+            w.Prop("roundCount", ws.Rounds?.Count ?? 0);
             w.Array("tags", ws.Tags);
             w.Prop("createdAtTick", ws.CreatedAtTick);
             w.Prop("lastActivityTick", ws.LastActivityTick);
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
+            // 当前 recap 的首行摘要（截取前 80 字符）
+            if (!string.IsNullOrEmpty(ws.CurrentRecap))
+                w.Prop("recapPreview", Truncate(ws.CurrentRecap, 80));
             return w.Close();
         }
 
         /// <summary>
-        /// 工作空间内的事件摘要（LLM 消费用，无需完整 Payload）。
+        /// 单个轮次的序列化。
         /// </summary>
-        private static string SerializeEventSummary(WorkspaceEvent evt)
+        private static string SerializeRound(WorkspaceRound r)
         {
-            var w = new JsonWriter(256);
-            w.Prop("eventId", evt.EventId ?? "");
-            w.Prop("defName", evt.DefName ?? "");
-            w.Array("tags", evt.Tags);
-            w.Prop("tick", evt.Tick);
-            w.Prop("severity", evt.Severity ?? "");
-            w.Prop("mapHint", evt.MapHint ?? "");
+            var w = new JsonWriter(512);
+            w.Prop("seq", r.Seq);
+            w.Prop("type", r.Type.ToString());
+            w.Prop("recap", r.Recap ?? "");
+            if (!string.IsNullOrEmpty(r.Narrative))
+                w.Prop("narrative", r.Narrative);
+            w.Prop("createdAtTick", r.CreatedAtTick);
 
-            if (evt.Actors != null && evt.Actors.Count > 0)
-            {
-                var actorJsons = new List<string>();
-                foreach (var a in evt.Actors)
-                {
-                    var aw = new JsonWriter(128);
-                    aw.Prop("id", a.ID ?? "");
-                    aw.Prop("name", a.Name ?? "");
-                    aw.Prop("role", a.Role ?? "");
-                    aw.Prop("refType", a.RefType ?? "");
-                    actorJsons.Add(aw.Close());
-                }
-                w.ArrayRaw("actors", actorJsons);
-            }
-
-            if (evt.Payload != null && evt.Payload.Count > 0)
-            {
-                var pw = new JsonWriter(256);
-                // 只选取关键字段，控制大小
-                var keyFields = new HashSet<string> { "letterLabel", "letterText", "reason",
-                    "mentalBreakLabel", "damageType", "changeType", "questName", "stateChange",
-                    "raidStrategy", "arrivalMode", "threatPoints" };
-                foreach (var kv in evt.Payload)
-                {
-                    if (keyFields.Contains(kv.Key))
-                        pw.Prop(kv.Key, Truncate(kv.Value, 200));
-                }
-                w.PropRaw("payload", pw.Close());
-            }
+            if (r.TriggerEventIds != null && r.TriggerEventIds.Count > 0)
+                w.Array("triggerEventIds", r.TriggerEventIds);
 
             return w.Close();
         }
