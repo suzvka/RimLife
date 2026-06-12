@@ -50,17 +50,35 @@ namespace RimLife
     }
 
     // ================================================================
-    // 精神崩溃 Hook
-    // RimWorld 1.5+ 中 Pawn.TryStartMentalState 已移除，
-    // 精神崩溃由 MentalBreaker 管理。
-    // 临时禁用此 hook，后续需适配 MentalBreaker API。
+    // 精神崩溃 Hook (RimWorld 1.6: MentalBreaker API)
     // ================================================================
-    // [HarmonyPatch(typeof(Pawn), "TryStartMentalState")]  ← 1.4 only
-    // internal static class Patch_Pawn_TryStartMentalState { ... }
+    [HarmonyPatch(typeof(MentalBreaker), "TryDoMentalBreak")]
+    internal static class Patch_MentalBreaker_TryDoMentalBreak
+    {
+        static void Postfix(MentalBreaker __instance, string reason, MentalBreakDef breakDef, bool __result)
+        {
+            if (!__result || breakDef == null) return;
+            try
+            {
+                var pawn = AccessTools.Field(typeof(MentalBreaker), "pawn")?.GetValue(__instance) as Pawn;
+                if (pawn == null)
+                {
+                    Log.Warning("[RimLife:EventHooks] MentalBreak: unable to resolve pawn from MentalBreaker");
+                    return;
+                }
+                RimLifeCore.EventLog?.Append(EventCardMapper.FromMentalBreak(pawn, reason, breakDef));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] MentalBreak hook failed: {e.Message}");
+            }
+        }
+    }
 
     // ================================================================
     // 社交互动 Hook
     // Hook Pawn_InteractionsTracker.TryInteractWith 以获取 InteractionDef
+    // 双写：EventLog（事件卡）+ InteractionHistoryStore（流水记录）
     // ================================================================
     [HarmonyPatch(typeof(Pawn_InteractionsTracker), "TryInteractWith")]
     internal static class Patch_InteractionsTracker_TryInteractWith
@@ -72,7 +90,19 @@ namespace RimLife
             {
                 var initiator = Traverse.Create(__instance).Field("pawn").GetValue<Pawn>();
                 if (initiator == null) return;
+
+                // 写入 EventLog（事件卡）
                 RimLifeCore.EventLog?.Append(EventCardMapper.FromSocialInteraction(initiator, recipient, intDef));
+
+                // 写入 InteractionHistoryStore（流水记录）
+                RimLifeCore.InteractionStore?.Append(new Cards.InteractionRecord
+                {
+                    Tick = Find.TickManager?.TicksGame ?? 0,
+                    InitiatorID = initiator.ThingID ?? "?",
+                    RecipientID = recipient.ThingID ?? "?",
+                    InteractionDef = intDef.defName ?? "Unknown",
+                    Outcome = intDef.label ?? ""
+                });
             }
             catch (Exception e)
             {

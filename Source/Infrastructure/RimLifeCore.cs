@@ -3,7 +3,7 @@ using RimLife.Core;
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// RimLife 核心服务定位器。提供持久化存储和事件日志的全局访问。
+    /// RimLife 核心服务定位器。提供持久化存储、事件日志和交互历史的全局访问。
     /// </summary>
     public static class RimLifeCore
     {
@@ -35,6 +35,31 @@ namespace RimLife.Infrastructure
                     }
                 }
                 return _eventLog;
+            }
+        }
+
+        private static IInteractionStore _interactionStore;
+        private static readonly object _interactionStoreLock = new object();
+
+        /// <summary>
+        /// 交互历史存储实例。首次访问时从 SaveStore 延迟创建。
+        /// 存档未加载时返回 null。
+        /// </summary>
+        public static IInteractionStore InteractionStore
+        {
+            get
+            {
+                if (_interactionStore == null)
+                {
+                    lock (_interactionStoreLock)
+                    {
+                        if (_interactionStore == null && SaveStore != null)
+                        {
+                            _interactionStore = new InteractionHistoryStore(SaveStore);
+                        }
+                    }
+                }
+                return _interactionStore;
             }
         }
     }

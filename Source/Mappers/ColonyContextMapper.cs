@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using RimLife.Cards;
+using RimLife.Infrastructure;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -37,6 +38,11 @@ namespace RimLife.Mappers
                 // === 财富 / 食物 / 电力 / 威胁 ===
                 Map map = ResolveMap(mapId);
                 MapMapStats(ctx, map);
+
+                // === 叙事者 / 科技 / 生命周期 ===
+                MapStoryteller(ctx);
+                MapTech(ctx);
+                MapColonyStartTick(ctx);
 
                 return ctx;
             }
@@ -259,5 +265,60 @@ namespace RimLife.Mappers
             if (hour >= 18 && hour < 20) return "Dusk";
             return "Night";
         }
+
+        // ================================================================
+        // Phase 2 新增映射
+        // ================================================================
+
+        private static void MapStoryteller(ColonyContext ctx)
+        {
+            try
+            {
+                var storyteller = Find.Storyteller;
+                ctx.StorytellerName = storyteller?.def?.label ?? storyteller?.def?.defName ?? "Unknown";
+                ctx.Difficulty = storyteller?.difficultyDef?.label ?? storyteller?.difficultyDef?.defName ?? "Unknown";
+            }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] storyteller: {e.Message}"); }
+        }
+
+        private static void MapTech(ColonyContext ctx)
+        {
+            try
+            {
+                var playerFaction = Faction.OfPlayer;
+                if (playerFaction?.def?.techLevel != null)
+                    ctx.TechLevel = playerFaction.def.techLevel.ToString();
+                else
+                    ctx.TechLevel = "Unknown";
+            }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] tech: {e.Message}"); }
+        }
+
+        private static void MapColonyStartTick(ColonyContext ctx)
+        {
+            try
+            {
+                const string key = "colony_start_tick";
+                var store = RimLifeCore.SaveStore;
+                if (store == null)
+                {
+                    ctx.ColonyStartTick = ctx.CurrentTick;
+                    return;
+                }
+
+                if (store.Contains(key))
+                {
+                    ctx.ColonyStartTick = store.Retrieve<int>(key);
+                }
+                else
+                {
+                    ctx.ColonyStartTick = ctx.CurrentTick;
+                    store.Store(key, ctx.ColonyStartTick);
+                }
+            }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] colonyStartTick: {e.Message}"); }
+        }
+
+
     }
 }

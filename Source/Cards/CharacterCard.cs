@@ -200,11 +200,25 @@ namespace RimLife.Cards
         public bool IsReciprocal;
     }
 
+    /// <summary>
+    /// 社交互动流水记录。用于 InteractionHistoryStore 的 append-only 存储。
+    /// 每条记录描述一次已发生的角色间互动。
+    /// </summary>
     public struct InteractionRecord
     {
+        /// <summary>发生时刻 (游戏 tick)。</summary>
         public int Tick;
+
+        /// <summary>互动发起者 ID。</summary>
+        public string InitiatorID;
+
+        /// <summary>互动接受者 ID。</summary>
+        public string RecipientID;
+
+        /// <summary>互动定义名 (如 "Insult", "Chat")。</summary>
         public string InteractionDef;
-        public string OtherID;
+
+        /// <summary>互动结果标签。</summary>
         public string Outcome;
     }
 

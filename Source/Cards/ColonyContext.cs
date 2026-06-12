@@ -69,6 +69,34 @@ namespace RimLife.Cards
 
         /// <summary>当前未解决的威胁摘要列表。</summary>
         public IReadOnlyList<string> ActiveThreats;
+
+        // ================================================================
+        // 叙事者与难度
+        // ================================================================
+
+        /// <summary>叙事者名称（如 "Cassandra Classic"）。</summary>
+        public string StorytellerName;
+
+        /// <summary>难度等级（如 "Strive to Survive"）。</summary>
+        public string Difficulty;
+
+        // ================================================================
+        // 殖民地生命周期
+        // ================================================================
+
+        /// <summary>殖民地成立的游戏 tick。首次加载时记录。</summary>
+        public int ColonyStartTick;
+
+        // ================================================================
+        // 科技
+        // ================================================================
+
+        /// <summary>当前科技等级（如 "Industrial" / "Spacer"）。</summary>
+        public string TechLevel;
+
+
+
+
     }
 
     // ================================================================
@@ -99,4 +127,6 @@ namespace RimLife.Cards
         public float Goodwill;
         public string RelationLabel;
     }
+
+
 }

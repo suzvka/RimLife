@@ -91,7 +91,7 @@ namespace RimLife.Mappers
         /// <summary>
         /// 从精神崩溃创建事件卡。
         /// </summary>
-        public static IGameEvent FromMentalBreak(Pawn pawn, MentalState mentalState)
+        public static IGameEvent FromMentalBreak(Pawn pawn, string reason, MentalBreakDef breakDef)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
@@ -103,16 +103,23 @@ namespace RimLife.Mappers
                     "Victim"));
 
             var payload = new Dictionary<string, string>();
-            if (mentalState?.def != null)
+            if (breakDef != null)
             {
-                payload["mentalStateDef"] = mentalState.def.defName;
-                payload["mentalStateLabel"] = mentalState.def.label ?? "";
+                payload["mentalBreakDef"] = breakDef.defName;
+                payload["mentalBreakLabel"] = breakDef.label ?? "";
+                payload["intensity"] = breakDef.intensity.ToStringSafe();
+                payload["reason"] = reason ?? "";
+                if (breakDef.mentalState != null)
+                {
+                    payload["mentalStateDef"] = breakDef.mentalState.defName;
+                    payload["mentalStateLabel"] = breakDef.mentalState.label ?? "";
+                }
             }
 
             return new EventCardImpl
             {
                 EventID = $"mental_{pawn?.ThingID}_{tick}",
-                DefName = mentalState?.def?.defName ?? "MentalBreak",
+                DefName = breakDef?.defName ?? "MentalBreak",
                 Category = EventCategory.Health,
                 Tick = tick,
                 Severity = "Major",
