@@ -80,6 +80,9 @@ namespace RimLife.Infrastructure
         public void ClearCache(string key) =>
             throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
 
+        public IEnumerable<string> ListCacheKeys() =>
+            throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
+
         // ================================================================
         // WorldComponent 序列化
         // ================================================================

@@ -83,6 +83,12 @@ namespace RimLife.Infrastructure
                 SaveToDisk();
         }
 
+        public IEnumerable<string> ListCacheKeys()
+        {
+            EnsureLoaded();
+            return _cache.Keys;
+        }
+
         // ================================================================
         // IPersistentStore - 权威存储（不支持）
         // ================================================================

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace RimLife.Core
 {
@@ -44,5 +45,8 @@ namespace RimLife.Core
 
         /// <summary>清除指定缓存。</summary>
         void ClearCache(string key);
+
+        /// <summary>列出所有缓存的 key。仅缓存语义有效，排序不保证。</summary>
+        IEnumerable<string> ListCacheKeys();
     }
 }

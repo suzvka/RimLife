@@ -132,6 +132,16 @@ namespace RimLife.Mappers
                 try { currentJob = p.CurJob?.def?.defName ?? ""; }
                     catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] job {p.ThingID}: {e.Message}"); }
 
+                // 研究进展缓存：当有殖民者正在做研究时，提取研究描述写入 CacheStore
+                try
+                {
+                    if (p.CurJob?.def?.defName == "Research" && p.CurJob.GetReport(p) is string report && report.Length > 0)
+                    {
+                        RimLifeCore.CacheStore.Cache("research_progress", report);
+                    }
+                }
+                catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] research cache {p.ThingID}: {e.Message}"); }
+
                 colonists.Add(new ColonistSummary
                 {
                     ID = p.ThingID ?? "?",

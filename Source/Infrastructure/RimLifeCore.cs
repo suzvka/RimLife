@@ -23,6 +23,7 @@ namespace RimLife.Infrastructure
                     _saveStore = value;
                     _eventLog = null;
                     _interactionStore = null;
+                    _workspaces = null;
                 }
             }
         }
@@ -77,6 +78,31 @@ namespace RimLife.Infrastructure
                     }
                 }
                 return _interactionStore;
+            }
+        }
+
+        private static Workspace.WorkspaceManager _workspaces;
+        private static readonly object _workspacesLock = new object();
+
+        /// <summary>
+        /// 工作空间管理器实例。首次访问时从 SaveStore 延迟创建。
+        /// 存档未加载时返回 null。
+        /// </summary>
+        public static Workspace.WorkspaceManager Workspaces
+        {
+            get
+            {
+                if (_workspaces == null)
+                {
+                    lock (_workspacesLock)
+                    {
+                        if (_workspaces == null && SaveStore != null)
+                        {
+                            _workspaces = new Workspace.WorkspaceManager(SaveStore);
+                        }
+                    }
+                }
+                return _workspaces;
             }
         }
     }

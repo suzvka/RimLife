@@ -352,6 +352,187 @@ namespace RimLife.Infrastructure.Mcp
         }
 
         // ================================================================
+        // F. 角色普查
+        // ================================================================
+
+        /// <summary>
+        /// 列出所有地图中的全部角色，按类型和派系分类。
+        /// </summary>
+        [McpTool(Name = "list_all_pawns",
+                 Description = "列出殖民地中所有角色（殖民者/动物/囚犯/访客/机械体），按类型和派系分类。")]
+        public static string ListAllPawns(
+            [McpParam(Description = "角色类型过滤：Colonist/Animal/Prisoner/Guest/Mechanoid/All，默认 All",
+                      Required = McpRequired.False)] string type = "All",
+            [McpParam(Description = "最大返回数，默认 50")] int limit = 50)
+        {
+            try
+            {
+                var allPawns = new List<Pawn>();
+                foreach (var map in Find.Maps)
+                {
+                    if (map?.mapPawns?.AllPawnsSpawned == null) continue;
+                    allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p => p != null));
+                }
+
+                // 按类型和派系分类过滤
+                var filtered = allPawns.Where(p => MatchesPawnType(p, type)).ToList();
+
+                // 按分类排序：殖民者 > 囚犯 > 访客 > 动物 > 机械体
+                filtered.Sort((a, b) =>
+                {
+                    int typeOrderA = GetPawnTypeOrder(a);
+                    int typeOrderB = GetPawnTypeOrder(b);
+                    if (typeOrderA != typeOrderB) return typeOrderA.CompareTo(typeOrderB);
+                    return string.Compare(a.LabelShortCap, b.LabelShortCap, System.StringComparison.OrdinalIgnoreCase);
+                });
+
+                if (filtered.Count > limit)
+                    filtered = filtered.Take(limit).ToList();
+
+                var summaries = new List<string>();
+                foreach (var p in filtered)
+                    summaries.Add(SerializePawnSummary(p));
+
+                return SerializeJsonArray(summaries);
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife.DirectorMcp] list_all_pawns failed: {e.Message}");
+                return "[]";
+            }
+        }
+
+        private static bool MatchesPawnType(Pawn p, string typeFilter)
+        {
+            if (p == null) return false;
+            if (string.IsNullOrEmpty(typeFilter) || typeFilter == "All") return true;
+
+            string lower = typeFilter.ToLowerInvariant();
+
+            switch (lower)
+            {
+                case "colonist":
+                    return p.IsColonist && !p.IsPrisoner;
+                case "prisoner":
+                    return p.IsPrisoner;
+                case "guest":
+                    return p.IsColonist == false && p.IsPrisoner == false
+                        && p.Faction != null && p.Faction != Faction.OfPlayer
+                        && !p.Faction.HostileTo(Faction.OfPlayer)
+                        && p.RaceProps.Humanlike;
+                case "animal":
+                    return p.RaceProps.Animal;
+                case "mechanoid":
+                    return p.RaceProps.IsMechanoid;
+                default:
+                    return true;
+            }
+        }
+
+        private static int GetPawnTypeOrder(Pawn p)
+        {
+            if (p.IsColonist && !p.IsPrisoner) return 0;
+            if (p.IsPrisoner) return 1;
+            if (p.RaceProps.Humanlike) return 2;
+            if (p.RaceProps.Animal) return 3;
+            if (p.RaceProps.IsMechanoid) return 4;
+            return 5;
+        }
+
+        private static string SerializePawnSummary(Pawn p)
+        {
+            string pawnType;
+            if (p.IsColonist && !p.IsPrisoner) pawnType = "Colonist";
+            else if (p.IsPrisoner) pawnType = "Prisoner";
+            else if (p.RaceProps.Animal) pawnType = "Animal";
+            else if (p.RaceProps.IsMechanoid) pawnType = "Mechanoid";
+            else if (p.RaceProps.Humanlike) pawnType = "Guest";
+            else pawnType = "Other";
+
+            var w = new Framework.JsonWriter(128);
+            w.Prop("id", p.ThingID ?? "");
+            w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
+            w.Prop("pawnType", pawnType);
+            w.Prop("factionLabel", p.Faction?.Name ?? "None");
+            w.Prop("isDead", p.Dead);
+            w.Prop("isDowned", p.Downed);
+            return w.Close();
+        }
+
+        // ================================================================
+        // G. 资源库存
+        // ================================================================
+
+        /// <summary>
+        /// 获取殖民地关键资源库存。
+        /// </summary>
+        [McpTool(Name = "get_resource_inventory",
+                 Description = "获取殖民地关键资源库存：钢铁、木材、零件、药品、食物等。")]
+        public static string GetResourceInventory(
+            [McpParam(Description = "地图 ID，0=当前地图",
+                      Required = McpRequired.False)] int mapId = 0)
+        {
+            try
+            {
+                Map map = mapId == 0 ? Find.CurrentMap
+                    : Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
+                if (map == null) return "{}";
+
+                // 关键资源 defName 白名单
+                var keyResources = new HashSet<string>
+                {
+                    "Steel", "WoodLog", "Plasteel", "Gold", "Silver", "Uranium",
+                    "ComponentIndustrial", "ComponentSpacer", "Chemfuel",
+                    "MedicineHerbal", "MedicineIndustrial", "MedicineUltratech",
+                    "Neutroamine", "Cloth", "Synthread", "Hyperweave", "DevilstrandCloth"
+                };
+
+                var inventory = new Dictionary<string, int>();
+
+                if (map.listerThings?.AllThings != null)
+                {
+                    foreach (var thing in map.listerThings.AllThings)
+                    {
+                        if (thing == null || thing.def == null) continue;
+                        string defName = thing.def.defName;
+
+                        // 匹配白名单资源
+                        if (keyResources.Contains(defName))
+                        {
+                            if (!inventory.ContainsKey(defName))
+                                inventory[defName] = 0;
+                            inventory[defName] += thing.stackCount;
+                        }
+                    }
+                }
+
+                // 额外统计食物总量
+                int totalFood = 0;
+                if (map.listerThings?.AllThings != null)
+                {
+                    foreach (var thing in map.listerThings.AllThings)
+                    {
+                        if (thing?.def?.IsNutritionGivingIngestible == true
+                            && thing.def.ingestible?.HumanEdible == true)
+                            totalFood += thing.stackCount;
+                    }
+                }
+                inventory["_totalFood"] = totalFood;
+
+                // 构造 JSON
+                var w = new Framework.JsonWriter(256);
+                foreach (var kv in inventory)
+                    w.Prop(kv.Key, kv.Value);
+                return w.Close();
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife.DirectorMcp] get_resource_inventory failed: {e.Message}");
+                return "{}";
+            }
+        }
+
+        // ================================================================
         // 内部辅助
         // ================================================================
 
