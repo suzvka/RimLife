@@ -24,6 +24,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取殖民地全局快照：人口、财富、食物/电力状态、士气、威胁、派系关系、时间季节。
         /// </summary>
+        [McpSkill("colony_overview")]
         [McpTool(Name = "get_colony_overview",
                  Description = "获取殖民地全局快照：人口、财富、食物/电力状态、士气、威胁、派系关系、时间季节。")]
         public static string GetColonyOverview()
@@ -43,6 +44,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取最近 N 条事件，可选按标签过滤。
         /// </summary>
+        [McpSkill("colony_overview")]
         [McpTool(Name = "get_recent_events",
                  Description = "获取最近 N 条事件，用于快速了解当前局势。可选按标签过滤。")]
         public static string GetRecentEvents(
@@ -81,6 +83,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取当前所有活跃中的目标/任务。
         /// </summary>
+        [McpSkill("colony_overview")]
         [McpTool(Name = "get_active_objectives",
                  Description = "获取当前所有活跃中的目标/任务，包括期限和进展。")]
         public static string GetActiveObjectives()
@@ -104,6 +107,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取指定角色的完整人物卡，可选指定需要的子模块。
         /// </summary>
+        [McpSkill("character_query")]
         [McpTool(Name = "get_character_card",
                  Description = "获取指定角色的完整人物卡。可选指定需要的子模块以节省上下文。")]
         public static string GetCharacterCard(
@@ -129,6 +133,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 按条件筛选殖民者。
         /// </summary>
+        [McpSkill("character_query")]
         [McpTool(Name = "find_characters",
                  Description = "按条件筛选殖民者。可用于查找特定技能、心情状态或健康状态的角色。")]
         public static string FindCharacters(
@@ -229,6 +234,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 多维事件历史查询。
         /// </summary>
+        [McpSkill("event_query")]
         [McpTool(Name = "query_events",
                  Description = "多维事件历史查询。支持按标签(OR/AND)、时间范围、Actor、严重度筛选。")]
         public static string QueryEvents(
@@ -276,6 +282,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取指定角色与其他人的社交关系。
         /// </summary>
+        [McpSkill("relationship_query")]
         [McpTool(Name = "get_relationships",
                  Description = "获取指定角色与其他人的社交关系：关系类型、好感度、好感层级。")]
         public static string GetRelationships(
@@ -301,6 +308,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取指定角色近期的社交互动流水记录。
         /// </summary>
+        [McpSkill("relationship_query")]
         [McpTool(Name = "get_interaction_history",
                  Description = "获取指定角色近期的社交互动流水记录，用于理解角色间动态。")]
         public static string GetInteractionHistory(
@@ -331,6 +339,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取指定角色当前所处环境信息。
         /// </summary>
+        [McpSkill("environment_query")]
         [McpTool(Name = "get_environment",
                  Description = "获取指定角色当前所处环境信息：室内外、温光、天气、房间评分。")]
         public static string GetEnvironment(
@@ -358,6 +367,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 列出所有地图中的全部角色，按类型和派系分类。
         /// </summary>
+        [McpSkill("character_query")]
         [McpTool(Name = "list_all_pawns",
                  Description = "列出殖民地中所有角色（殖民者/动物/囚犯/访客/机械体），按类型和派系分类。")]
         public static string ListAllPawns(
@@ -466,6 +476,7 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取殖民地关键资源库存。
         /// </summary>
+        [McpSkill("colony_overview")]
         [McpTool(Name = "get_resource_inventory",
                  Description = "获取殖民地关键资源库存：钢铁、木材、零件、药品、食物等。")]
         public static string GetResourceInventory(

@@ -1,4 +1,6 @@
 using RimLife.Core;
+using RimLife.Framework.Mcp;
+using System.Collections.Generic;
 using Verse;
 
 namespace RimLife.Infrastructure
@@ -8,11 +10,86 @@ namespace RimLife.Infrastructure
     /// </summary>
     public static class RimLifeCore
     {
+        private static bool _skillRegistryInitialized;
+        private static readonly object _skillRegistryLock = new object();
+
         static RimLifeCore()
         {
             // 注入日志出口：知识库模块通过静态回调输出日志，具体实现由 RimWorld 侧提供
             Knowledge.BuiltInKnowledgeBase.LogInfo = Log.Message;
             Knowledge.BuiltInKnowledgeBase.LogWarning = Log.Warning;
+        }
+
+        /// <summary>
+        /// 初始化 MCP Skill 注册表。注册所有 Skill 元数据，
+        /// 扫描 4 个工具类型自动建立 Skill → Tool 映射。
+        /// 幂等，可多次调用。
+        /// </summary>
+        public static void EnsureSkillRegistryInitialized()
+        {
+            if (_skillRegistryInitialized) return;
+            lock (_skillRegistryLock)
+            {
+                if (_skillRegistryInitialized) return;
+
+                McpSkillRegistry.InitializeDefaults();
+
+                // 注册 4 个工具类（SystemMcpTools 最先注册，确保 system skill 的工具总是可用）
+                int count = McpSkillRegistry.RegisterFromType(typeof(Mcp.SystemMcpTools));
+                count += McpSkillRegistry.RegisterFromType(typeof(Mcp.DirectorMcpTools));
+                count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
+                count += McpSkillRegistry.RegisterFromType(typeof(Workspace.WorkspaceMcpTools));
+
+                Log.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
+
+                _skillRegistryInitialized = true;
+            }
+
+            // 冷启动：从缓存恢复预载技能
+            LoadAndApplySkillPreloads();
+        }
+
+        // ----------------------------------------------------------------
+        // 技能预载持久化
+        // ----------------------------------------------------------------
+
+        private const string _skillPreloadsCacheKey = "rimlife_skill_preloads";
+
+        /// <summary>
+        /// 将当前预载的技能列表持久化到 CacheStore。
+        /// </summary>
+        internal static void SaveSkillPreloads()
+        {
+            try
+            {
+                var preloadIds = McpSkillRegistry.GetPreloadSkillIds();
+                CacheStore.Cache(_skillPreloadsCacheKey, preloadIds);
+            }
+            catch (System.Exception e)
+            {
+                Log.Warning($"[RimLife.Core] SaveSkillPreloads failed: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 从 CacheStore 加载预载技能列表并应用到注册表。
+        /// 缓存不可用或为空时静默返回。
+        /// </summary>
+        private static void LoadAndApplySkillPreloads()
+        {
+            try
+            {
+                var preloadIds = CacheStore.FetchCache<List<string>>(_skillPreloadsCacheKey);
+                if (preloadIds != null && preloadIds.Count > 0)
+                {
+                    int count = McpSkillRegistry.ApplyPreloads(preloadIds);
+                    Log.Message($"[RimLife.Core] Preloaded {count} skills from cache: [{string.Join(", ", preloadIds)}]");
+                }
+            }
+            catch (System.Exception e)
+            {
+                Log.Warning($"[RimLife.Core] LoadAndApplySkillPreloads failed: {e.Message}");
+            }
         }
 
         private static IPersistentStore _saveStore;

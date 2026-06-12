@@ -13,6 +13,7 @@ namespace RimLife.Workspace
     /// 提供上下文空间的创建、查询、分支、合并和生命周期控制。
     /// 每个静态方法对应一个 MCP 工具，通过 [McpTool] / [McpParam] 标注。
     /// </summary>
+    [McpSkill("workspace_management")]
     public static class WorkspaceMcpTools
     {
         // ================================================================

@@ -22,6 +22,9 @@ namespace RimLife.Infrastructure
             Instance = new Harmony("RimLife.Core");
             Instance.PatchAll();
             Log.Message("[RimLife.Infrastructure] Harmony patches registered.");
+
+            // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
+            RimLifeCore.EnsureSkillRegistryInitialized();
         }
     }
 }

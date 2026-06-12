@@ -123,6 +123,25 @@ namespace RimLife.Framework.Mcp
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 获取当前已激活全部 Skill 的工具定义 JSON 数组。
+        /// 用于构造发送给 LLM 的 prompt 中的 tools 字段。
+        /// 初始仅含 system 技能的 3 个元工具（list_skills / activate_skill / deactivate_skill）。
+        /// </summary>
+        public static string SerializeAllActiveTools()
+        {
+            return McpSkillRegistry.GetActiveToolsJson();
+        }
+
+        /// <summary>
+        /// 获取所有 Skill 的轻量列表 JSON（含激活状态）。
+        /// 供 Agent 调用 list_skills 时返回。
+        /// </summary>
+        public static string SerializeSkillList()
+        {
+            return McpSkillRegistry.GetSkillListJson();
+        }
+
         // ================================================================
         // 内部序列化
         // ================================================================

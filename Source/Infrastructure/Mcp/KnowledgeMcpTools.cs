@@ -14,6 +14,7 @@ namespace RimLife.Infrastructure.Mcp
     /// 同时保留旧版 set_kv_cache / get_kv_cache / list_kv_cache / delete_kv_cache
     /// 作为兼容包装（内部转换为 KnowledgeEntry）。
     /// </summary>
+    [McpSkill("knowledge_management")]
     public static class KnowledgeMcpTools
     {
         // ================================================================
