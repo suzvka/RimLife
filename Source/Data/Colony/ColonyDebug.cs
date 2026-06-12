@@ -164,7 +164,7 @@ namespace RimLife
                 {
                     foreach (var evt in events)
                     {
-                        sb.AppendLine($"  [{evt.Category}] {evt.DefName} tick={evt.Tick} sev={evt.Severity}");
+                        sb.AppendLine($"  [{string.Join(",", evt.Tags ?? new List<string>())}] {evt.DefName} tick={evt.Tick} sev={evt.Severity}");
                         if (evt.Actors != null)
                         {
                             foreach (var a in evt.Actors)

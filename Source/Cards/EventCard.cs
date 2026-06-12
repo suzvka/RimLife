@@ -1,25 +1,11 @@
-using System;
 using System.Collections.Generic;
 
 namespace RimLife.Cards
 {
     /// <summary>
-    /// 事件语义分类。
-    /// </summary>
-    public enum EventCategory
-    {
-        Combat,
-        Nature,
-        Social,
-        Quest,
-        Health,
-        Economy,
-        Anomaly
-    }
-
-    /// <summary>
     /// 游戏事件的标准接口。所有具体事件实现必须实现此接口。
     /// 纯 DTO 接口，零 RimWorld 依赖。
+    /// 标签示例：["Raid", "Combat", "TribalSappers"] — 首标签为具体类型，后续为领域/子类型。
     /// </summary>
     public interface IGameEvent
     {
@@ -29,8 +15,8 @@ namespace RimLife.Cards
         /// <summary>事件定义名 (例如 "RaidEnemy", "QuestNode")。</summary>
         string DefName { get; }
 
-        /// <summary>语义分类。</summary>
-        EventCategory Category { get; }
+        /// <summary>语义标签列表。LLM 消费者直接读字符串，无需枚举解析。</summary>
+        IReadOnlyList<string> Tags { get; }
 
         /// <summary>发生时刻 (游戏 tick)。</summary>
         int Tick { get; }

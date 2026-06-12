@@ -1,4 +1,4 @@
-using RimLife.Cards;
+using System.Collections.Generic;
 using RimLife.Core;
 using Xunit;
 
@@ -15,7 +15,8 @@ namespace RimLife.Tests.Core
         {
             var q = EventQuery.All;
 
-            Assert.Null(q.Category);
+            Assert.Null(q.TagsAny);
+            Assert.Null(q.TagsAll);
             Assert.Null(q.SinceTick);
             Assert.Null(q.UntilTick);
             Assert.Null(q.ActorId);
@@ -25,13 +26,26 @@ namespace RimLife.Tests.Core
         }
 
         [Fact]
-        public void ByCategory_SetsOnlyCategory()
+        public void ByAnyTag_SetsOnlyTagsAny()
         {
-            var q = EventQuery.ByCategory(EventCategory.Combat);
+            var q = EventQuery.ByAnyTag("Combat", "Raid");
 
-            Assert.Equal(EventCategory.Combat, q.Category);
+            Assert.Equal(2, q.TagsAny.Count);
+            Assert.Contains("Combat", q.TagsAny);
+            Assert.Null(q.TagsAll);
             Assert.Null(q.SinceTick);
             Assert.Null(q.Severity);
+        }
+
+        [Fact]
+        public void ByAllTags_SetsOnlyTagsAll()
+        {
+            var q = EventQuery.ByAllTags("Combat", "Major");
+
+            Assert.Equal(2, q.TagsAll.Count);
+            Assert.Contains("Combat", q.TagsAll);
+            Assert.Null(q.TagsAny);
+            Assert.Null(q.SinceTick);
         }
 
         [Fact]
@@ -40,7 +54,8 @@ namespace RimLife.Tests.Core
             var q = EventQuery.Since(1000);
 
             Assert.Equal(1000, q.SinceTick);
-            Assert.Null(q.Category);
+            Assert.Null(q.TagsAny);
+            Assert.Null(q.TagsAll);
             Assert.Null(q.UntilTick);
         }
 
@@ -49,7 +64,8 @@ namespace RimLife.Tests.Core
         {
             var q = new EventQuery();
 
-            Assert.Null(q.Category);
+            Assert.Null(q.TagsAny);
+            Assert.Null(q.TagsAll);
             Assert.Null(q.SinceTick);
             Assert.Null(q.UntilTick);
             Assert.Null(q.ActorId);
@@ -63,7 +79,8 @@ namespace RimLife.Tests.Core
         {
             var q = new EventQuery
             {
-                Category = EventCategory.Social,
+                TagsAny = new List<string> { "Social", "Health" },
+                TagsAll = new List<string> { "Combat" },
                 SinceTick = 5000,
                 UntilTick = 10000,
                 ActorId = "pawn_001",
@@ -72,7 +89,10 @@ namespace RimLife.Tests.Core
                 Offset = 5
             };
 
-            Assert.Equal(EventCategory.Social, q.Category);
+            Assert.Equal(2, q.TagsAny.Count);
+            Assert.Contains("Social", q.TagsAny);
+            Assert.Single(q.TagsAll);
+            Assert.Contains("Combat", q.TagsAll);
             Assert.Equal(5000, q.SinceTick);
             Assert.Equal(10000, q.UntilTick);
             Assert.Equal("pawn_001", q.ActorId);

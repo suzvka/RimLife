@@ -42,7 +42,7 @@ namespace RimLife.Infrastructure
 
             _events.Add(evt);
             TotalAppended++;
-            Log.Message($"[RimLife.EventLog] +{evt.Category}/{evt.DefName} tick={evt.Tick} total={TotalAppended}");
+            Log.Message($"[RimLife.EventLog] +{string.Join(",", evt.Tags ?? new List<string>())}/{evt.DefName} tick={evt.Tick} total={TotalAppended}");
 
             // 裁剪旧事件
             while (_events.Count > _maxCapacity)
@@ -70,9 +70,11 @@ namespace RimLife.Infrastructure
 
             IEnumerable<IGameEvent> result = _events;
 
-            // 按类别筛选
-            if (query.Category.HasValue)
-                result = result.Where(e => e.Category == query.Category.Value);
+            // 按标签筛选（OR / AND）
+            if (query.TagsAny != null && query.TagsAny.Count > 0)
+                result = result.Where(e => e.Tags != null && query.TagsAny.Any(t => e.Tags.Contains(t)));
+            if (query.TagsAll != null && query.TagsAll.Count > 0)
+                result = result.Where(e => e.Tags != null && query.TagsAll.All(t => e.Tags.Contains(t)));
 
             // 按时间范围筛选
             if (query.SinceTick.HasValue)
@@ -109,7 +111,8 @@ namespace RimLife.Infrastructure
             // 复用过滤逻辑但不应用分页
             var q = new EventQuery
             {
-                Category = query.Category,
+                TagsAny = query.TagsAny,
+                TagsAll = query.TagsAll,
                 SinceTick = query.SinceTick,
                 UntilTick = query.UntilTick,
                 ActorId = query.ActorId,
@@ -173,12 +176,27 @@ namespace RimLife.Infrastructure
         // 事件序列化（JSON 格式）
         // ================================================================
 
+        private static string SerializeTagsToJson(IReadOnlyList<string> tags)
+        {
+            if (tags == null || tags.Count == 0) return "[]";
+            var sb = new System.Text.StringBuilder("[");
+            for (int i = 0; i < tags.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append('"');
+                sb.Append(Framework.JsonHelper.Escape(tags[i]));
+                sb.Append('"');
+            }
+            sb.Append(']');
+            return sb.ToString();
+        }
+
         private static string SerializeEvent(IGameEvent evt)
         {
             var writer = new Framework.JsonWriter(512);
             writer.Prop("eventId", evt.EventID);
             writer.Prop("defName", evt.DefName);
-            writer.Prop("category", evt.Category.ToString());
+            writer.PropRaw("tags", SerializeTagsToJson(evt.Tags));
             writer.Prop("tick", evt.Tick);
             writer.Prop("severity", evt.Severity);
             writer.Prop("mapHint", evt.MapHint ?? "");
@@ -229,7 +247,7 @@ namespace RimLife.Infrastructure
         {
             public string EventID { get; }
             public string DefName { get; }
-            public EventCategory Category { get; }
+            public IReadOnlyList<string> Tags { get; }
             public int Tick { get; }
             public string Severity { get; }
             public IReadOnlyList<EventActorRef> Actors { get; }
@@ -240,7 +258,9 @@ namespace RimLife.Infrastructure
             {
                 EventID = data.TryGetValue("eventId", out var v) ? v : "?";
                 DefName = data.TryGetValue("defName", out v) ? v : "?";
-                Category = data.TryGetValue("category", out v) && Enum.TryParse<EventCategory>(v, out var cat) ? cat : EventCategory.Anomaly;
+                Tags = data.TryGetValue("tags", out v) && !string.IsNullOrEmpty(v)
+                    ? ParseTagArray(v)
+                    : new List<string>();
                 Tick = data.TryGetValue("tick", out v) && int.TryParse(v, out var t) ? t : 0;
                 Severity = data.TryGetValue("severity", out v) ? v : "Minor";
                 MapHint = data.TryGetValue("mapHint", out v) ? v : "";
@@ -272,6 +292,29 @@ namespace RimLife.Infrastructure
                 {
                     Payload = new Dictionary<string, string>();
                 }
+            }
+
+            private static IReadOnlyList<string> ParseTagArray(string json)
+            {
+                // 期望格式: ["tag1","tag2",...]
+                var result = new List<string>();
+                if (string.IsNullOrEmpty(json) || json == "[]") return result;
+
+                json = json.Trim();
+                int start = 0;
+                for (int i = 0; i < json.Length; i++)
+                {
+                    if (json[i] == '"')
+                    {
+                        start = i + 1;
+                        i++;
+                        while (i < json.Length && json[i] != '"')
+                            i++;
+                        if (start <= i)
+                            result.Add(Framework.JsonParser.UnescapeJson(json.Substring(start, i - start)));
+                    }
+                }
+                return result;
             }
         }
     }

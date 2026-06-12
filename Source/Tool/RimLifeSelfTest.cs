@@ -295,7 +295,7 @@ namespace RimLife.Tool
                 return;
             }
 
-            var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", EventCategory.Social, 9999, "Minor");
+            var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", new List<string> { "Selftest", "Social" }, 9999, "Minor");
             try
             {
                 int before = log.TotalAppended;
@@ -325,11 +325,11 @@ namespace RimLife.Tool
                 else
                     Fail("Query(All) 返回空");
 
-                var byCategory = log.Query(EventQuery.ByCategory(EventCategory.Social));
-                if (byCategory.Count > 0)
-                    Pass($"Query(Social) 返回 {byCategory.Count} 条");
+                var byTag = log.Query(EventQuery.ByAnyTag("Social"));
+                if (byTag.Count > 0)
+                    Pass($"Query(ByAnyTag:Social) 返回 {byTag.Count} 条");
                 else
-                    Fail("Query(Social) 返回空");
+                    Fail("Query(ByAnyTag:Social) 返回空");
             }
             catch (Exception e) { Fail("Query 异常", e.Message); }
 
@@ -347,7 +347,7 @@ namespace RimLife.Tool
                 {
                     DumpObject("EventID", latest.EventID);
                     DumpObject("DefName", latest.DefName);
-                    DumpObject("Category", latest.Category);
+                    DumpObject("Tags", string.Join(", ", latest.Tags ?? new List<string>()));
                     DumpObject("Tick", latest.Tick);
                     DumpObject("Severity", latest.Severity);
                     DumpObject("MapHint", latest.MapHint);
@@ -505,7 +505,7 @@ namespace RimLife.Tool
                     {
                         Pass("FromDeath 构造成功");
                         DumpObject("  EventID", evt.EventID);
-                        DumpObject("  Category", evt.Category);
+                        DumpObject("  Tags", string.Join(", ", evt.Tags ?? new List<string>()));
                         DumpObject("  Severity", evt.Severity);
                     }
                     else
@@ -564,12 +564,12 @@ namespace RimLife.Tool
                 var pawn = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.FirstOrDefault();
                 if (pawn != null)
                 {
-                    var evt = EventCardMapper.FromMentalBreak(pawn, pawn.MentalState);
+                    var evt = EventCardMapper.FromMentalBreak(pawn, "Selftest", null);
                     if (evt != null)
                     {
                         Pass("FromMentalBreak 构造成功");
                         DumpObject("  EventID", evt.EventID);
-                        DumpObject("  Category", evt.Category);
+                        DumpObject("  Tags", string.Join(", ", evt.Tags ?? new List<string>()));
                     }
                     else
                         Fail("FromMentalBreak 返回 null");
@@ -652,13 +652,13 @@ namespace RimLife.Tool
         // 辅助
         // ================================================================
 
-        private static IGameEvent MakeTestEvent(string id, EventCategory cat, int tick, string severity)
+        private static IGameEvent MakeTestEvent(string id, IReadOnlyList<string> tags, int tick, string severity)
         {
             return new TestGameEvent
             {
                 EventID = id,
                 DefName = "SelftestEvent",
-                Category = cat,
+                Tags = tags,
                 Tick = tick,
                 Severity = severity,
                 Actors = new List<EventActorRef>
@@ -674,7 +674,7 @@ namespace RimLife.Tool
         {
             public string EventID { get; set; }
             public string DefName { get; set; }
-            public EventCategory Category { get; set; }
+            public IReadOnlyList<string> Tags { get; set; }
             public int Tick { get; set; }
             public string Severity { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }

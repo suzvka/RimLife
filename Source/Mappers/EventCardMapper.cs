@@ -36,7 +36,7 @@ namespace RimLife.Mappers
             {
                 EventID = $"incident_{def?.defName}_{tick}",
                 DefName = def?.defName ?? "Unknown",
-                Category = CategorizeIncident(def),
+                Tags = BuildIncidentTags(def),
                 Tick = tick,
                 Severity = threat > 2000f ? "Extreme" : threat > 800f ? "Major" : "Minor",
                 Actors = actors,
@@ -75,11 +75,15 @@ namespace RimLife.Mappers
                 }
             }
 
+            var deathTags = new List<string> { "PawnDeath", "Health" };
+            if (dinfo.HasValue && dinfo.Value.Instigator is Pawn)
+                deathTags.Add("Combat");
+
             return new EventCardImpl
             {
                 EventID = $"death_{victim?.ThingID}_{tick}",
                 DefName = "PawnDeath",
-                Category = EventCategory.Health,
+                Tags = deathTags,
                 Tick = tick,
                 Severity = "Major",
                 Actors = actors,
@@ -120,7 +124,7 @@ namespace RimLife.Mappers
             {
                 EventID = $"mental_{pawn?.ThingID}_{tick}",
                 DefName = breakDef?.defName ?? "MentalBreak",
-                Category = EventCategory.Health,
+                Tags = new List<string> { "MentalBreak", "Health" },
                 Tick = tick,
                 Severity = "Major",
                 Actors = actors,
@@ -156,7 +160,7 @@ namespace RimLife.Mappers
             {
                 EventID = $"social_{initiator?.ThingID}_{recipient?.ThingID}_{tick}",
                 DefName = intDef?.defName ?? "SocialInteraction",
-                Category = EventCategory.Social,
+                Tags = new List<string> { "SocialInteraction", "Social" },
                 Tick = tick,
                 Severity = "Minor",
                 Actors = actors,
@@ -184,7 +188,7 @@ namespace RimLife.Mappers
             {
                 EventID = $"quest_{quest?.id}_{tick}",
                 DefName = "Quest",
-                Category = EventCategory.Quest,
+                Tags = new List<string> { "Quest", stateChange ?? "Unknown" },
                 Tick = tick,
                 Severity = "Major",
                 Actors = new List<EventActorRef>(),
@@ -246,7 +250,7 @@ namespace RimLife.Mappers
             {
                 EventID = $"factionchange_{pawn?.ThingID}_{tick}",
                 DefName = "FactionChange",
-                Category = EventCategory.Social,
+                Tags = new List<string> { "FactionChange", "Social", changeType },
                 Tick = tick,
                 Severity = severity,
                 Actors = actors,
@@ -263,7 +267,7 @@ namespace RimLife.Mappers
         {
             public string EventID { get; set; }
             public string DefName { get; set; }
-            public EventCategory Category { get; set; }
+            public IReadOnlyList<string> Tags { get; set; }
             public int Tick { get; set; }
             public string Severity { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
@@ -271,31 +275,45 @@ namespace RimLife.Mappers
             public IDictionary<string, string> Payload { get; set; }
         }
 
-        private static EventCategory CategorizeIncident(IncidentDef def)
+        private static List<string> BuildIncidentTags(IncidentDef def)
         {
-            if (def == null) return EventCategory.Anomaly;
-
-            string name = def.defName ?? "";
-            if (name.StartsWith("Raid") || name.Contains("Raid") || name.Contains("Attack"))
-                return EventCategory.Combat;
-            if (name.Contains("Trade") || name.Contains("Trader"))
-                return EventCategory.Economy;
-            if (name.Contains("Quest") || name.Contains("GiveQuest"))
-                return EventCategory.Quest;
-            if (name.Contains("Weather") || name.Contains("Eclipse") || name.Contains("Toxic")
-                || name.Contains("Volcanic") || name.Contains("SolarFlare"))
-                return EventCategory.Nature;
-            if (name.Contains("Wanderer") || name.Contains("Refugee") || name.Contains("Join"))
-                return EventCategory.Social;
-
-            if (def.category != null)
+            var tags = new List<string> { "Incident" };
+            if (def == null)
             {
-                string cat = def.category.defName ?? "";
-                if (cat == "ThreatBig" || cat == "ThreatSmall") return EventCategory.Combat;
-                if (cat == "Misc") return EventCategory.Nature;
+                tags.Add("Unknown");
+                return tags;
             }
 
-            return EventCategory.Anomaly;
+            string name = def.defName ?? "";
+
+            // 首标签：具体事件类型（从 defName 提取关键词）
+            if (name.StartsWith("Raid") || name.Contains("Raid") || name.Contains("Attack"))
+                tags.Add("Combat");
+            else if (name.Contains("Trade") || name.Contains("Trader"))
+                tags.Add("Economy");
+            else if (name.Contains("Quest") || name.Contains("GiveQuest"))
+                tags.Add("Quest");
+            else if (name.Contains("Weather") || name.Contains("Eclipse") || name.Contains("Toxic")
+                || name.Contains("Volcanic") || name.Contains("SolarFlare"))
+                tags.Add("Nature");
+            else if (name.Contains("Wanderer") || name.Contains("Refugee") || name.Contains("Join"))
+                tags.Add("Social");
+            else if (def.category != null)
+            {
+                string cat = def.category.defName ?? "";
+                if (cat == "ThreatBig" || cat == "ThreatSmall")
+                    tags.Add("Combat");
+                else if (cat == "Misc")
+                    tags.Add("Nature");
+                else
+                    tags.Add(cat);
+            }
+            else
+            {
+                tags.Add("Unknown");
+            }
+
+            return tags;
         }
     }
 }
