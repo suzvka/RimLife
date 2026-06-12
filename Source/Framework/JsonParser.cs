@@ -156,6 +156,42 @@ namespace RimLife.Framework
             return sb.ToString();
         }
 
+        /// <summary>
+        /// 解析 JSON 字符串数组。期望格式 ["a","b",...]。
+        /// 返回反转义后的字符串列表。
+        /// </summary>
+        public static List<string> ParseStringArray(string json)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrEmpty(json) || json == "[]") return result;
+
+            int pos = 1; // skip '['
+            int len = json.Length;
+            while (pos < len)
+            {
+                while (pos < len && (json[pos] == ' ' || json[pos] == ',' || json[pos] == '\n')) pos++;
+                if (pos >= len || json[pos] == ']') break;
+
+                if (json[pos] == '"')
+                {
+                    int start = ++pos;
+                    while (pos < len && json[pos] != '"')
+                    {
+                        if (json[pos] == '\\') pos++;
+                        pos++;
+                    }
+                    result.Add(UnescapeJson(json.Substring(start, pos - start)));
+                    pos++; // skip closing '"'
+                }
+                else
+                {
+                    // 裸值（数字等），跳过
+                    while (pos < len && json[pos] != ',' && json[pos] != ']') pos++;
+                }
+            }
+            return result;
+        }
+
         // ================================================================
         // 序列化辅助
         // ================================================================
