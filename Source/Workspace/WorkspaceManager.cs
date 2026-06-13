@@ -14,6 +14,10 @@ namespace RimLife.Workspace
     /// 创建、查询、挂起/恢复、完成/废弃、分支、合并、回合推送。
     /// 工作空间只存 Agent 的写作日志（Rounds），不重复存储事件数据。
     /// 通过 RimLifeCore.SaveStore 持久化到存档文件。
+    ///
+    /// 身份校验规则：
+    /// - Director: create / branch / merge / suspend / resume / close
+    /// - Screenwriter: push_round / signal_workspace_status
     /// </summary>
     public class WorkspaceManager
     {
@@ -41,8 +45,9 @@ namespace RimLife.Workspace
         /// <param name="label">人类可读标签。</param>
         /// <param name="colonistIds">关联的殖民者 ThingID 列表。</param>
         /// <param name="tags">语义标签列表。</param>
+        /// <param name="createdByRole">创建者角色（Director 或 Screenwriter）。</param>
         /// <returns>创建的工作空间状态。</returns>
-        public WorkspaceState Create(string label, List<string> colonistIds, List<string> tags)
+        public WorkspaceState Create(string label, List<string> colonistIds, List<string> tags, WorkspaceRole createdByRole)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
@@ -51,6 +56,7 @@ namespace RimLife.Workspace
                 Id = Guid.NewGuid().ToString("D"),
                 Label = label ?? "Unnamed",
                 Status = WorkspaceStatus.Active,
+                CreatedByRole = createdByRole,
                 ParentId = null,
                 MergedFromIds = new List<string>(),
                 ColonistIds = colonistIds ?? new List<string>(),
@@ -60,13 +66,14 @@ namespace RimLife.Workspace
                 CreatedAtTick = tick,
                 LastActivityTick = tick,
                 ActiveSkillIds = new List<string>(),
-                Outcome = null
+                Outcome = null,
+                LastSignal = null
             };
 
             _workspaces.Add(ws);
             SaveToStore();
 
-            Log.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id})");
+            Log.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id}, role={createdByRole})");
             return ws;
         }
 
@@ -132,16 +139,26 @@ namespace RimLife.Workspace
         // ================================================================
 
         /// <summary>
-        /// 推送一个新轮次到工作空间。Agent 每轮生成结束后调用。
+        /// 推送一个新轮次到工作空间。编剧每轮生成结束后调用。
         /// </summary>
         /// <param name="workspaceId">目标工作空间 ID。</param>
-        /// <param name="recap">Agent 写的前情提要。</param>
-        /// <param name="narrative">Agent 写的正式台词。</param>
+        /// <param name="recap">编剧写的前情提要。</param>
+        /// <param name="narrative">编剧写的正式台词。</param>
         /// <param name="triggerEventIds">本轮触发的事件 ID 列表（溯源用）。</param>
+        /// <param name="callerRole">调用者角色（仅 Screenwriter 可推送）。</param>
+        /// <param name="callerId">调用者 Agent ID（可选，用于审计）。</param>
         /// <returns>是否成功。</returns>
-        public bool PushRound(string workspaceId, string recap, string narrative, List<string> triggerEventIds)
+        public bool PushRound(string workspaceId, string recap, string narrative, List<string> triggerEventIds,
+                              WorkspaceRole callerRole, string callerId = null)
         {
             if (string.IsNullOrEmpty(recap) && string.IsNullOrEmpty(narrative)) return false;
+
+            // 身份校验：只有 Screenwriter 可以推送回合
+            if (callerRole != WorkspaceRole.Screenwriter)
+            {
+                Log.Warning($"[RimLife.Workspace] PushRound rejected: caller is {callerRole}, only Screenwriter can push rounds.");
+                return false;
+            }
 
             var ws = Get(workspaceId);
             if (ws == null)
@@ -166,7 +183,9 @@ namespace RimLife.Workspace
                 Recap = recap ?? "",
                 Narrative = narrative ?? "",
                 CreatedAtTick = tick,
-                TriggerEventIds = triggerEventIds ?? new List<string>()
+                TriggerEventIds = triggerEventIds ?? new List<string>(),
+                AuthorRole = callerRole,
+                AuthorId = callerId
             };
 
             if (ws.Rounds == null)
@@ -186,15 +205,23 @@ namespace RimLife.Workspace
         // ================================================================
 
         /// <summary>
-        /// 从父工作空间分叉创建新的子工作空间。
+        /// 从父工作空间分叉创建新的子工作空间。仅 Director 可调用。
         /// 拷贝父空间的 Rounds 历史，并追加一条 Branch 轮记录分支声明。
         /// </summary>
         /// <param name="parentId">父工作空间 ID。</param>
         /// <param name="newLabel">新工作空间标签。</param>
-        /// <param name="branchRecap">Agent 写的分支前情提要（作为子空间的初始 CurrentRecap）。</param>
+        /// <param name="branchRecap">编剧写的分支前情提要（作为子空间的初始 CurrentRecap）。</param>
+        /// <param name="callerRole">调用者角色（仅 Director 可分支）。</param>
         /// <returns>新创建的子工作空间，失败返回 null。</returns>
-        public WorkspaceState Branch(string parentId, string newLabel, string branchRecap)
+        public WorkspaceState Branch(string parentId, string newLabel, string branchRecap, WorkspaceRole callerRole)
         {
+            // 身份校验：只有 Director 可以分支
+            if (callerRole != WorkspaceRole.Director)
+            {
+                Log.Warning($"[RimLife.Workspace] Branch rejected: caller is {callerRole}, only Director can branch.");
+                return null;
+            }
+
             var parent = Get(parentId);
             if (parent == null)
             {
@@ -207,7 +234,7 @@ namespace RimLife.Workspace
             // 拷贝父空间的 Rounds 历史（浅拷贝，WorkspaceRound 是值类型 struct）
             var copiedRounds = new List<WorkspaceRound>(parent.Rounds ?? new List<WorkspaceRound>());
 
-            // 追加一条 Branch 声明轮
+            // 追加一条 Branch 声明轮（由 Director 记录）
             int branchSeq = copiedRounds.Count;
             var branchRound = new WorkspaceRound
             {
@@ -216,7 +243,9 @@ namespace RimLife.Workspace
                 Recap = branchRecap ?? $"Forked from '{parent.Label}'",
                 Narrative = "",
                 CreatedAtTick = tick,
-                TriggerEventIds = new List<string>()
+                TriggerEventIds = new List<string>(),
+                AuthorRole = callerRole,
+                AuthorId = null
             };
             copiedRounds.Add(branchRound);
 
@@ -228,6 +257,7 @@ namespace RimLife.Workspace
                 Id = Guid.NewGuid().ToString("D"),
                 Label = newLabel ?? $"{parent.Label} (branch)",
                 Status = WorkspaceStatus.Active,
+                CreatedByRole = parent.CreatedByRole,
                 ParentId = parentId,
                 MergedFromIds = new List<string>(),
                 ColonistIds = new List<string>(parent.ColonistIds ?? new List<string>()),
@@ -237,7 +267,8 @@ namespace RimLife.Workspace
                 CreatedAtTick = tick,
                 LastActivityTick = tick,
                 ActiveSkillIds = childSkillIds,
-                Outcome = null
+                Outcome = null,
+                LastSignal = null
             };
 
             _workspaces.Add(child);
@@ -253,13 +284,22 @@ namespace RimLife.Workspace
 
         /// <summary>
         /// 将源空间和目标的 Rounds 按 Seq 合并去重，追加一条 Merge 轮记录合并声明，然后废弃源空间。
+        /// 仅 Director 可调用。
         /// </summary>
         /// <param name="sourceId">源工作空间 ID。</param>
         /// <param name="targetId">目标工作空间 ID。</param>
-        /// <param name="mergeRecap">Agent 写的合并前情提要（作为目标空间新的 CurrentRecap）。</param>
+        /// <param name="mergeRecap">编剧写的合并前情提要（作为目标空间新的 CurrentRecap）。</param>
+        /// <param name="callerRole">调用者角色（仅 Director 可合并）。</param>
         /// <returns>是否成功。</returns>
-        public bool Merge(string sourceId, string targetId, string mergeRecap)
+        public bool Merge(string sourceId, string targetId, string mergeRecap, WorkspaceRole callerRole)
         {
+            // 身份校验：只有 Director 可以合并
+            if (callerRole != WorkspaceRole.Director)
+            {
+                Log.Warning($"[RimLife.Workspace] Merge rejected: caller is {callerRole}, only Director can merge.");
+                return false;
+            }
+
             var source = Get(sourceId);
             var target = Get(targetId);
 
@@ -292,7 +332,7 @@ namespace RimLife.Workspace
             }
             mergedRounds = mergedRounds.OrderBy(r => r.Seq).ToList();
 
-            // 追加一条 Merge 声明轮
+            // 追加一条 Merge 声明轮（由 Director 记录）
             int mergeSeq = mergedRounds.Count;
             int tick = Find.TickManager?.TicksGame ?? 0;
             var mergeRound = new WorkspaceRound
@@ -302,7 +342,9 @@ namespace RimLife.Workspace
                 Recap = mergeRecap ?? $"Merged from '{source.Label}' into '{target.Label}'",
                 Narrative = "",
                 CreatedAtTick = tick,
-                TriggerEventIds = new List<string>()
+                TriggerEventIds = new List<string>(),
+                AuthorRole = callerRole,
+                AuthorId = null
             };
             mergedRounds.Add(mergeRound);
 
@@ -358,6 +400,53 @@ namespace RimLife.Workspace
 
             SaveToStore();
             Log.Message($"[RimLife.Workspace] Merged '{source.Label}' into '{target.Label}'");
+            return true;
+        }
+
+        // ================================================================
+        // 编剧信号
+        // ================================================================
+
+        /// <summary>
+        /// 编剧上报推进状态信号。仅 Screenwriter 可调用。
+        /// 导演通过信号了解剧情线推进情况，据此做结构决策。
+        /// </summary>
+        /// <param name="workspaceId">目标工作空间 ID。</param>
+        /// <param name="signalType">信号类型。</param>
+        /// <param name="note">编剧给导演的简短说明（≤200字）。</param>
+        /// <param name="suggestedTargetId">ReadyForMerge 时的建议目标空间 ID。</param>
+        /// <param name="callerRole">调用者角色（仅 Screenwriter 可上报信号）。</param>
+        /// <returns>是否成功。</returns>
+        public bool ReportSignal(string workspaceId, SignalType signalType, string note,
+                                 string suggestedTargetId, WorkspaceRole callerRole)
+        {
+            // 身份校验：只有 Screenwriter 可以上报信号
+            if (callerRole != WorkspaceRole.Screenwriter)
+            {
+                Log.Warning($"[RimLife.Workspace] ReportSignal rejected: caller is {callerRole}, " +
+                            "only Screenwriter can report signals.");
+                return false;
+            }
+
+            var ws = Get(workspaceId);
+            if (ws == null)
+            {
+                Log.Warning($"[RimLife.Workspace] ReportSignal failed: workspace '{workspaceId}' not found.");
+                return false;
+            }
+
+            int tick = Find.TickManager?.TicksGame ?? 0;
+            ws.LastSignal = new StorylineSignal
+            {
+                Type = signalType,
+                ReportedAtTick = tick,
+                Note = note ?? "",
+                SuggestedTargetId = suggestedTargetId
+            };
+            ws.LastActivityTick = tick;
+
+            SaveToStore();
+            Log.Message($"[RimLife.Workspace] Workspace '{ws.Label}' reported signal: {signalType}");
             return true;
         }
 
@@ -425,6 +514,7 @@ namespace RimLife.Workspace
             w.Prop("id", ws.Id ?? "");
             w.Prop("label", ws.Label ?? "");
             w.Prop("status", ws.Status.ToString());
+            w.Prop("createdByRole", ws.CreatedByRole.ToString());
             if (ws.ParentId != null)
                 w.Prop("parentId", ws.ParentId);
 
@@ -462,6 +552,20 @@ namespace RimLife.Workspace
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
+            // LastSignal
+            if (ws.LastSignal.HasValue)
+            {
+                var sig = ws.LastSignal.Value;
+                var sigWriter = new JsonWriter(256);
+                sigWriter.Prop("type", sig.Type.ToString());
+                sigWriter.Prop("reportedAtTick", sig.ReportedAtTick);
+                if (!string.IsNullOrEmpty(sig.Note))
+                    sigWriter.Prop("note", sig.Note);
+                if (!string.IsNullOrEmpty(sig.SuggestedTargetId))
+                    sigWriter.Prop("suggestedTargetId", sig.SuggestedTargetId);
+                w.PropRaw("lastSignal", sigWriter.Close());
+            }
+
             return w.Close();
         }
 
@@ -478,6 +582,10 @@ namespace RimLife.Workspace
             if (r.TriggerEventIds != null && r.TriggerEventIds.Count > 0)
                 w.Array("triggerEventIds", r.TriggerEventIds);
 
+            w.Prop("authorRole", r.AuthorRole.ToString());
+            if (!string.IsNullOrEmpty(r.AuthorId))
+                w.Prop("authorId", r.AuthorId);
+
             return w.Close();
         }
 
@@ -490,6 +598,7 @@ namespace RimLife.Workspace
                 Id = data.TryGetValue("id", out var v) ? v : Guid.NewGuid().ToString("D"),
                 Label = data.TryGetValue("label", out v) ? v : "Unnamed",
                 Status = ParseStatus(data.TryGetValue("status", out v) ? v : "Active"),
+                CreatedByRole = ParseRole(data.TryGetValue("createdByRole", out v) ? v : "Director"),
                 ParentId = data.TryGetValue("parentId", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null,
                 MergedFromIds = DeserializeStringList(data.TryGetValue("mergedFromIds", out v) ? v : null),
                 ColonistIds = DeserializeStringList(data.TryGetValue("colonistIds", out v) ? v : null),
@@ -499,7 +608,8 @@ namespace RimLife.Workspace
                 CreatedAtTick = data.TryGetValue("createdAtTick", out v) && int.TryParse(v, out var tick) ? tick : 0,
                 LastActivityTick = data.TryGetValue("lastActivityTick", out v) && int.TryParse(v, out var lt) ? lt : 0,
                 ActiveSkillIds = DeserializeStringList(data.TryGetValue("activeSkillIds", out v) ? v : null),
-                Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
+                Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null,
+                LastSignal = DeserializeSignal(data.TryGetValue("lastSignal", out v) ? v : null)
             };
 
             return ws;
@@ -520,7 +630,9 @@ namespace RimLife.Workspace
                     Recap = dict.TryGetValue("recap", out v) ? v : "",
                     Narrative = dict.TryGetValue("narrative", out v) ? v : "",
                     CreatedAtTick = dict.TryGetValue("createdAtTick", out v) && int.TryParse(v, out var t) ? t : 0,
-                    TriggerEventIds = DeserializeStringList(dict.TryGetValue("triggerEventIds", out v) ? v : null)
+                    TriggerEventIds = DeserializeStringList(dict.TryGetValue("triggerEventIds", out v) ? v : null),
+                    AuthorRole = ParseRole(dict.TryGetValue("authorRole", out v) ? v : "Screenwriter"),
+                    AuthorId = dict.TryGetValue("authorId", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
                 };
                 result.Add(r);
             }
@@ -546,6 +658,39 @@ namespace RimLife.Workspace
             if (Enum.TryParse<RoundType>(s, true, out var rt))
                 return rt;
             return RoundType.Normal;
+        }
+
+        private static WorkspaceRole ParseRole(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return WorkspaceRole.Director;
+            if (Enum.TryParse<WorkspaceRole>(s, true, out var role))
+                return role;
+            return WorkspaceRole.Director;
+        }
+
+        private static StorylineSignal? DeserializeSignal(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return null;
+
+            var dict = JsonParser.ParseDict(json);
+            if (dict == null || dict.Count == 0) return null;
+
+            var signal = new StorylineSignal
+            {
+                Type = ParseSignalType(dict.TryGetValue("type", out var v) ? v : "Progressing"),
+                ReportedAtTick = dict.TryGetValue("reportedAtTick", out v) && int.TryParse(v, out var t) ? t : 0,
+                Note = dict.TryGetValue("note", out v) ? v : "",
+                SuggestedTargetId = dict.TryGetValue("suggestedTargetId", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
+            };
+            return signal;
+        }
+
+        private static SignalType ParseSignalType(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return SignalType.Progressing;
+            if (Enum.TryParse<SignalType>(s, true, out var st))
+                return st;
+            return SignalType.Progressing;
         }
 
         private static List<string> DeserializeStringList(string json)

@@ -1,12 +1,14 @@
 using RimLife.Core;
 using RimLife.Framework.Mcp;
+using RimLife.Infrastructure.Llm;
 using System.Collections.Generic;
 using Verse;
 
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// RimLife 核心服务定位器。提供持久化存储、事件日志、交互历史、工作空间和知识库的全局访问。
+    /// RimLife 核心服务定位器。提供持久化存储、事件日志、交互历史、
+    /// 工作空间、知识库和 LLM API 访问的全局访问。
     /// </summary>
     public static class RimLifeCore
     {
@@ -38,7 +40,8 @@ namespace RimLife.Infrastructure
                 int count = McpSkillRegistry.RegisterFromType(typeof(Mcp.SystemMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.DirectorMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
-                count += McpSkillRegistry.RegisterFromType(typeof(Workspace.WorkspaceMcpTools));
+                count += McpSkillRegistry.RegisterFromType(typeof(Workspace.DirectionMcpTools));
+                count += McpSkillRegistry.RegisterFromType(typeof(Workspace.WritingMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.PawnMemoryMcpTools));
 
                 Log.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
@@ -176,6 +179,32 @@ namespace RimLife.Infrastructure
                     }
                 }
                 return _knowledgeBase;
+            }
+        }
+
+        private static LlmAccessor _llmAccessor;
+        private static readonly object _llmAccessorLock = new object();
+
+        /// <summary>
+        /// LLM API 访问器实例。首次访问时从 CacheStore 延迟创建。
+        /// 配置（baseUrl + apiKey + modelName）通过 CacheStore 持久化，跨存档复用。
+        /// CacheStore 不可用时返回 null。
+        /// </summary>
+        public static LlmAccessor LlmAccessor
+        {
+            get
+            {
+                if (_llmAccessor == null)
+                {
+                    lock (_llmAccessorLock)
+                    {
+                        if (_llmAccessor == null && CacheStore != null)
+                        {
+                            _llmAccessor = new LlmAccessor(CacheStore);
+                        }
+                    }
+                }
+                return _llmAccessor;
             }
         }
 

@@ -68,8 +68,10 @@ namespace RimLife.Framework.Mcp
                     "查询角色当前所处的环境信息（室内外、温光、天气、房间）");
                 RegisterSkill("knowledge_management", "知识管理",
                     "词条查询、学习、列表、删除、统计");
-                RegisterSkill("workspace_management", "工作空间",
-                    "剧情线工作空间的创建、查询、分支、合并、生命周期管理");
+                RegisterSkill("workspace_direction", "工作空间(导演)",
+                    "剧情线工作空间的创建、分支、合并、生命周期管理。导演专用。");
+                RegisterSkill("workspace_writing", "工作空间(编剧)",
+                    "查看工作空间完整内容、推送叙事回合、上报推进状态信号。编剧专用。");
             }
         }
 

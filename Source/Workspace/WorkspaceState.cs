@@ -3,11 +3,23 @@ using System.Collections.Generic;
 namespace RimLife.Workspace
 {
     /// <summary>
+    /// Agent 角色身份。决定对工作空间的操作权限。
+    /// </summary>
+    public enum WorkspaceRole
+    {
+        /// <summary>导演：管理分支结构（创建/分支/合并/关闭），不接触叙事内容。</summary>
+        Director,
+
+        /// <summary>编剧：创作叙事内容（push_round），无分支/合并权。</summary>
+        Screenwriter
+    }
+
+    /// <summary>
     /// 工作空间状态枚举。
     /// </summary>
     public enum WorkspaceStatus
     {
-        /// <summary>活跃中，导演可继续推送回合。</summary>
+        /// <summary>活跃中，编剧可继续推送回合。</summary>
         Active,
 
         /// <summary>暂时挂起，保留数据但暂停回合推送。</summary>
@@ -59,6 +71,12 @@ namespace RimLife.Workspace
 
         /// <summary>本轮触发的事件 ID 列表。仅作溯源，不注入 prompt。</summary>
         public List<string> TriggerEventIds;
+
+        /// <summary>本轮作者角色（Director/Screenwriter）。</summary>
+        public WorkspaceRole AuthorRole;
+
+        /// <summary>本轮作者标识（Agent ID，可选）。</summary>
+        public string AuthorId;
     }
 
     /// <summary>
@@ -75,6 +93,9 @@ namespace RimLife.Workspace
 
         /// <summary>当前状态。</summary>
         public WorkspaceStatus Status;
+
+        /// <summary>创建此空间的 Agent 角色。</summary>
+        public WorkspaceRole CreatedByRole;
 
         /// <summary>分支来源工作空间 ID（null 表示根空间）。</summary>
         public string ParentId;
@@ -105,5 +126,8 @@ namespace RimLife.Workspace
 
         /// <summary>结束原因描述（Completed / Abandoned 时填充）。</summary>
         public string Outcome;
+
+        /// <summary>编剧最近一次上报的推进状态信号。</summary>
+        public StorylineSignal? LastSignal;
     }
 }

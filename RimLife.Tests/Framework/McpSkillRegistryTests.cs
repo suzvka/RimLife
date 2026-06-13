@@ -53,10 +53,10 @@ namespace RimLife.Tests.Framework
         // ================================================================
 
         [Fact]
-        public void InitializeDefaults_CreatesSevenBusinessSkills()
+        public void InitializeDefaults_CreatesEightBusinessSkills()
         {
             McpSkillRegistry.InitializeDefaults();
-            Assert.Equal(7, McpSkillRegistry.SkillCount);
+            Assert.Equal(8, McpSkillRegistry.SkillCount);
         }
 
         [Fact]
@@ -70,7 +70,8 @@ namespace RimLife.Tests.Framework
             Assert.Contains("event_query", ids);
             Assert.Contains("environment_query", ids);
             Assert.Contains("knowledge_management", ids);
-            Assert.Contains("workspace_management", ids);
+            Assert.Contains("workspace_direction", ids);
+            Assert.Contains("workspace_writing", ids);
             Assert.DoesNotContain(McpSkillRegistry.SystemSkillId, ids);
         }
 
