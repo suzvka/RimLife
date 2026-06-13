@@ -4,18 +4,42 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Verse;
 
 namespace RimLife.Workspace
 {
     /// <summary>
-    /// 导演 Agent 的 MCP 工具集。提供工作空间的结构管理能力：
-    /// 创建、查询（仅看信号/统计，不看叙事内容）、分支、合并、生命周期控制。
-    /// 导演的职责是管理分支结构，不接触具体叙事内容。
+    /// 导演 Agent 的 MCP 工具提供者。通过 IMcpHookProvider 接口注入依赖（WorkspaceManager + ILogger），
+    /// 不再直接引用 Infrastructure 或 RimWorld。
     /// </summary>
-    [McpSkill("workspace_direction")]
-    public static class DirectionMcpTools
+    public class DirectionMcpProvider : IMcpHookProvider
     {
+        private readonly Func<WorkspaceManager> _getWorkspaceManager;
+        private readonly ILogger _logger;
+
+        public DirectionMcpProvider(Func<WorkspaceManager> getWorkspaceManager, ILogger logger)
+        {
+            _getWorkspaceManager = getWorkspaceManager ?? throw new ArgumentNullException(nameof(getWorkspaceManager));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public string HookId => "workspace_direction";
+        public string HookName => "工作空间(导演)";
+        public string HookDescription => "剧情线工作空间的创建、分支、合并、生命周期管理。导演专用。";
+
+        public IReadOnlyList<McpTool> GetTools()
+        {
+            return new McpTool[]
+            {
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(CreateWorkspace)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(ListWorkspaces)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(GetWorkspace)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(SuspendWorkspace)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(ResumeWorkspace)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(CloseWorkspace)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(BranchWorkspace)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(MergeWorkspaces)), this),
+            };
+        }
         // ================================================================
         // 创建
         // ================================================================
@@ -25,7 +49,7 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "create_workspace",
                  Description = "创建新的上下文空间（剧情线工作空间），返回工作空间完整信息。创建者角色为 Director。")]
-        public static string CreateWorkspace(
+        public string CreateWorkspace(
             [McpParam(Description = "人类可读标签，如 'RaidAftermath'")] string label,
             [McpParam(Description = "关联殖民者 ThingID，逗号分隔",
                       Required = McpRequired.False)] string colonistIds = null,
@@ -34,7 +58,7 @@ namespace RimLife.Workspace
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 var colonistList = ParseStringList(colonistIds);
@@ -45,7 +69,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] create_workspace failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] create_workspace failed: {e.Message}");
                 return "{}";
             }
         }
@@ -59,13 +83,13 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "list_workspaces",
                  Description = "列出所有工作空间摘要（导演视图）。含信号、轮次数、角色数，不含叙事内容。可按状态过滤。")]
-        public static string ListWorkspaces(
+        public string ListWorkspaces(
             [McpParam(Description = "过滤状态：Active/Suspended/Completed/Abandoned，留空=全部",
                       Required = McpRequired.False)] string status = null)
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "[]";
 
                 WorkspaceStatus? statusFilter = null;
@@ -77,7 +101,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] list_workspaces failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] list_workspaces failed: {e.Message}");
                 return "[]";
             }
         }
@@ -87,12 +111,12 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "get_workspace",
                  Description = "获取指定工作空间的导演视图：含角色、标签、信号、轮次统计，不含叙事台词内容。")]
-        public static string GetWorkspace(
+        public string GetWorkspace(
             [McpParam(Description = "工作空间唯一 ID")] string workspaceId)
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 var ws = manager.Get(workspaceId);
@@ -102,7 +126,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] get_workspace({workspaceId}) failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] get_workspace({workspaceId}) failed: {e.Message}");
                 return "{}";
             }
         }
@@ -116,12 +140,12 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "suspend_workspace",
                  Description = "挂起指定工作空间，保留数据但停止回合推送。")]
-        public static string SuspendWorkspace(
+        public string SuspendWorkspace(
             [McpParam(Description = "工作空间 ID")] string workspaceId)
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 bool ok = manager.UpdateStatus(workspaceId, WorkspaceStatus.Suspended);
@@ -130,7 +154,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] suspend_workspace failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] suspend_workspace failed: {e.Message}");
                 return "{}";
             }
         }
@@ -140,12 +164,12 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "resume_workspace",
                  Description = "恢复已挂起的工作空间，重新开始接受回合推送。")]
-        public static string ResumeWorkspace(
+        public string ResumeWorkspace(
             [McpParam(Description = "工作空间 ID")] string workspaceId)
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 bool ok = manager.UpdateStatus(workspaceId, WorkspaceStatus.Active);
@@ -154,7 +178,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] resume_workspace failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] resume_workspace failed: {e.Message}");
                 return "{}";
             }
         }
@@ -164,7 +188,7 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "close_workspace",
                  Description = "关闭工作空间，标记为 Completed 或 Abandoned。")]
-        public static string CloseWorkspace(
+        public string CloseWorkspace(
             [McpParam(Description = "工作空间 ID")] string workspaceId,
             [McpParam(Description = "结束类型：Completed 或 Abandoned")] string outcomeType,
             [McpParam(Description = "结束原因描述",
@@ -172,7 +196,7 @@ namespace RimLife.Workspace
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 WorkspaceStatus targetStatus;
@@ -182,7 +206,7 @@ namespace RimLife.Workspace
                     targetStatus = WorkspaceStatus.Abandoned;
                 else
                 {
-                    Log.Warning($"[RimLife.DirectionMcp] close_workspace: invalid outcomeType '{outcomeType}', must be Completed or Abandoned.");
+                    _logger.Warning($"[RimLife.DirectionMcp] close_workspace: invalid outcomeType '{outcomeType}', must be Completed or Abandoned.");
                     return "{}";
                 }
 
@@ -192,7 +216,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] close_workspace failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] close_workspace failed: {e.Message}");
                 return "{}";
             }
         }
@@ -206,7 +230,7 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "branch_workspace",
                  Description = "从父工作空间分叉创建新的子工作空间。拷贝父空间的轮次历史，追加一条 Branch 轮。")]
-        public static string BranchWorkspace(
+        public string BranchWorkspace(
             [McpParam(Description = "父工作空间 ID")] string parentWorkspaceId,
             [McpParam(Description = "新工作空间标签")] string label,
             [McpParam(Description = "分支前情提要：编剧对为什么要开分支以及新线当前状态的总结。")]
@@ -214,7 +238,7 @@ namespace RimLife.Workspace
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 var child = manager.Branch(parentWorkspaceId, label, branchRecap, WorkspaceRole.Director);
@@ -222,7 +246,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] branch_workspace failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] branch_workspace failed: {e.Message}");
                 return "{}";
             }
         }
@@ -232,7 +256,7 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "merge_workspaces",
                  Description = "将源空间的轮次合并到目标空间，然后废弃源空间。按 Seq 去重，追加一条 Merge 轮。")]
-        public static string MergeWorkspaces(
+        public string MergeWorkspaces(
             [McpParam(Description = "源工作空间 ID（将被合并并废弃）")] string sourceWorkspaceId,
             [McpParam(Description = "目标工作空间 ID（接收数据）")] string targetWorkspaceId,
             [McpParam(Description = "合并前情提要：编剧对两条线合并后的叙事状态总结。")]
@@ -240,7 +264,7 @@ namespace RimLife.Workspace
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 bool ok = manager.Merge(sourceWorkspaceId, targetWorkspaceId, mergeRecap, WorkspaceRole.Director);
@@ -249,7 +273,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.DirectionMcp] merge_workspaces failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] merge_workspaces failed: {e.Message}");
                 return "{}";
             }
         }
@@ -261,7 +285,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 导演视图序列化：含元数据、信号、轮次统计，不含具体叙事内容。
         /// </summary>
-        private static string SerializeDirectorView(WorkspaceState ws)
+        private string SerializeDirectorView(WorkspaceState ws)
         {
             if (ws == null) return "{}";
 
@@ -302,7 +326,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 导演视图摘要列表（轻量，不含轮次详情，含信号）。
         /// </summary>
-        private static string SerializeDirectorSummaryList(IReadOnlyList<WorkspaceState> workspaces)
+        private string SerializeDirectorSummaryList(IReadOnlyList<WorkspaceState> workspaces)
         {
             if (workspaces == null || workspaces.Count == 0) return "[]";
 
@@ -319,7 +343,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 单个工作空间的导演摘要（轻量）。
         /// </summary>
-        private static string SerializeDirectorSummary(WorkspaceState ws)
+        private string SerializeDirectorSummary(WorkspaceState ws)
         {
             var w = new JsonWriter(256);
             w.Prop("id", ws.Id ?? "");
@@ -350,7 +374,7 @@ namespace RimLife.Workspace
         // 辅助
         // ================================================================
 
-        private static List<string> ParseStringList(string input)
+        private List<string> ParseStringList(string input)
         {
             if (string.IsNullOrEmpty(input)) return new List<string>();
             return input.Split(new char[] { ',' })
@@ -359,7 +383,7 @@ namespace RimLife.Workspace
                 .ToList();
         }
 
-        private static string Truncate(string value, int maxLength)
+        private string Truncate(string value, int maxLength)
         {
             if (string.IsNullOrEmpty(value)) return "";
             if (value.Length <= maxLength) return value;

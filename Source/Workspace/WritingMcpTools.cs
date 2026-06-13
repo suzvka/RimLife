@@ -4,18 +4,37 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Verse;
 
 namespace RimLife.Workspace
 {
     /// <summary>
-    /// 编剧 Agent 的 MCP 工具集。提供叙事创作能力：
-    /// 查看完整工作空间（含轮次/前情提要）、推送回合、上报推进信号。
-    /// 编剧没有分支/合并/关闭权限，只能通过信号建议导演操作。
+    /// 编剧 Agent 的 MCP 工具提供者。通过 IMcpHookProvider 接口注入依赖（WorkspaceManager + ILogger），
+    /// 不再直接引用 Infrastructure 或 RimWorld。
     /// </summary>
-    [McpSkill("workspace_writing")]
-    public static class WritingMcpTools
+    public class WritingMcpProvider : IMcpHookProvider
     {
+        private readonly Func<WorkspaceManager> _getWorkspaceManager;
+        private readonly ILogger _logger;
+
+        public WritingMcpProvider(Func<WorkspaceManager> getWorkspaceManager, ILogger logger)
+        {
+            _getWorkspaceManager = getWorkspaceManager ?? throw new ArgumentNullException(nameof(getWorkspaceManager));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
+
+        public string HookId => "workspace_writing";
+        public string HookName => "工作空间(编剧)";
+        public string HookDescription => "查看工作空间完整内容、推送叙事回合、上报推进状态信号。编剧专用。";
+
+        public IReadOnlyList<McpTool> GetTools()
+        {
+            return new McpTool[]
+            {
+                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(GetWorkspace)), this),
+                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(PushRound)), this),
+                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(SignalWorkspaceStatus)), this),
+            };
+        }
         // ================================================================
         // 查询
         // ================================================================
@@ -25,12 +44,12 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "get_workspace",
                  Description = "获取指定工作空间的编剧视图：含关联角色、标签、当前前情提要和全部轮次记录（含叙事台词）。")]
-        public static string GetWorkspace(
+        public string GetWorkspace(
             [McpParam(Description = "工作空间唯一 ID")] string workspaceId)
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 var ws = manager.Get(workspaceId);
@@ -40,7 +59,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.WritingMcp] get_workspace({workspaceId}) failed: {e.Message}");
+                _logger.Warning($"[RimLife.WritingMcp] get_workspace({workspaceId}) failed: {e.Message}");
                 return "{}";
             }
         }
@@ -54,7 +73,7 @@ namespace RimLife.Workspace
         /// </summary>
         [McpTool(Name = "push_round",
                  Description = "向工作空间推送一个新轮次：前情提要 + 正式台词。只有 Active 空间可推送。推送后 CurrentRecap 自动更新。")]
-        public static string PushRound(
+        public string PushRound(
             [McpParam(Description = "目标工作空间 ID")] string workspaceId,
             [McpParam(Description = "本轮前情提要：编剧对本轮叙事起点的总结。")]
             string recap,
@@ -65,7 +84,7 @@ namespace RimLife.Workspace
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 var eventIdList = ParseStringList(triggerEventIds);
@@ -77,7 +96,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.WritingMcp] push_round failed: {e.Message}");
+                _logger.Warning($"[RimLife.WritingMcp] push_round failed: {e.Message}");
                 return "{}";
             }
         }
@@ -94,7 +113,7 @@ namespace RimLife.Workspace
                                "signalType: Progressing(正常推进) / StorylineComplete(走到终点) / " +
                                "NeedsBranch(需要分叉) / Stuck(僵局) / ReadyForMerge(建议合并)。\n" +
                                "编剧只上报状态，不透露具体叙事内容。")]
-        public static string SignalWorkspaceStatus(
+        public string SignalWorkspaceStatus(
             [McpParam(Description = "目标工作空间 ID")] string workspaceId,
             [McpParam(Description = "信号类型：Progressing/StorylineComplete/NeedsBranch/Stuck/ReadyForMerge")]
             string signalType,
@@ -105,12 +124,12 @@ namespace RimLife.Workspace
         {
             try
             {
-                var manager = Infrastructure.RimLifeCore.Workspaces;
+                var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
                 if (!Enum.TryParse<SignalType>(signalType, true, out var parsedType))
                 {
-                    Log.Warning($"[RimLife.WritingMcp] signal_workspace_status: invalid signalType '{signalType}'.");
+                    _logger.Warning($"[RimLife.WritingMcp] signal_workspace_status: invalid signalType '{signalType}'.");
                     return "{}";
                 }
 
@@ -122,7 +141,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.WritingMcp] signal_workspace_status failed: {e.Message}");
+                _logger.Warning($"[RimLife.WritingMcp] signal_workspace_status failed: {e.Message}");
                 return "{}";
             }
         }
@@ -134,7 +153,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 编剧视图序列化：含完整轮次列表和叙事内容。
         /// </summary>
-        private static string SerializeWriterView(WorkspaceState ws)
+        private string SerializeWriterView(WorkspaceState ws)
         {
             if (ws == null) return "{}";
 
@@ -186,7 +205,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 单个轮次的序列化（含完整叙事内容和作者信息）。
         /// </summary>
-        private static string SerializeRound(WorkspaceRound r)
+        private string SerializeRound(WorkspaceRound r)
         {
             var w = new JsonWriter(512);
             w.Prop("seq", r.Seq);
@@ -210,7 +229,7 @@ namespace RimLife.Workspace
         // 辅助
         // ================================================================
 
-        private static List<string> ParseStringList(string input)
+        private List<string> ParseStringList(string input)
         {
             if (string.IsNullOrEmpty(input)) return new List<string>();
             return input.Split(new char[] { ',' })

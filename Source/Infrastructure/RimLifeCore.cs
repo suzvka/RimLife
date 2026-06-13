@@ -37,8 +37,8 @@ namespace RimLife.Infrastructure
 
                 int count = McpSkillRegistry.RegisterFromType(typeof(Mcp.SystemMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
-                count += McpSkillRegistry.RegisterFromType(typeof(Workspace.DirectionMcpTools));
-                count += McpSkillRegistry.RegisterFromType(typeof(Workspace.WritingMcpTools));
+                count += RegisterHookProvider(new Workspace.DirectionMcpProvider(() => Workspaces, Logger));
+                count += RegisterHookProvider(new Workspace.WritingMcpProvider(() => Workspaces, Logger));
 
                 // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
                 count += RegisterHookProvider(new Mcp.ColonyOverviewProvider());
