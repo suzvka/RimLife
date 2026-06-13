@@ -66,38 +66,4 @@ namespace RimLife.Cards
         public string Summary;
         public List<string> RelatedPawnIds;
     }
-
-    /// <summary>
-    /// 大五人格向量。用于心理学特征计算。
-    /// </summary>
-    public struct BigFiveVector
-    {
-        public int Openness;
-        public int Conscientiousness;
-        public int Extraversion;
-        public int Agreeableness;
-        public int Neuroticism;
-
-        public static BigFiveVector Zero => new BigFiveVector();
-
-        public BigFiveVector(int o, int c, int e, int a, int n)
-        {
-            Openness = o;
-            Conscientiousness = c;
-            Extraversion = e;
-            Agreeableness = a;
-            Neuroticism = n;
-        }
-
-        public bool IsZero()
-        {
-            return Openness == 0 && Conscientiousness == 0 && Extraversion == 0
-                && Agreeableness == 0 && Neuroticism == 0;
-        }
-
-        public override string ToString()
-        {
-            return $"O={Openness} C={Conscientiousness} E={Extraversion} A={Agreeableness} N={Neuroticism}";
-        }
-    }
 }

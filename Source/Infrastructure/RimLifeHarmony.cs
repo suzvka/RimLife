@@ -21,7 +21,7 @@ namespace RimLife.Infrastructure
             MainThreadDispatcher.Logger = logger;
 
             // 注册 Pawn 语义提示词提供者
-            RimLifeCore.PromptProvider = new PawnPromptProvider();
+            RimLifeCore.PromptProvider = new PawnPro();
 
             Instance = new Harmony("RimLife.Core");
             Instance.PatchAll();

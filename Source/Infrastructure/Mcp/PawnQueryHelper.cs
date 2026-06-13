@@ -1,5 +1,4 @@
 using RimLife.Cards;
-using RimLife.Mappers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -74,12 +73,27 @@ namespace RimLife.Infrastructure.Mcp
         }
 
         /// <summary>
-        /// 构建仅含身份元数据的 CharacterCard。
-        /// view 参数供调用方透传，层控制由 CardSerializer 完成。
+        /// 构建仅含身份元数据的 CharacterCard（基于 PawnPro）。
         /// </summary>
         public static CharacterCard BuildCharacterCard(Pawn pawn, string view)
         {
-            return CharacterCardMapper.CreateBasic(pawn);
+            if (pawn == null) throw new ArgumentNullException(nameof(pawn));
+            var p = new PawnPro(pawn);
+            return new CharacterCard
+            {
+                ID = p.ID,
+                Name = p.Name,
+                FullName = p.FullName,
+                DefName = p.DefName,
+                FactionLabel = p.FactionLabel,
+                AgeBiologicalYears = p.AgeBiologicalYears,
+                Gender = p.Gender,
+                PawnType = p.PawnType.ToString(),
+                PawnRelation = p.PawnRelation.ToString(),
+                IsDead = p.IsDead,
+                IsDowned = p.IsDowned,
+                IsAwake = p.IsAwake
+            };
         }
 
         /// <summary>

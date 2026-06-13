@@ -5,7 +5,7 @@ using Xunit;
 namespace RimLife.Tests.Cards
 {
     /// <summary>
-    /// EventCard / EventActorRef / BigFiveVector DTO 断言测试。
+    /// EventCard / EventActorRef DTO 断言测试。
     /// 纯数据结构测试，验证工厂方法和值语义正确性。
     /// </summary>
     public class EventCardTests
@@ -55,56 +55,6 @@ namespace RimLife.Tests.Cards
             Assert.Equal("?", actor.ID);
             Assert.Equal("?", actor.Name);
             Assert.Equal("Bystander", actor.Role);
-        }
-
-        // ================================================================
-        // BigFiveVector
-        // ================================================================
-
-        [Fact]
-        public void BigFiveVector_Zero_AllComponentsZero()
-        {
-            var zero = BigFiveVector.Zero;
-
-            Assert.Equal(0, zero.Openness);
-            Assert.Equal(0, zero.Conscientiousness);
-            Assert.Equal(0, zero.Extraversion);
-            Assert.Equal(0, zero.Agreeableness);
-            Assert.Equal(0, zero.Neuroticism);
-            Assert.True(zero.IsZero());
-        }
-
-        [Fact]
-        public void BigFiveVector_Constructor_SetsComponents()
-        {
-            var vec = new BigFiveVector(1, 2, 3, 4, 5);
-
-            Assert.Equal(1, vec.Openness);
-            Assert.Equal(2, vec.Conscientiousness);
-            Assert.Equal(3, vec.Extraversion);
-            Assert.Equal(4, vec.Agreeableness);
-            Assert.Equal(5, vec.Neuroticism);
-            Assert.False(vec.IsZero());
-        }
-
-        [Fact]
-        public void BigFiveVector_IsZero_DetectsPartialZero()
-        {
-            var partial = new BigFiveVector(0, 1, 0, 0, 0);
-            Assert.False(partial.IsZero());
-        }
-
-        [Fact]
-        public void BigFiveVector_ToString_ContainsAllComponents()
-        {
-            var vec = new BigFiveVector(1, -2, 3, 0, 5);
-            var str = vec.ToString();
-
-            Assert.Contains("O=1", str);
-            Assert.Contains("C=-2", str);
-            Assert.Contains("E=3", str);
-            Assert.Contains("A=0", str);
-            Assert.Contains("N=5", str);
         }
 
         // ================================================================

@@ -23,7 +23,7 @@ namespace RimLife
             if (pawn == null) yield break;
             if (!Prefs.DevMode) yield break;
 
-            // SocialInfo dump (via CharacterCardMapper)
+            // SocialInfo dump (via PawnPro)
             yield return new Command_Action
             {
                 defaultLabel = "SocialInfo Dump",

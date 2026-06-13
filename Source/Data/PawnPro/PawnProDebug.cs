@@ -6,7 +6,6 @@ using HarmonyLib;
 using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Infrastructure;
-using RimLife.Mappers;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -39,7 +38,7 @@ namespace RimLife
         {
             try
             {
-                var card = CharacterCardMapper.CreateBasic(pawn);
+                var card = Infrastructure.Mcp.PawnQueryHelper.BuildCharacterCard(pawn, null);
                 var sb = new StringBuilder(2048);
                 sb.AppendLine($"[CharacterCard Dump] {card.FullName} ({card.ID}) | Type={card.PawnType} Faction={card.FactionLabel}");
                 sb.AppendLine($"Age={card.AgeBiologicalYears:0.0} Gender={card.Gender} Dead={card.IsDead} Downed={card.IsDowned} Awake={card.IsAwake}");

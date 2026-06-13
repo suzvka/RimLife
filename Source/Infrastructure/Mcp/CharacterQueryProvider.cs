@@ -2,7 +2,6 @@ using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
-using RimLife.Mappers;
 using RimWorld;
 using System;
 using System.Collections.Generic;
@@ -123,7 +122,7 @@ namespace RimLife.Infrastructure.Mcp
                     }
 
                     // 构建卡片：basic only，序列化时由 promptProvider 按需填充
-                    var card = CharacterCardMapper.CreateBasic(p);
+                    var card = PawnQueryHelper.BuildCharacterCard(p, null);
 
                     results.Add(card);
                 }

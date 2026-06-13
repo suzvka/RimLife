@@ -399,10 +399,10 @@ namespace RimLife.Tool
 
             DumpObject("测试 Pawn", $"{pawn.LabelCap} ({pawn.ThingID})");
 
-            // CharacterCardMapper — Basic
+            // PawnQueryHelper — Basic
             try
             {
-                var card = CharacterCardMapper.CreateBasic(pawn);
+                var card = PawnQueryHelper.BuildCharacterCard(pawn, null);
                 bool ok = !string.IsNullOrEmpty(card.ID)
                        && !string.IsNullOrEmpty(card.Name)
                        && card.PawnType != null;
@@ -630,7 +630,7 @@ namespace RimLife.Tool
             {
                 try
                 {
-                    var card = CharacterCardMapper.CreateBasic(pawn);
+                    var card = PawnQueryHelper.BuildCharacterCard(pawn, null);
                     var json = CardSerializer.SerializeCharacterCard(card, "static", RimLifeCore.PromptProvider);
                     if (json.Length > 50 && json.Contains("\"id\""))
                     {
