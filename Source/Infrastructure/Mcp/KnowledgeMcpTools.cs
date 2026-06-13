@@ -5,8 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Verse;
-
 namespace RimLife.Infrastructure.Mcp
 {
     /// <summary>
@@ -47,7 +45,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.KnowledgeMcp] lookup_term({term}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.KnowledgeMcp] lookup_term({term}) failed: {e.Message}");
                 return "{\"hit\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -98,7 +96,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.KnowledgeMcp] learn_term({term}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.KnowledgeMcp] learn_term({term}) failed: {e.Message}");
                 return "{\"hit\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -147,7 +145,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.KnowledgeMcp] list_known_terms failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.KnowledgeMcp] list_known_terms failed: {e.Message}");
                 return "[]";
             }
         }
@@ -178,7 +176,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.KnowledgeMcp] forget_term({term}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.KnowledgeMcp] forget_term({term}) failed: {e.Message}");
                 return "{\"hit\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -209,7 +207,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.KnowledgeMcp] get_term_stats({term}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.KnowledgeMcp] get_term_stats({term}) failed: {e.Message}");
                 return "{\"hit\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -256,7 +254,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.KnowledgeMcp] get_kv_cache({query}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.KnowledgeMcp] get_kv_cache({query}) failed: {e.Message}");
                 return "{\"hit\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }

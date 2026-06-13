@@ -5,11 +5,13 @@ using System.Linq;
 using HarmonyLib;
 using RimLife.Cards;
 using RimLife.Core;
+using RimLife.Driver;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
 using RimLife.Infrastructure;
 using RimLife.Infrastructure.Mcp;
 using RimLife.Mappers;
+using RimLife.Workspace;
 using RimWorld;
 using UnityEngine;
 using Verse;
@@ -108,8 +110,10 @@ namespace RimLife.Tool
             TestEventCardMapper();
             TestHarmonyStatus();
             TestCardSerializer();
-            TestDirectorMcpTools();
+            TestMcpProviders();
             TestSkillSystem();
+            TestAgentLoop();
+            TestWorkspaceAgent();
             EndSuite();
         }
 
@@ -786,12 +790,12 @@ namespace RimLife.Tool
         }
 
         // ================================================================
-        // 9. DirectorMcpTools 工具调用测试
+        // 9. MCP Provider 工具调用测试
         // ================================================================
 
-        public static void TestDirectorMcpTools()
+        public static void TestMcpProviders()
         {
-            Section("9. DirectorMcpTools 工具调用");
+            Section("9. MCP Provider 工具调用");
 
             var pawn = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.FirstOrDefault();
             string pawnId = pawn?.ThingID;
@@ -799,7 +803,7 @@ namespace RimLife.Tool
             // --- 9.1 get_colony_overview ---
             try
             {
-                var json = DirectorMcpTools.GetColonyOverview();
+                var json = ColonyOverviewProvider.GetColonyOverview();
                 if (json.Length > 20 && json.StartsWith("{") && json.EndsWith("}"))
                 {
                     Pass($"get_colony_overview 成功 ({json.Length} chars)");
@@ -816,7 +820,7 @@ namespace RimLife.Tool
                 var eventLog = RimLifeCore.EventLog;
                 if (eventLog != null && eventLog.TotalAppended > 0)
                 {
-                    var json = DirectorMcpTools.GetRecentEvents(5);
+                    var json = ColonyOverviewProvider.GetRecentEvents(5);
                     if (json.StartsWith("[") && json.EndsWith("]"))
                         Pass($"get_recent_events 成功");
                     else
@@ -830,7 +834,7 @@ namespace RimLife.Tool
             // --- 9.3 get_active_objectives ---
             try
             {
-                var json = DirectorMcpTools.GetActiveObjectives();
+                var json = ColonyOverviewProvider.GetActiveObjectives();
                 if (json.StartsWith("[") && json.EndsWith("]"))
                     Pass("get_active_objectives 成功");
                 else
@@ -843,7 +847,7 @@ namespace RimLife.Tool
             {
                 try
                 {
-                    var json = DirectorMcpTools.GetCharacterCard(pawnId, "health,mood,skills");
+                    var json = CharacterQueryProvider.GetCharacterCard(pawnId, "health,mood,skills");
                     if (json.Length > 50 && json.Contains("\"id\""))
                         Pass($"get_character_card 成功 ({json.Length} chars)");
                     else
@@ -853,7 +857,7 @@ namespace RimLife.Tool
 
                 try
                 {
-                    var json = DirectorMcpTools.GetCharacterCard(pawnId); // all sections
+                    var json = CharacterQueryProvider.GetCharacterCard(pawnId); // all sections
                     if (json.Length > 50)
                         Pass($"get_character_card(all) 成功 ({json.Length} chars)");
                     else
@@ -867,7 +871,7 @@ namespace RimLife.Tool
             // --- 9.5 find_characters ---
             try
             {
-                var json = DirectorMcpTools.FindCharacters(moodTier: "Content", limit: 3);
+                var json = CharacterQueryProvider.FindCharacters(moodTier: "Content", limit: 3);
                 if (json.StartsWith("[") && json.EndsWith("]"))
                     Pass($"find_characters(moodTier) 成功");
                 else
@@ -877,7 +881,7 @@ namespace RimLife.Tool
 
             try
             {
-                var json = DirectorMcpTools.FindCharacters(minSkill: "Shooting=3", limit: 3);
+                var json = CharacterQueryProvider.FindCharacters(minSkill: "Shooting=3", limit: 3);
                 if (json.StartsWith("[") && json.EndsWith("]"))
                     Pass($"find_characters(skill) 成功");
                 else
@@ -887,7 +891,7 @@ namespace RimLife.Tool
 
             try
             {
-                var json = DirectorMcpTools.FindCharacters(injuredOnly: true, limit: 3);
+                var json = CharacterQueryProvider.FindCharacters(injuredOnly: true, limit: 3);
                 if (json.StartsWith("[") && json.EndsWith("]"))
                     Pass($"find_characters(injured) 成功");
                 else
@@ -901,7 +905,7 @@ namespace RimLife.Tool
                 var eventLog = RimLifeCore.EventLog;
                 if (eventLog != null && eventLog.TotalAppended > 0)
                 {
-                    var json = DirectorMcpTools.QueryEvents(tagsAny: "Combat", limit: 5);
+                    var json = EventQueryProvider.QueryEvents(tagsAny: "Combat", limit: 5);
                     if (json.StartsWith("[") && json.EndsWith("]"))
                         Pass("query_events(Combat) 成功");
                     else
@@ -917,7 +921,7 @@ namespace RimLife.Tool
             {
                 try
                 {
-                    var json = DirectorMcpTools.GetRelationships(pawnId);
+                    var json = RelationshipQueryProvider.GetRelationships(pawnId);
                     if (json.Length > 5 && json.StartsWith("{"))
                         Pass($"get_relationships 成功 ({json.Length} chars)");
                     else
@@ -934,7 +938,7 @@ namespace RimLife.Tool
                 var store = RimLifeCore.InteractionStore;
                 if (store != null && store.TotalAppended > 0 && pawnId != null)
                 {
-                    var json = DirectorMcpTools.GetInteractionHistory(pawnId, limit: 5);
+                    var json = RelationshipQueryProvider.GetInteractionHistory(pawnId, limit: 5);
                     if (json.StartsWith("[") && json.EndsWith("]"))
                         Pass("get_interaction_history 成功");
                     else
@@ -950,7 +954,7 @@ namespace RimLife.Tool
             {
                 try
                 {
-                    var json = DirectorMcpTools.GetEnvironment(pawnId);
+                    var json = EnvironmentQueryProvider.GetEnvironment(pawnId);
                     if (json.Contains("\"type\""))
                         Pass("get_environment 成功");
                     else
@@ -964,7 +968,7 @@ namespace RimLife.Tool
             // --- MCP 工具定义生成 ---
             try
             {
-                var json = McpToolGenerator.SerializeAllFrom(typeof(DirectorMcpTools));
+                var json = McpToolGenerator.SerializeAllFrom(typeof(ColonyOverviewProvider));
                 if (json.StartsWith("[") && json.EndsWith("]") && json.Length > 100)
                 {
                     // 计数工具数量
@@ -1155,6 +1159,298 @@ namespace RimLife.Tool
         }
 
         // ================================================================
+        // 11. AgentLoop 测试
+        // ================================================================
+
+        public static void TestAgentLoop()
+        {
+            Section("11. AgentLoop");
+
+            // --- 11.1 AgentEventPool 类型 ---
+            try
+            {
+                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
+                if (pool != null)
+                {
+                    Pass($"EventLog 是 AgentEventPool ({pool.GetType().Name})");
+                    DumpObject("  PendingCount", pool.PendingCount);
+                    DumpObject("  TotalImportance", pool.TotalImportance);
+                    DumpObject("  RecentEvents", pool.RecentEvents.Count);
+                    DumpObject("  TotalAppended", pool.TotalAppended);
+                }
+                else
+                    Fail("EventLog 不是 AgentEventPool 类型");
+            }
+            catch (Exception e) { Fail("AgentEventPool 类型检查异常", e.Message); }
+
+            // --- 11.2 Pending/Drain 生命周期 ---
+            try
+            {
+                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
+                if (pool == null) { Skip("AgentEventPool 不可用"); return; }
+
+                int before = pool.PendingCount;
+
+                // 追加测试事件
+                var testEvt = MakeTestEvent("driver_test_1", new List<string> { "Test", "Driver" }, 99999, "Major");
+                pool.Append(testEvt);
+
+                int afterAppend = pool.PendingCount;
+                if (afterAppend == before + 1)
+                    Pass($"Append 后 PendingCount: {before} → {afterAppend}");
+                else
+                    Fail("Append 未增加 PendingCount");
+
+                // Drain
+                var drained = pool.DrainPending();
+                if (drained.Count == afterAppend && pool.PendingCount == 0)
+                    Pass($"DrainPending 成功: drained={drained.Count}, pending={pool.PendingCount}");
+                else
+                    Fail($"DrainPending 后状态异常: drained={drained.Count}, pending={pool.PendingCount}");
+
+                // 把事件放回去（避免影响后续测试）
+                foreach (var evt in drained)
+                    pool.Append(evt);
+
+                // Clear
+                pool.ClearPending();
+                if (pool.PendingCount == 0)
+                    Pass("ClearPending 清空成功");
+                else
+                    Fail("ClearPending 后 PendingCount != 0");
+            }
+            catch (Exception e) { Fail("Drain/Clear 测试异常", e.Message); }
+
+            // --- 11.3 重要度计算 ---
+            try
+            {
+                var config = RimLifeCore.DriverConfig;
+                Pass($"DriverConfig: Minor={config.GetSeverityWeight("Minor")}, " +
+                     $"Major={config.GetSeverityWeight("Major")}, " +
+                     $"Extreme={config.GetSeverityWeight("Extreme")}");
+
+                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
+                if (pool == null) { Skip("AgentEventPool 不可用"); return; }
+
+                pool.ClearPending();
+                pool.Append(MakeTestEvent("imp_1", new List<string> { "Test" }, 1, "Minor"));
+                pool.Append(MakeTestEvent("imp_2", new List<string> { "Test" }, 2, "Major"));
+                pool.Append(MakeTestEvent("imp_3", new List<string> { "Test" }, 3, "Extreme"));
+
+                int expected = config.GetSeverityWeight("Minor")
+                             + config.GetSeverityWeight("Major")
+                             + config.GetSeverityWeight("Extreme");
+
+                if (pool.TotalImportance == expected)
+                    Pass($"TotalImportance 计算正确: {pool.TotalImportance} (expected {expected})");
+                else
+                    Fail($"TotalImportance 不正确: {pool.TotalImportance} != {expected}");
+
+                pool.ClearPending();
+            }
+            catch (Exception e) { Fail("重要度计算异常", e.Message); }
+
+            // --- 11.4 OnThresholdReached 回调 ---
+            try
+            {
+                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
+                if (pool == null) { Skip("AgentEventPool 不可用"); return; }
+
+                pool.ClearPending();
+
+                bool callbackFired = false;
+                Action handler = () => { callbackFired = true; };
+                pool.OnThresholdReached += handler;
+
+                // 添加少量 Minor 事件：数量达标
+                for (int i = 0; i < 3; i++)
+                    pool.Append(MakeTestEvent($"cnt_{i}", new List<string> { "Test" }, i, "Minor"));
+
+                if (callbackFired)
+                    Pass("OnThresholdReached: 数量达标触发回调");
+                else if (pool.PendingCount < RimLifeCore.DriverConfig.CountThreshold)
+                    Pass("OnThresholdReached: 未触发（数量未达标，预期行为）");
+                else
+                    Fail("OnThresholdReached: 数量达标但未触发");
+
+                pool.OnThresholdReached -= handler;
+                pool.ClearPending();
+            }
+            catch (Exception e) { Fail("OnThresholdReached 测试异常", e.Message); }
+
+            // --- 11.5 DirectorAgent 状态 ---
+            try
+            {
+                var director = RimLifeCore.DirectorAgent;
+                if (director != null)
+                {
+                    Pass("DirectorAgent 已创建");
+                    DumpObject("  IsProcessing", director.IsProcessing);
+                    DumpObject("  CurrentRound", director.CurrentRound);
+                }
+                else
+                    Skip("DirectorAgent 未创建 (SaveStore 未就绪或 LLM 未配置)");
+            }
+            catch (Exception e) { Fail("DirectorAgent 状态异常", e.Message); }
+        }
+
+        // ================================================================
+        // 12. 工作空间 Agent 驱动
+        // ================================================================
+
+        public static void TestWorkspaceAgent()
+        {
+            Section("12. 工作空间 Agent 驱动");
+
+            // --- 12.1 EventPool 字段存在性 ---
+            try
+            {
+                var wsManager = RimLifeCore.Workspaces;
+                if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
+
+                var activeWs = wsManager.GetActive();
+                if (activeWs.Count > 0)
+                {
+                    var ws = activeWs[0];
+                    Pass($"工作空间 '{ws.Label}' 存在 (Active workspace count={activeWs.Count})");
+
+                    // EventPool 可能尚未初始化（延迟）
+                    DumpObject("  EventPool", ws.EventPool == null ? "(not initialized yet)" : $"ready (pending={ws.EventPool.PendingCount})");
+                    DumpObject("  Role", ws.CreatedByRole.ToString());
+                }
+                else
+                {
+                    // 没有活跃工作空间，创建一个测试空间
+                    Pass("无活跃工作空间 — 创建测试空间验证字段");
+                    var testWs = new WorkspaceState
+                    {
+                        Id = "selftest_ws",
+                        Label = "Selftest Workspace",
+                        Status = WorkspaceStatus.Active,
+                        CreatedByRole = WorkspaceRole.Screenwriter,
+                        ActiveSkillIds = new List<string> { "workspace_writing" }
+                    };
+
+                    if (testWs.EventPool == null)
+                        Pass("EventPool 默认为 null (预期)");
+                    else
+                        Fail("EventPool 应默认为 null");
+                }
+            }
+            catch (Exception e) { Fail("字段存在性测试异常", e.Message); }
+
+            // --- 12.2 事件推入工作空间事件池 ---
+            try
+            {
+                var config = RimLifeCore.DriverConfig;
+                var testWs = new WorkspaceState
+                {
+                    Id = "selftest_push",
+                    Label = "PushTest WS",
+                    Status = WorkspaceStatus.Active,
+                    CreatedByRole = WorkspaceRole.Screenwriter,
+                    ActiveSkillIds = new List<string> { "workspace_writing" },
+                    EventPool = new AgentEventPool(config)
+                };
+
+                var evt = MakeTestEvent("ws_test_1", new List<string> { "Test", "Combat" }, 1000, "Major");
+                testWs.EventPool.Append(evt);
+
+                if (testWs.EventPool.PendingCount == 1)
+                    Pass($"PushEvent 后 PendingCount=1");
+                else
+                    Fail($"PushEvent 后 PendingCount={testWs.EventPool.PendingCount} (expected 1)");
+
+                int weight = config.GetSeverityWeight("Major");
+                if (testWs.EventPool.TotalImportance == weight)
+                    Pass($"TotalImportance={weight} (Major权重正确)");
+                else
+                    Fail($"TotalImportance={testWs.EventPool.TotalImportance} (expected {weight})");
+
+                // Drain
+                var drained = testWs.EventPool.DrainPending();
+                if (drained.Count == 1 && testWs.EventPool.PendingCount == 0)
+                    Pass("DrainPending 清空工作空间事件池");
+                else
+                    Fail($"DrainPending 异常: drained={drained.Count}, pending={testWs.EventPool.PendingCount}");
+            }
+            catch (Exception e) { Fail("PushEvent 测试异常", e.Message); }
+
+            // --- 12.3 OnThresholdReached 回调（工作空间事件池） ---
+            try
+            {
+                var config = RimLifeCore.DriverConfig;
+                var testWs = new WorkspaceState
+                {
+                    Id = "selftest_cb",
+                    Label = "CallbackTest WS",
+                    Status = WorkspaceStatus.Active,
+                    CreatedByRole = WorkspaceRole.Screenwriter,
+                    EventPool = new AgentEventPool(config)
+                };
+
+                bool callbackFired = false;
+                Action handler = () => { callbackFired = true; };
+                testWs.EventPool.OnThresholdReached += handler;
+
+                // 填充事件到阈值
+                for (int i = 0; i < config.CountThreshold; i++)
+                    testWs.EventPool.Append(MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, "Major"));
+
+                if (callbackFired)
+                    Pass("工作空间 OnThresholdReached 回调触发");
+                else
+                    Fail("OnThresholdReached 未触发");
+
+                testWs.EventPool.OnThresholdReached -= handler;
+            }
+            catch (Exception e) { Fail("工作空间回调测试异常", e.Message); }
+
+            // --- 12.4 激活条件（纯事件驱动，无定时器） ---
+            try
+            {
+                var config = RimLifeCore.DriverConfig;
+                var testWs = new WorkspaceState
+                {
+                    Id = "selftest_activation",
+                    Label = "ActivationTest WS",
+                    Status = WorkspaceStatus.Active,
+                    CreatedByRole = WorkspaceRole.Screenwriter,
+                    ActiveSkillIds = new List<string> { "workspace_writing" },
+                    EventPool = new AgentEventPool(config)
+                };
+
+                // 填充极端事件：1个Extreme即可满足重要性
+                testWs.EventPool.Append(MakeTestEvent("act_1", new List<string> { "Test" }, 1, "Extreme"));
+
+                bool countOk = testWs.EventPool.PendingCount >= config.CountThreshold;
+                bool impOk = testWs.EventPool.TotalImportance >= config.ImportanceThreshold;
+
+                if (!countOk && impOk)
+                    Pass("1个Extreme: Count不满足, Importance满足 (纯事件驱动)");
+                else if (countOk || impOk)
+                    Pass($"激活条件: Count={countOk}, Importance={impOk}");
+                else
+                    Fail($"激活条件异常: Count={countOk}, Importance={impOk}");
+
+                DumpObject("  CountThreshold", config.CountThreshold);
+                DumpObject("  ImportanceThreshold", config.ImportanceThreshold);
+            }
+            catch (Exception e) { Fail("激活条件测试异常", e.Message); }
+
+            // --- 12.5 WorkspaceManager 状态 ---
+            try
+            {
+                var wsManager = RimLifeCore.Workspaces;
+                if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
+
+                Pass("WorkspaceManager 就绪");
+                DumpObject("  Active workspaces", wsManager.GetActive().Count);
+            }
+            catch (Exception e) { Fail("WorkspaceManager 状态异常", e.Message); }
+        }
+
+        // ================================================================
         // Gizmo 注入 — 获得角色 Gizmo 列表
         // ================================================================
 
@@ -1180,13 +1476,15 @@ namespace RimLife.Tool
                 new FloatMenuOption("1. 基础设施 (SaveStore/CacheStore/EventLog)", () => TestInfrastructure()),
                 new FloatMenuOption("2. JSON 往返 (ParseDict/Serialize/Writer)", () => TestJsonRoundTrip()),
                 new FloatMenuOption("3. Framework 纯逻辑 (SemanticLabels/RandomInt)", () => TestFramework()),
-                new FloatMenuOption("4. EventLog 集成 (Append/Query/Count)", () => TestEventLog()),
+                new FloatMenuOption("4. EventLog(AgentEventPool) 集成 (Append/Query/Count)", () => TestEventLog()),
                 new FloatMenuOption("5. Mapper 数据采集 (CharacterCard/EnvironmentCard)", () => TestMappers()),
                 new FloatMenuOption("6. EventCardMapper 构造 (FromDeath/FromSocial/...)", () => TestEventCardMapper()),
                 new FloatMenuOption("7. Harmony Patch 状态", () => TestHarmonyStatus()),
                 new FloatMenuOption("8. CardSerializer 序列化 (ColonyContext/CharacterCard/...)", () => TestCardSerializer()),
-                new FloatMenuOption("9. DirectorMcpTools 工具调用 (所有9个MCP工具)", () => TestDirectorMcpTools()),
+                new FloatMenuOption("9. MCP Provider 工具调用 (所有9个MCP工具)", () => TestMcpProviders()),
                 new FloatMenuOption("10. Skill 按需激活系统 (list/activate/deactivate/token对比)", () => TestSkillSystem()),
+                new FloatMenuOption("11. AgentLoop (Pool/OnThresholdReached/DirectorAgent)", () => TestAgentLoop()),
+                new FloatMenuOption("12. 工作空间 (EventPool/OnThresholdReached)", () => TestWorkspaceAgent()),
             };
             Find.WindowStack.Add(new FloatMenu(options));
         }

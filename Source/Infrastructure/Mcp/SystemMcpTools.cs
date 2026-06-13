@@ -1,8 +1,6 @@
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
 using System;
-using Verse;
-
 namespace RimLife.Infrastructure.Mcp
 {
     /// <summary>
@@ -31,7 +29,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.SystemMcp] list_skills({workspaceId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.SystemMcp] list_skills({workspaceId}) failed: {e.Message}");
                 return "{\"skills\":[],\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -56,7 +54,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.SystemMcp] activate_skill({workspaceId}, {skillId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.SystemMcp] activate_skill({workspaceId}, {skillId}) failed: {e.Message}");
                 return "{\"error\":true,\"message\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -81,7 +79,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.SystemMcp] deactivate_skill({workspaceId}, {skillId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.SystemMcp] deactivate_skill({workspaceId}, {skillId}) failed: {e.Message}");
                 return "{\"error\":true,\"message\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }

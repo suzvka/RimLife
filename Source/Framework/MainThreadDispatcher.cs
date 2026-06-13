@@ -8,7 +8,7 @@ namespace RimLife.Framework
     /// <summary>
     /// 主线程任务调度器。零外部依赖。
     /// 从任意线程 Enqueue action，由主线程周期调用 DrainQueue 执行。
-    /// 日志回调需由宿主层注入（如 RimWorld 适配层设置 LogWarningCallback / LogErrorCallback）。
+    /// 日志接口需由宿主层注入（如 RimWorld 适配层设置 Logger）。
     /// </summary>
     public static class MainThreadDispatcher
     {
@@ -20,23 +20,20 @@ namespace RimLife.Framework
         private const int MaxQueueSize = 5000;
 
         // ================================================================
-        // 可注入日志回调（由宿主层设置）
+        // 可注入日志接口（由宿主层设置）
         // ================================================================
 
-        /// <summary>警告级别日志回调。不设置则不输出。</summary>
-        public static Action<string> LogWarningCallback;
-
-        /// <summary>错误级别日志回调。不设置则不输出。</summary>
-        public static Action<string> LogErrorCallback;
+        /// <summary>日志接口。由宿主层注入，未设置时静默忽略。</summary>
+        public static ILogger Logger;
 
         private static void LogWarning(string message)
         {
-            LogWarningCallback?.Invoke(message);
+            Logger?.Warning(message);
         }
 
         private static void LogError(string message)
         {
-            LogErrorCallback?.Invoke(message);
+            Logger?.Error(message);
         }
 
         // ================================================================

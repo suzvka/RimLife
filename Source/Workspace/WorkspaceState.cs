@@ -124,6 +124,9 @@ namespace RimLife.Workspace
         /// <summary>此工作空间激活的 Skill ID 列表。持久化以支持冷启动恢复。</summary>
         public List<string> ActiveSkillIds;
 
+        /// <summary>工作空间内部事件池。Agent 的待处理素材。</summary>
+        public Driver.AgentEventPool EventPool;
+
         /// <summary>结束原因描述（Completed / Abandoned 时填充）。</summary>
         public string Outcome;
 

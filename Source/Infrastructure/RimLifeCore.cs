@@ -1,4 +1,7 @@
+using RimLife.Agent;
 using RimLife.Core;
+using RimLife.Framework;
+using RimLife.Driver;
 using RimLife.Framework.Mcp;
 using RimLife.Infrastructure.Llm;
 using System.Collections.Generic;
@@ -15,16 +18,12 @@ namespace RimLife.Infrastructure
         private static bool _skillRegistryInitialized;
         private static readonly object _skillRegistryLock = new object();
 
-        static RimLifeCore()
-        {
-            // 注入日志出口：知识库模块通过静态回调输出日志，具体实现由 RimWorld 侧提供
-            Knowledge.BuiltInKnowledgeBase.LogInfo = Log.Message;
-            Knowledge.BuiltInKnowledgeBase.LogWarning = Log.Warning;
-        }
+        /// <summary>日志接口。由适配层在启动时注入。</summary>
+        public static ILogger Logger { get; internal set; }
 
         /// <summary>
         /// 初始化 MCP Skill 注册表。注册所有 Skill 元数据，
-        /// 扫描 4 个工具类型自动建立 Skill → Tool 映射。
+        /// 扫描工具类型自动建立 Skill → Tool 映射。
         /// 幂等，可多次调用。
         /// </summary>
         public static void EnsureSkillRegistryInitialized()
@@ -36,15 +35,20 @@ namespace RimLife.Infrastructure
 
                 McpSkillRegistry.InitializeDefaults();
 
-                // 注册 4 个工具类（SystemMcpTools 最先注册，确保 system skill 的工具总是可用）
                 int count = McpSkillRegistry.RegisterFromType(typeof(Mcp.SystemMcpTools));
-                count += McpSkillRegistry.RegisterFromType(typeof(Mcp.DirectorMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Workspace.DirectionMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Workspace.WritingMcpTools));
-                count += McpSkillRegistry.RegisterFromType(typeof(Mcp.PawnMemoryMcpTools));
 
-                Log.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
+                // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
+                count += RegisterHookProvider(new Mcp.ColonyOverviewProvider());
+                count += RegisterHookProvider(new Mcp.CharacterQueryProvider());
+                count += RegisterHookProvider(new Mcp.EventQueryProvider());
+                count += RegisterHookProvider(new Mcp.RelationshipQueryProvider());
+                count += RegisterHookProvider(new Mcp.EnvironmentQueryProvider());
+                count += RegisterHookProvider(new Mcp.PawnMemoryProvider());
+
+                Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
 
                 _skillRegistryInitialized = true;
             }
@@ -59,8 +63,6 @@ namespace RimLife.Infrastructure
         /// 通过此方法将外部工具注册到 Skill 系统中。
         /// 应在 EnsureSkillRegistryInitialized() 之后调用。
         /// </summary>
-        /// <param name="provider">Hook 提供者实例。</param>
-        /// <returns>成功注册的工具数。</returns>
         public static int RegisterHookProvider(IMcpHookProvider provider)
         {
             if (provider == null) return 0;
@@ -69,12 +71,12 @@ namespace RimLife.Infrastructure
             {
                 EnsureSkillRegistryInitialized();
                 int count = McpSkillRegistry.RegisterFromProvider(provider);
-                Log.Message($"[RimLife.Core] HookProvider '{provider.HookId}' registered: {count} tools.");
+                Logger?.Message($"[RimLife.Core] HookProvider '{provider.HookId}' registered: {count} tools.");
                 return count;
             }
             catch (System.Exception e)
             {
-                Log.Warning($"[RimLife.Core] RegisterHookProvider({provider.HookId}) failed: {e.Message}");
+                Logger?.Warning($"[RimLife.Core] RegisterHookProvider({provider.HookId}) failed: {e.Message}");
                 return 0;
             }
         }
@@ -83,7 +85,7 @@ namespace RimLife.Infrastructure
 
         /// <summary>
         /// 权威存储（存档文件）。由 RimWorldSaveStore 在初始化时注册。
-        /// 设为新值时自动重置 EventLog 和 InteractionStore，避免跨存档引用失效。
+        /// 设为新值时自动重置 EventLog、AgentDriver 和 InteractionStore，避免跨存档引用失效。
         /// </summary>
         public static IPersistentStore SaveStore
         {
@@ -94,6 +96,7 @@ namespace RimLife.Infrastructure
                 {
                     _saveStore = value;
                     _eventLog = null;
+                    _directorAgent = null;
                     _interactionStore = null;
                     _workspaces = null;
                     _knowledgeBase = null;
@@ -108,8 +111,8 @@ namespace RimLife.Infrastructure
         private static readonly object _eventLogLock = new object();
 
         /// <summary>
-        /// 事件日志实例。首次访问时从 SaveStore 延迟创建。
-        /// 存档未加载时返回 null。
+        /// 事件池实例（AgentEventPool）。
+        /// 首次访问时从 SaveStore 延迟创建。存档未加载时返回 null。
         /// </summary>
         public static IEventLog EventLog
         {
@@ -121,11 +124,101 @@ namespace RimLife.Infrastructure
                     {
                         if (_eventLog == null && SaveStore != null)
                         {
-                            _eventLog = new RimWorldEventLog(SaveStore);
+                            var config = LoadDriverConfig();
+                            _eventLog = new AgentEventPool(config);
                         }
                     }
                 }
                 return _eventLog;
+            }
+        }
+
+        private static DriverConfig _driverConfig;
+        private static readonly object _driverConfigLock = new object();
+
+        /// <summary>
+        /// Agent 驱动配置。从 CacheStore 加载，未配置时返回默认值。
+        /// </summary>
+        public static DriverConfig DriverConfig
+        {
+            get
+            {
+                lock (_driverConfigLock)
+                {
+                    if (_driverConfig == null)
+                        _driverConfig = LoadDriverConfig();
+                    return _driverConfig;
+                }
+            }
+        }
+
+        private static AgentLoop _directorAgent;
+        private static readonly object _directorAgentLock = new object();
+
+        /// <summary>
+        /// 导演 AgentLoop 实例。首次访问时延迟创建，自动订阅 EventLog 的回调。
+        /// 存档未加载或 LLM 未配置时返回 null。
+        /// </summary>
+        public static AgentLoop DirectorAgent
+        {
+            get
+            {
+                if (_directorAgent == null)
+                {
+                    lock (_directorAgentLock)
+                    {
+                        if (_directorAgent == null && SaveStore != null && LlmAccessor != null)
+                        {
+                            var pool = EventLog as AgentEventPool;
+                            if (pool != null)
+                            {
+                                _directorAgent = new AgentLoop(
+                                    pool: pool,
+                                    llm: LlmAccessor,
+                                    systemPrompt: BuildDirectorSystemPrompt(),
+                                    skillIds: new[] { "workspace_direction" },
+                                    maxRounds: DriverConfig.MaxAgentRounds,
+                                    logger: Logger);
+                            }
+                        }
+                    }
+                }
+                return _directorAgent;
+            }
+        }
+
+        private static string BuildDirectorSystemPrompt()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("你是 RimWorld 殖民地的剧情导演 (Director Agent)。");
+            sb.AppendLine();
+            sb.AppendLine("你的职责：");
+            sb.AppendLine("1. 审查以下积累的事件列表");
+            sb.AppendLine("2. 挑选值得发展为剧情线的事件");
+            sb.AppendLine("3. 为选中的事件创建或分支工作空间（workspace）");
+            sb.AppendLine("4. 未被挑选的事件将被丢弃");
+            sb.AppendLine();
+            sb.AppendLine("决策原则：");
+            sb.AppendLine("- 优先处理 Extreme 和 Major 严重度的事件");
+            sb.AppendLine("- 相关事件可合并到同一个工作空间（如同一场袭击中的多个角色受伤）");
+            sb.AppendLine("- 互不相关的事件应创建独立工作空间");
+            sb.AppendLine("- 如无值得发展的内容，可以不创建任何工作空间");
+            sb.AppendLine("- 可使用 get_workspace / list_workspaces 查看现有工作空间状态");
+            sb.AppendLine("- 对已有工作空间可用 branch_workspace 创建分支、merge_workspaces 合并");
+            return sb.ToString();
+        }
+
+        private static DriverConfig LoadDriverConfig()
+        {
+            try
+            {
+                var config = CacheStore?.FetchOrRebuild("rimlife_driver_config",
+                    () => DriverConfig.CreateDefault());
+                return config ?? DriverConfig.CreateDefault();
+            }
+            catch
+            {
+                return DriverConfig.CreateDefault();
             }
         }
 
@@ -172,7 +265,7 @@ namespace RimLife.Infrastructure
                     {
                         if (_knowledgeBase == null && CacheStore != null)
                         {
-                            var builtIn = new Knowledge.BuiltInKnowledgeBase(CacheStore);
+                            var builtIn = new Knowledge.BuiltInKnowledgeBase(CacheStore, Logger);
                             var gameDef = new Knowledge.GameDefKnowledgeBase();
                             _knowledgeBase = new Framework.KnowledgeBaseChain(builtIn, gameDef);
                         }
@@ -187,8 +280,6 @@ namespace RimLife.Infrastructure
 
         /// <summary>
         /// LLM API 访问器实例。首次访问时从 CacheStore 延迟创建。
-        /// 配置（baseUrl + apiKey + modelName）通过 CacheStore 持久化，跨存档复用。
-        /// CacheStore 不可用时返回 null。
         /// </summary>
         public static LlmAccessor LlmAccessor
         {
@@ -225,7 +316,7 @@ namespace RimLife.Infrastructure
                     {
                         if (_workspaces == null && SaveStore != null)
                         {
-                            _workspaces = new Workspace.WorkspaceManager(SaveStore);
+                            _workspaces = new Workspace.WorkspaceManager(SaveStore, Logger);
                         }
                     }
                 }

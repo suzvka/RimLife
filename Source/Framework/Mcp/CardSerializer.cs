@@ -6,7 +6,7 @@ namespace RimLife.Framework.Mcp
 {
     /// <summary>
     /// Card DTO → JSON 序列化器。纯静态，零 RimWorld 依赖。
-    /// 供 DirectorMcpTools 调用，将查询结果转为 LLM 可消费的 JSON。
+    /// 供各 MCP Provider 调用，将查询结果转为 LLM 可消费的 JSON。
     /// </summary>
     public static class CardSerializer
     {

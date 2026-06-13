@@ -1,21 +1,32 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using RimLife;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
-using RimLife.Mappers;
-using RimWorld;
+using System;
+using System.Collections.Generic;
 using Verse;
 
 namespace RimLife.Infrastructure.Mcp
 {
     /// <summary>
-    /// Pawn 个体记忆的 MCP 工具集。提供记忆查询、追加、心境写入能力。
-    /// 三个工具：get_memory（查询）、add_memory（注入 STM）、update_mindset（写入心境凌驾层）。
+    /// Pawn 个体记忆 Skill 的 Hook Provider。
+    /// 提供记忆查询、追加、心境写入三个工具。
     /// </summary>
-    [McpSkill("pawn_memory")]
-    public static class PawnMemoryMcpTools
+    public class PawnMemoryProvider : IMcpHookProvider
     {
+        public string HookId => "pawn_memory";
+        public string HookName => "个体记忆";
+        public string HookDescription => "查询、追加角色短期记忆，写入即时心境";
+
+        public IReadOnlyList<McpTool> GetTools()
+        {
+            return new McpTool[]
+            {
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(GetMemory))),
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(AddMemory))),
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(UpdateMindset))),
+            };
+        }
+
         /// <summary>
         /// 查询指定角色的记忆。支持 summary（心境+回顾）和 full（全部四区）两种模式。
         /// </summary>
@@ -28,7 +39,7 @@ namespace RimLife.Infrastructure.Mcp
         {
             try
             {
-                var comp = FindMemoryComp(pawnId);
+                var comp = PawnQueryHelper.FindMemoryComp(pawnId);
                 if (comp == null)
                     return "{\"error\":\"Pawn not found or no memory data\"}";
 
@@ -84,7 +95,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.PawnMemoryMcp] get_memory({pawnId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.PawnMemoryProvider] get_memory({pawnId}) failed: {e.Message}");
                 return "{\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -106,7 +117,7 @@ namespace RimLife.Infrastructure.Mcp
                 if (string.IsNullOrEmpty(summary))
                     return "{\"success\":false,\"error\":\"summary is required\"}";
 
-                var comp = FindMemoryComp(pawnId);
+                var comp = PawnQueryHelper.FindMemoryComp(pawnId);
                 if (comp == null)
                     return "{\"success\":false,\"error\":\"Pawn not found or no memory data\"}";
 
@@ -118,7 +129,7 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.PawnMemoryMcp] add_memory({pawnId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.PawnMemoryProvider] add_memory({pawnId}) failed: {e.Message}");
                 return "{\"success\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
@@ -137,7 +148,7 @@ namespace RimLife.Infrastructure.Mcp
                 if (string.IsNullOrEmpty(content))
                     return "{\"success\":false,\"error\":\"content is required\"}";
 
-                var comp = FindMemoryComp(pawnId);
+                var comp = PawnQueryHelper.FindMemoryComp(pawnId);
                 if (comp == null)
                     return "{\"success\":false,\"error\":\"Pawn not found or no memory data\"}";
 
@@ -148,48 +159,9 @@ namespace RimLife.Infrastructure.Mcp
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.PawnMemoryMcp] update_mindset({pawnId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.PawnMemoryProvider] update_mindset({pawnId}) failed: {e.Message}");
                 return "{\"success\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
-        }
-
-        // ================================================================
-        // 内部辅助
-        // ================================================================
-
-        /// <summary>
-        /// 通过 ThingID 查找 Pawn 并获取其 HediffComp_PawnMemory。
-        /// </summary>
-        private static HediffComp_PawnMemory FindMemoryComp(string pawnId)
-        {
-            if (string.IsNullOrEmpty(pawnId)) return null;
-
-            var pawn = FindPawnById(pawnId);
-            if (pawn?.health?.hediffSet == null) return null;
-
-            var hediffDef = DefDatabase<HediffDef>.GetNamedSilentFail("PawnProMemory");
-            if (hediffDef == null) return null;
-
-            var hediff = pawn.health.hediffSet.GetFirstHediffOfDef(hediffDef);
-            return hediff?.TryGetComp<HediffComp_PawnMemory>();
-        }
-
-        /// <summary>
-        /// 通过 ThingID 在所有地图中查找 Pawn。
-        /// </summary>
-        private static Pawn FindPawnById(string id)
-        {
-            if (string.IsNullOrEmpty(id)) return null;
-
-            foreach (var map in Find.Maps)
-            {
-                if (map?.mapPawns?.AllPawnsSpawned == null) continue;
-                foreach (var pawn in map.mapPawns.AllPawnsSpawned)
-                {
-                    if (pawn?.ThingID == id) return pawn;
-                }
-            }
-            return null;
         }
     }
 }

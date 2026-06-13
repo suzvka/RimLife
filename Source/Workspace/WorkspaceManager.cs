@@ -1,12 +1,14 @@
+using RimLife.Cards;
 using RimLife.Core;
+using RimLife.Driver;
 using RimLife.Framework;
+using RimLife.Framework.Llm;
 using RimLife.Framework.Mcp;
+using RimLife.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Verse;
-
 namespace RimLife.Workspace
 {
     /// <summary>
@@ -23,15 +25,18 @@ namespace RimLife.Workspace
     {
         private readonly List<WorkspaceState> _workspaces = new List<WorkspaceState>();
         private readonly IPersistentStore _store;
+        private readonly ILogger _logger;
+        private int _globalSeq;
         private const string StoreKey = "rimlife_workspaces";
 
         /// <summary>
         /// 创建 WorkspaceManager 实例并尝试从存档加载已有工作空间。
         /// </summary>
         /// <param name="store">持久化存储（SaveStore）。</param>
-        public WorkspaceManager(IPersistentStore store)
+        public WorkspaceManager(IPersistentStore store, ILogger logger)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             LoadFromStore();
         }
 
@@ -49,7 +54,7 @@ namespace RimLife.Workspace
         /// <returns>创建的工作空间状态。</returns>
         public WorkspaceState Create(string label, List<string> colonistIds, List<string> tags, WorkspaceRole createdByRole)
         {
-            int tick = Find.TickManager?.TicksGame ?? 0;
+            int tick = ++_globalSeq;
 
             var ws = new WorkspaceState
             {
@@ -73,7 +78,7 @@ namespace RimLife.Workspace
             _workspaces.Add(ws);
             SaveToStore();
 
-            Log.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id}, role={createdByRole})");
+            _logger.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id}, role={createdByRole})");
             return ws;
         }
 
@@ -120,17 +125,17 @@ namespace RimLife.Workspace
             // 验证状态转换合法性
             if (!IsValidTransition(ws.Status, newStatus))
             {
-                Log.Warning($"[RimLife.Workspace] Invalid status transition for '{ws.Label}': {ws.Status} → {newStatus}");
+                _logger.Warning($"[RimLife.Workspace] Invalid status transition for '{ws.Label}': {ws.Status} → {newStatus}");
                 return false;
             }
 
             ws.Status = newStatus;
-            ws.LastActivityTick = Find.TickManager?.TicksGame ?? ws.LastActivityTick;
+            ws.LastActivityTick = ++_globalSeq;
             if (outcome != null)
                 ws.Outcome = outcome;
 
             SaveToStore();
-            Log.Message($"[RimLife.Workspace] Workspace '{ws.Label}' status: {newStatus}");
+            _logger.Message($"[RimLife.Workspace] Workspace '{ws.Label}' status: {newStatus}");
             return true;
         }
 
@@ -156,24 +161,24 @@ namespace RimLife.Workspace
             // 身份校验：只有 Screenwriter 可以推送回合
             if (callerRole != WorkspaceRole.Screenwriter)
             {
-                Log.Warning($"[RimLife.Workspace] PushRound rejected: caller is {callerRole}, only Screenwriter can push rounds.");
+                _logger.Warning($"[RimLife.Workspace] PushRound rejected: caller is {callerRole}, only Screenwriter can push rounds.");
                 return false;
             }
 
             var ws = Get(workspaceId);
             if (ws == null)
             {
-                Log.Warning($"[RimLife.Workspace] PushRound failed: workspace '{workspaceId}' not found.");
+                _logger.Warning($"[RimLife.Workspace] PushRound failed: workspace '{workspaceId}' not found.");
                 return false;
             }
 
             if (ws.Status != WorkspaceStatus.Active)
             {
-                Log.Warning($"[RimLife.Workspace] PushRound failed: workspace '{ws.Label}' is not Active (status={ws.Status}).");
+                _logger.Warning($"[RimLife.Workspace] PushRound failed: workspace '{ws.Label}' is not Active (status={ws.Status}).");
                 return false;
             }
 
-            int tick = Find.TickManager?.TicksGame ?? 0;
+            int tick = ++_globalSeq;
             int nextSeq = (ws.Rounds?.Count) ?? 0;
 
             var round = new WorkspaceRound
@@ -218,18 +223,18 @@ namespace RimLife.Workspace
             // 身份校验：只有 Director 可以分支
             if (callerRole != WorkspaceRole.Director)
             {
-                Log.Warning($"[RimLife.Workspace] Branch rejected: caller is {callerRole}, only Director can branch.");
+                _logger.Warning($"[RimLife.Workspace] Branch rejected: caller is {callerRole}, only Director can branch.");
                 return null;
             }
 
             var parent = Get(parentId);
             if (parent == null)
             {
-                Log.Warning($"[RimLife.Workspace] Branch failed: parent workspace '{parentId}' not found.");
+                _logger.Warning($"[RimLife.Workspace] Branch failed: parent workspace '{parentId}' not found.");
                 return null;
             }
 
-            int tick = Find.TickManager?.TicksGame ?? 0;
+            int tick = ++_globalSeq;
 
             // 拷贝父空间的 Rounds 历史（浅拷贝，WorkspaceRound 是值类型 struct）
             var copiedRounds = new List<WorkspaceRound>(parent.Rounds ?? new List<WorkspaceRound>());
@@ -274,7 +279,7 @@ namespace RimLife.Workspace
             _workspaces.Add(child);
             SaveToStore();
 
-            Log.Message($"[RimLife.Workspace] Branched workspace '{child.Label}' (id={child.Id}) from '{parent.Label}'");
+            _logger.Message($"[RimLife.Workspace] Branched workspace '{child.Label}' (id={child.Id}) from '{parent.Label}'");
             return child;
         }
 
@@ -296,7 +301,7 @@ namespace RimLife.Workspace
             // 身份校验：只有 Director 可以合并
             if (callerRole != WorkspaceRole.Director)
             {
-                Log.Warning($"[RimLife.Workspace] Merge rejected: caller is {callerRole}, only Director can merge.");
+                _logger.Warning($"[RimLife.Workspace] Merge rejected: caller is {callerRole}, only Director can merge.");
                 return false;
             }
 
@@ -305,13 +310,13 @@ namespace RimLife.Workspace
 
             if (source == null || target == null)
             {
-                Log.Warning($"[RimLife.Workspace] Merge failed: source '{sourceId}' or target '{targetId}' not found.");
+                _logger.Warning($"[RimLife.Workspace] Merge failed: source '{sourceId}' or target '{targetId}' not found.");
                 return false;
             }
 
             if (source.Id == target.Id)
             {
-                Log.Warning($"[RimLife.Workspace] Merge failed: source and target are the same workspace.");
+                _logger.Warning($"[RimLife.Workspace] Merge failed: source and target are the same workspace.");
                 return false;
             }
 
@@ -334,7 +339,7 @@ namespace RimLife.Workspace
 
             // 追加一条 Merge 声明轮（由 Director 记录）
             int mergeSeq = mergedRounds.Count;
-            int tick = Find.TickManager?.TicksGame ?? 0;
+            int tick = ++_globalSeq;
             var mergeRound = new WorkspaceRound
             {
                 Seq = mergeSeq,
@@ -399,7 +404,7 @@ namespace RimLife.Workspace
             source.Outcome = $"Merged into '{target.Label}' ({target.Id})";
 
             SaveToStore();
-            Log.Message($"[RimLife.Workspace] Merged '{source.Label}' into '{target.Label}'");
+            _logger.Message($"[RimLife.Workspace] Merged '{source.Label}' into '{target.Label}'");
             return true;
         }
 
@@ -423,7 +428,7 @@ namespace RimLife.Workspace
             // 身份校验：只有 Screenwriter 可以上报信号
             if (callerRole != WorkspaceRole.Screenwriter)
             {
-                Log.Warning($"[RimLife.Workspace] ReportSignal rejected: caller is {callerRole}, " +
+                _logger.Warning($"[RimLife.Workspace] ReportSignal rejected: caller is {callerRole}, " +
                             "only Screenwriter can report signals.");
                 return false;
             }
@@ -431,11 +436,11 @@ namespace RimLife.Workspace
             var ws = Get(workspaceId);
             if (ws == null)
             {
-                Log.Warning($"[RimLife.Workspace] ReportSignal failed: workspace '{workspaceId}' not found.");
+                _logger.Warning($"[RimLife.Workspace] ReportSignal failed: workspace '{workspaceId}' not found.");
                 return false;
             }
 
-            int tick = Find.TickManager?.TicksGame ?? 0;
+            int tick = ++_globalSeq;
             ws.LastSignal = new StorylineSignal
             {
                 Type = signalType,
@@ -446,7 +451,7 @@ namespace RimLife.Workspace
             ws.LastActivityTick = tick;
 
             SaveToStore();
-            Log.Message($"[RimLife.Workspace] Workspace '{ws.Label}' reported signal: {signalType}");
+            _logger.Message($"[RimLife.Workspace] Workspace '{ws.Label}' reported signal: {signalType}");
             return true;
         }
 
@@ -474,7 +479,7 @@ namespace RimLife.Workspace
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.Workspace] Failed to save workspaces: {e.Message}");
+                _logger.Warning($"[RimLife.Workspace] Failed to save workspaces: {e.Message}");
             }
         }
 
@@ -496,11 +501,11 @@ namespace RimLife.Workspace
                     }
                 }
 
-                Log.Message($"[RimLife.Workspace] Loaded {_workspaces.Count} workspaces from save.");
+                _logger.Message($"[RimLife.Workspace] Loaded {_workspaces.Count} workspaces from save.");
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife.Workspace] Failed to load workspaces: {e.Message}");
+                _logger.Warning($"[RimLife.Workspace] Failed to load workspaces: {e.Message}");
             }
         }
 
@@ -749,7 +754,7 @@ namespace RimLife.Workspace
                 newToolsJson = "[]"; // 已激活，无新工具
             }
 
-            ws.LastActivityTick = Find.TickManager?.TicksGame ?? ws.LastActivityTick;
+            ws.LastActivityTick = ++_globalSeq;
             SaveToStore();
             return McpSkillRegistry.MakeActivateResult(skillId, newToolsJson);
         }
@@ -773,7 +778,7 @@ namespace RimLife.Workspace
             if (ws.ActiveSkillIds != null)
                 ws.ActiveSkillIds.Remove(skillId);
 
-            ws.LastActivityTick = Find.TickManager?.TicksGame ?? ws.LastActivityTick;
+            ws.LastActivityTick = ++_globalSeq;
             SaveToStore();
             return McpSkillRegistry.MakeDeactivateResult(skillId);
         }
@@ -825,5 +830,6 @@ namespace RimLife.Workspace
                     return false;
             }
         }
+
     }
 }

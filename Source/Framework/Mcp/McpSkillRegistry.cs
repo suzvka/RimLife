@@ -202,11 +202,21 @@ namespace RimLife.Framework.Mcp
                     : new HashSet<string>();
 
                 var skills = new List<string>();
+
+                // system 技能始终最先列出，隐式可用（不在 _skillMetas 中注册）
+                int systemToolCount = _skillTools.TryGetValue(SystemSkillId, out var sysTools) ? sysTools.Count : 0;
+                var sw = new JsonWriter(128);
+                sw.Prop("id", SystemSkillId);
+                sw.Prop("name", "系统");
+                sw.Prop("description", "系统元工具集（技能列表、激活、反激活）");
+                sw.Prop("toolCount", systemToolCount);
+                sw.Prop("active", true);
+                skills.Add(sw.Close());
+
                 foreach (var kv in _skillMetas)
                 {
                     int toolCount = _skillTools.TryGetValue(kv.Key, out var tools) ? tools.Count : 0;
-                    // system 始终 active，其余按传入集合判断
-                    bool active = kv.Key == SystemSkillId || activeSet.Contains(kv.Key);
+                    bool active = activeSet.Contains(kv.Key);
 
                     var w = new JsonWriter(128);
                     w.Prop("id", kv.Value.Id);

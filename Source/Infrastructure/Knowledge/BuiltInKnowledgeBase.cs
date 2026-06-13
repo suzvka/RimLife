@@ -12,11 +12,7 @@ namespace RimLife.Infrastructure.Knowledge
     /// </summary>
     public class BuiltInKnowledgeBase : IKnowledgeBase
     {
-        /// <summary>日志信息出口。由 RimWorld 侧（RimLifeCore）注入 Verse.Log.Message。</summary>
-        public static Action<string> LogInfo;
-
-        /// <summary>日志警告出口。由 RimWorld 侧（RimLifeCore）注入 Verse.Log.Warning。</summary>
-        public static Action<string> LogWarning;
+        private readonly ILogger _logger;
 
         private const string StoreKey = "rimlife_knowledge";
         private const int DefaultMaxCapacity = 500;
@@ -35,10 +31,12 @@ namespace RimLife.Infrastructure.Knowledge
         /// 创建内置知识库实例。
         /// </summary>
         /// <param name="store">缓存存储（通常为 RimLifeCore.CacheStore）。</param>
+        /// <param name="logger">日志接口。</param>
         /// <param name="maxCapacity">最大条目数，超出时触发 LRU 淘汰。默认 500。</param>
-        public BuiltInKnowledgeBase(IPersistentStore store, int maxCapacity = DefaultMaxCapacity)
+        public BuiltInKnowledgeBase(IPersistentStore store, ILogger logger, int maxCapacity = DefaultMaxCapacity)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _maxCapacity = Math.Max(32, maxCapacity);
             LoadFromStore();
         }
@@ -155,8 +153,7 @@ namespace RimLife.Infrastructure.Knowledge
         /// <summary>
         /// 按语义标签筛选词条。
         /// </summary>
-        /// <param name="tags">标签列表。命中任一标签即匹配。
-        /// 此参数为 <see cref="ListAll"/> 提供标签过滤。该参数为按语义标签查找词条的过滤方式。</param>
+        /// <param name="tags">标签列表。命中任一标签即匹配。</param>
         public IReadOnlyList<KnowledgeEntry> ListByTags(IReadOnlyList<string> tags)
         {
             if (tags == null || tags.Count == 0)
@@ -211,7 +208,7 @@ namespace RimLife.Infrastructure.Knowledge
             if (coldestKey != null)
             {
                 _entries.Remove(coldestKey);
-                LogInfo?.Invoke($"[RimLife.Knowledge] LRU evicted term '{coldestKey}' (heat={coldestScore:F2})");
+                _logger.Message($"[RimLife.Knowledge] LRU evicted term '{coldestKey}' (heat={coldestScore:F2})");
             }
         }
 
@@ -235,11 +232,11 @@ namespace RimLife.Infrastructure.Knowledge
                         _entries[entry.Term] = entry;
                 }
 
-                LogInfo?.Invoke($"[RimLife.Knowledge] Loaded {_entries.Count} knowledge entries from cache.");
+                _logger.Message($"[RimLife.Knowledge] Loaded {_entries.Count} knowledge entries from cache.");
             }
             catch (Exception e)
             {
-                LogWarning?.Invoke($"[RimLife.Knowledge] Failed to load knowledge: {e.Message}");
+                _logger.Warning($"[RimLife.Knowledge] Failed to load knowledge: {e.Message}");
             }
         }
 
@@ -267,7 +264,7 @@ namespace RimLife.Infrastructure.Knowledge
             }
             catch (Exception e)
             {
-                LogWarning?.Invoke($"[RimLife.Knowledge] Failed to save knowledge: {e.Message}");
+                _logger.Warning($"[RimLife.Knowledge] Failed to save knowledge: {e.Message}");
             }
         }
 
@@ -330,6 +327,5 @@ namespace RimLife.Infrastructure.Knowledge
                 return result;
             return KnowledgeSource.LegacyCache;
         }
-
     }
 }

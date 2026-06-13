@@ -20,7 +20,7 @@ namespace RimLife.Infrastructure.Llm
     /// 4. 异步连通性测试（TestConnectionAsync，供配置向导使用）
     /// 5. 异步模型列表查询（ListModelsAsync，供配置向导使用）
     /// </summary>
-    public class LlmAccessor
+    public class LlmAccessor : ILlmChatService
     {
         private readonly IPersistentStore _store;
         private const string ConfigKey = "rimlife_llm_config";

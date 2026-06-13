@@ -15,13 +15,14 @@ namespace RimLife.Infrastructure
 
         static RimLifeHarmony()
         {
-            // 将 Framework 组件接入 RimWorld 日志管线
-            MainThreadDispatcher.LogWarningCallback = Log.Warning;
-            MainThreadDispatcher.LogErrorCallback = Log.Error;
+            // 创建 RimWorld 日志适配器，注入到框架层和核心
+            var logger = new RimWorldLogger();
+            RimLifeCore.Logger = logger;
+            MainThreadDispatcher.Logger = logger;
 
             Instance = new Harmony("RimLife.Core");
             Instance.PatchAll();
-            Log.Message("[RimLife.Infrastructure] Harmony patches registered.");
+            logger.Message("[RimLife.Infrastructure] Harmony patches registered.");
 
             // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
             RimLifeCore.EnsureSkillRegistryInitialized();
