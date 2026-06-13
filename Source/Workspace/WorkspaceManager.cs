@@ -1,5 +1,6 @@
 using RimLife.Core;
 using RimLife.Framework;
+using RimLife.Framework.Mcp;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -58,6 +59,7 @@ namespace RimLife.Workspace
                 CurrentRecap = "",
                 CreatedAtTick = tick,
                 LastActivityTick = tick,
+                ActiveSkillIds = new List<string>(),
                 Outcome = null
             };
 
@@ -218,6 +220,9 @@ namespace RimLife.Workspace
             };
             copiedRounds.Add(branchRound);
 
+            // 拷贝父空间的激活技能列表
+            var childSkillIds = new List<string>(parent.ActiveSkillIds ?? new List<string>());
+
             var child = new WorkspaceState
             {
                 Id = Guid.NewGuid().ToString("D"),
@@ -231,6 +236,7 @@ namespace RimLife.Workspace
                 CurrentRecap = branchRecap ?? "",
                 CreatedAtTick = tick,
                 LastActivityTick = tick,
+                ActiveSkillIds = childSkillIds,
                 Outcome = null
             };
 
@@ -333,6 +339,18 @@ namespace RimLife.Workspace
             target.CurrentRecap = mergeRecap ?? "";
             target.LastActivityTick = tick;
 
+            // 合并激活技能：将源空间独有的技能并入目标空间
+            if (source.ActiveSkillIds != null && source.ActiveSkillIds.Count > 0)
+            {
+                if (target.ActiveSkillIds == null)
+                    target.ActiveSkillIds = new List<string>();
+                foreach (var skillId in source.ActiveSkillIds)
+                {
+                    if (!target.ActiveSkillIds.Contains(skillId))
+                        target.ActiveSkillIds.Add(skillId);
+                }
+            }
+
             // 废弃源空间
             source.Status = WorkspaceStatus.Abandoned;
             source.LastActivityTick = tick;
@@ -384,7 +402,9 @@ namespace RimLife.Workspace
                 {
                     var ws = DeserializeWorkspace(dict);
                     if (ws != null)
+                    {
                         _workspaces.Add(ws);
+                    }
                 }
 
                 Log.Message($"[RimLife.Workspace] Loaded {_workspaces.Count} workspaces from save.");
@@ -423,6 +443,10 @@ namespace RimLife.Workspace
             // CurrentRecap
             if (!string.IsNullOrEmpty(ws.CurrentRecap))
                 w.Prop("currentRecap", ws.CurrentRecap);
+
+            // ActiveSkillIds
+            if (ws.ActiveSkillIds != null && ws.ActiveSkillIds.Count > 0)
+                w.Array("activeSkillIds", ws.ActiveSkillIds);
 
             // Rounds
             if (ws.Rounds != null && ws.Rounds.Count > 0)
@@ -474,6 +498,7 @@ namespace RimLife.Workspace
                 Rounds = DeserializeRounds(data.TryGetValue("rounds", out v) ? v : null),
                 CreatedAtTick = data.TryGetValue("createdAtTick", out v) && int.TryParse(v, out var tick) ? tick : 0,
                 LastActivityTick = data.TryGetValue("lastActivityTick", out v) && int.TryParse(v, out var lt) ? lt : 0,
+                ActiveSkillIds = DeserializeStringList(data.TryGetValue("activeSkillIds", out v) ? v : null),
                 Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
             };
 
@@ -543,6 +568,89 @@ namespace RimLife.Workspace
                 }
             }
             return result;
+        }
+
+        // ================================================================
+        // 技能管理（WorkspaceState.ActiveSkillIds 是唯一权威源）
+        // ================================================================
+
+        /// <summary>
+        /// 为指定工作空间激活一个 Skill。直接修改 WorkspaceState 并持久化。
+        /// </summary>
+        /// <returns>激活结果 JSON（供 LLM 工具调用返回）。</returns>
+        public string ActivateSkill(string workspaceId, string skillId)
+        {
+            var ws = Get(workspaceId);
+            if (ws == null)
+                return McpSkillRegistry.MakeError($"Workspace '{workspaceId}' not found.");
+
+            if (string.IsNullOrEmpty(skillId))
+                return McpSkillRegistry.MakeError("skillId is required");
+
+            if (string.Equals(skillId, McpSkillRegistry.SystemSkillId, StringComparison.OrdinalIgnoreCase))
+                return McpSkillRegistry.MakeError($"System skill '{McpSkillRegistry.SystemSkillId}' is always active.");
+
+            if (ws.ActiveSkillIds == null)
+                ws.ActiveSkillIds = new List<string>();
+
+            string newToolsJson;
+            if (!ws.ActiveSkillIds.Contains(skillId))
+            {
+                ws.ActiveSkillIds.Add(skillId);
+                newToolsJson = McpSkillRegistry.GetSkillToolsJson(skillId);
+            }
+            else
+            {
+                newToolsJson = "[]"; // 已激活，无新工具
+            }
+
+            ws.LastActivityTick = Find.TickManager?.TicksGame ?? ws.LastActivityTick;
+            SaveToStore();
+            return McpSkillRegistry.MakeActivateResult(skillId, newToolsJson);
+        }
+
+        /// <summary>
+        /// 为指定工作空间停用一个 Skill。直接修改 WorkspaceState 并持久化。
+        /// </summary>
+        /// <returns>反激活结果 JSON（供 LLM 工具调用返回）。</returns>
+        public string DeactivateSkill(string workspaceId, string skillId)
+        {
+            var ws = Get(workspaceId);
+            if (ws == null)
+                return McpSkillRegistry.MakeError($"Workspace '{workspaceId}' not found.");
+
+            if (string.IsNullOrEmpty(skillId))
+                return McpSkillRegistry.MakeError("skillId is required");
+
+            if (string.Equals(skillId, McpSkillRegistry.SystemSkillId, StringComparison.OrdinalIgnoreCase))
+                return McpSkillRegistry.MakeError($"Cannot deactivate system skill '{McpSkillRegistry.SystemSkillId}'.");
+
+            if (ws.ActiveSkillIds != null)
+                ws.ActiveSkillIds.Remove(skillId);
+
+            ws.LastActivityTick = Find.TickManager?.TicksGame ?? ws.LastActivityTick;
+            SaveToStore();
+            return McpSkillRegistry.MakeDeactivateResult(skillId);
+        }
+
+        /// <summary>
+        /// 获取指定工作空间的已激活工具定义 JSON（用于 LLM prompt 注入）。
+        /// </summary>
+        public string GetActiveToolsJson(string workspaceId)
+        {
+            var ws = Get(workspaceId);
+            var activeIds = ws?.ActiveSkillIds;
+            return McpSkillRegistry.GetActiveToolsJson(activeIds);
+        }
+
+        /// <summary>
+        /// 获取所有 Skill 的轻量列表 JSON（含激活状态），用于 list_skills 工具。
+        /// </summary>
+        public string GetSkillListJson(string workspaceId)
+        {
+            var ws = Get(workspaceId);
+            var activeIds = ws?.ActiveSkillIds;
+            return McpSkillRegistry.GetSkillListJson(activeIds);
         }
 
         /// <summary>

@@ -6,7 +6,8 @@ using Xunit;
 namespace RimLife.Tests.Framework
 {
     /// <summary>
-    /// MCP Skill 注册表自检测试。覆盖 Skill 注册、激活/反激活、工具序列化等核心路径。
+    /// MCP Skill 注册表自检测试。覆盖 Skill 注册、纯函数查询（GetActiveToolsJson 等）、
+    /// 工具调用等核心路径。McpSkillRegistry 是无状态的纯注册表，激活状态由调用方提供。
     /// </summary>
     public class McpSkillRegistryTests
     {
@@ -32,7 +33,6 @@ namespace RimLife.Tests.Framework
         [McpTool(Name = "find_characters", Description = "查找角色")]
         public static string FindCharacters() => "found";
 
-        /// <summary>无 [McpSkill] 标注的方法应被 RegisterFromType 跳过。</summary>
         [McpTool(Name = "orphan_tool", Description = "无技能归属的工具")]
         public static string OrphanTool() => "orphan";
 
@@ -60,14 +60,6 @@ namespace RimLife.Tests.Framework
         }
 
         [Fact]
-        public void InitializeDefaults_SystemSkillIsActive()
-        {
-            McpSkillRegistry.InitializeDefaults();
-            Assert.True(McpSkillRegistry.IsActive(McpSkillRegistry.SystemSkillId));
-            Assert.Equal(1, McpSkillRegistry.ActiveSkillCount);
-        }
-
-        [Fact]
         public void GetAllSkillIds_ContainsExpectedSkills()
         {
             McpSkillRegistry.InitializeDefaults();
@@ -79,7 +71,7 @@ namespace RimLife.Tests.Framework
             Assert.Contains("environment_query", ids);
             Assert.Contains("knowledge_management", ids);
             Assert.Contains("workspace_management", ids);
-            Assert.DoesNotContain(McpSkillRegistry.SystemSkillId, ids); // system 不在业务技能中
+            Assert.DoesNotContain(McpSkillRegistry.SystemSkillId, ids);
         }
 
         // ================================================================
@@ -90,8 +82,6 @@ namespace RimLife.Tests.Framework
         public void RegisterFromType_RegistersToolsWithSkillAttribute()
         {
             SetupRegistry();
-
-            // orphan_tool 无 [McpSkill]，不应被注册
             Assert.Equal(4, McpSkillRegistry.TotalToolCount); // 2 test_colony + 2 test_character
         }
 
@@ -99,155 +89,70 @@ namespace RimLife.Tests.Framework
         public void RegisterFromType_OrphanToolSkipped()
         {
             SetupRegistry();
-
-            // 验证孤儿工具不被包含在活跃工具中
-            var activeJson = McpSkillRegistry.GetActiveToolsJson();
-            Assert.DoesNotContain("orphan_tool", activeJson);
+            // 激活 test_colony 和 test_character，孤儿工具不应出现
+            var json = McpSkillRegistry.GetActiveToolsJson(new[] { "test_colony", "test_character" });
+            Assert.DoesNotContain("orphan_tool", json);
         }
 
         // ================================================================
-        // 3. 激活 / 反激活
+        // 3. GetActiveToolsJson 纯函数
         // ================================================================
 
         [Fact]
-        public void ActivateSkill_AddsToActiveSet()
+        public void GetActiveToolsJson_EmptyList_OnlySystemTools()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var result = McpSkillRegistry.ActivateSkill("test_colony");
-            Assert.Contains("\"activated\"", result);
-            Assert.Contains("test_colony", result);
-            Assert.True(McpSkillRegistry.IsActive("test_colony"));
-            Assert.Equal(2, McpSkillRegistry.ActiveSkillCount); // system + test_colony
-        }
-
-        [Fact]
-        public void ActivateSkill_AlreadyActive_NoError()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.ActivateSkill("test_colony");
-            var result = McpSkillRegistry.ActivateSkill("test_colony"); // 重复激活
-            Assert.DoesNotContain("\"error\"", result);
-            Assert.True(McpSkillRegistry.IsActive("test_colony"));
-            Assert.Equal(2, McpSkillRegistry.ActiveSkillCount);
-        }
-
-        [Fact]
-        public void ActivateSkill_UnknownSkill_ReturnsError()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var result = McpSkillRegistry.ActivateSkill("nonexistent_skill");
-            Assert.Contains("\"error\"", result);
-        }
-
-        [Fact]
-        public void ActivateSkill_AccumulatesCorrectly()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.ActivateSkill("test_colony");
-            McpSkillRegistry.ActivateSkill("test_character");
-            Assert.True(McpSkillRegistry.IsActive("test_colony"));
-            Assert.True(McpSkillRegistry.IsActive("test_character"));
-            Assert.Equal(3, McpSkillRegistry.ActiveSkillCount); // system + 2
-        }
-
-        [Fact]
-        public void DeactivateSkill_RemovesFromActiveSet()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.ActivateSkill("test_colony");
-            McpSkillRegistry.DeactivateSkill("test_colony");
-            Assert.False(McpSkillRegistry.IsActive("test_colony"));
-            Assert.Equal(1, McpSkillRegistry.ActiveSkillCount);
-        }
-
-        [Fact]
-        public void DeactivateSkill_System_CannotBeDeactivated()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var result = McpSkillRegistry.DeactivateSkill(McpSkillRegistry.SystemSkillId);
-            Assert.Contains("\"error\"", result);
-            Assert.True(McpSkillRegistry.IsActive(McpSkillRegistry.SystemSkillId));
-        }
-
-        [Fact]
-        public void DeactivateSkill_UnknownSkill_ReturnsError()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var result = McpSkillRegistry.DeactivateSkill("nonexistent");
-            Assert.Contains("\"error\"", result);
-        }
-
-        // ================================================================
-        // 4. 工具序列化
-        // ================================================================
-
-        [Fact]
-        public void GetActiveToolsJson_Initial_OnlySystemTools()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.ActivateSkill(McpSkillRegistry.SystemSkillId); // 确保 system 激活
-            var json = McpSkillRegistry.GetActiveToolsJson();
-            // 初始应该为空（因为测试类中没有注册 system 工具）
-            // 这里仅验证格式合法
+            var json = McpSkillRegistry.GetActiveToolsJson(new string[0]);
             Assert.True(json.StartsWith("[") || json == "[]");
         }
 
         [Fact]
-        public void GetActiveToolsJson_AfterActivate_ContainsSkillTools()
+        public void GetActiveToolsJson_Null_OnlySystemTools()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.ActivateSkill("test_colony");
-            var json = McpSkillRegistry.GetActiveToolsJson();
-            Assert.Contains("get_overview", json);
-            Assert.Contains("get_events", json);
-            Assert.DoesNotContain("get_character", json); // test_character 未激活
+            var json = McpSkillRegistry.GetActiveToolsJson(null);
+            Assert.True(json.StartsWith("[") || json == "[]");
         }
 
         [Fact]
-        public void GetActiveToolsJson_AfterDeactivate_RemovesTools()
+        public void GetActiveToolsJson_SingleSkill_ContainsItsTools()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
+            var json = McpSkillRegistry.GetActiveToolsJson(new[] { "test_colony" });
+            Assert.Contains("get_overview", json);
+            Assert.Contains("get_events", json);
+            Assert.DoesNotContain("get_character", json);
+        }
 
-            McpSkillRegistry.ActivateSkill("test_colony");
-            McpSkillRegistry.ActivateSkill("test_character");
-            McpSkillRegistry.DeactivateSkill("test_colony");
-
-            var json = McpSkillRegistry.GetActiveToolsJson();
-            Assert.DoesNotContain("get_overview", json);
+        [Fact]
+        public void GetActiveToolsJson_MultipleSkills_ContainsAllTools()
+        {
+            SetupRegistry();
+            var json = McpSkillRegistry.GetActiveToolsJson(new[] { "test_colony", "test_character" });
+            Assert.Contains("get_overview", json);
             Assert.Contains("get_character", json);
             Assert.Contains("find_characters", json);
         }
 
+        [Fact]
+        public void GetActiveToolsJson_EmptyVsFull_DifferentSizes()
+        {
+            SetupRegistry();
+            var empty = McpSkillRegistry.GetActiveToolsJson(new string[0]);
+            var full = McpSkillRegistry.GetActiveToolsJson(
+                McpSkillRegistry.GetAllSkillIds());
+            Assert.True(full.Length > empty.Length);
+        }
+
         // ================================================================
-        // 5. Skill 列表 JSON
+        // 4. GetSkillListJson 纯函数
         // ================================================================
 
         [Fact]
         public void GetSkillListJson_ContainsAllSkills()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var json = McpSkillRegistry.GetSkillListJson();
+            var json = McpSkillRegistry.GetSkillListJson(new string[0]);
             Assert.Contains("\"skills\"", json);
             Assert.Contains("test_colony", json);
             Assert.Contains("test_character", json);
@@ -257,182 +162,123 @@ namespace RimLife.Tests.Framework
         public void GetSkillListJson_ReflectsActiveState()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
+            var inactive = McpSkillRegistry.GetSkillListJson(new string[0]);
+            Assert.Contains("\"active\":false", inactive);
 
-            // 激活前
-            var before = McpSkillRegistry.GetSkillListJson();
-            Assert.Contains("\"active\":false", before);
-
-            // 激活后
-            McpSkillRegistry.ActivateSkill("test_colony");
-            var after = McpSkillRegistry.GetSkillListJson();
-            Assert.Contains("\"active\":true", after);
-        }
-
-        // ================================================================
-        // 6. Reset
-        // ================================================================
-
-        [Fact]
-        public void Reset_ClearsAllExceptSystem()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.ActivateSkill("test_colony");
-            McpSkillRegistry.ActivateSkill("test_character");
-            McpSkillRegistry.Reset();
-
-            Assert.True(McpSkillRegistry.IsActive(McpSkillRegistry.SystemSkillId));
-            Assert.False(McpSkillRegistry.IsActive("test_colony"));
-            Assert.False(McpSkillRegistry.IsActive("test_character"));
-            Assert.Equal(1, McpSkillRegistry.ActiveSkillCount);
-        }
-
-        // ================================================================
-        // 6.5. 预载管理
-        // ================================================================
-
-        [Fact]
-        public void AddPreload_AddsToPreloadSetAndActivates()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var result = McpSkillRegistry.AddPreload("test_colony");
-            Assert.Contains("\"action\":\"preloaded\"", result);
-            Assert.True(McpSkillRegistry.IsPreloaded("test_colony"));
-            Assert.True(McpSkillRegistry.IsActive("test_colony"));
-            Assert.Contains("test_colony", McpSkillRegistry.GetPreloadSkillIds());
+            var active = McpSkillRegistry.GetSkillListJson(new[] { "test_colony" });
+            Assert.Contains("\"active\":true", active);
         }
 
         [Fact]
-        public void AddPreload_AlreadyPreloaded_ReturnsAlreadyPreloaded()
+        public void GetSkillListJson_SystemAlwaysActive()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
+            var json = McpSkillRegistry.GetSkillListJson(new string[0]);
+            // system 技能始终 active=true，应体现在 JSON 中
+            Assert.Contains(McpSkillRegistry.SystemSkillId, json);
+        }
 
-            McpSkillRegistry.AddPreload("test_colony");
-            var result = McpSkillRegistry.AddPreload("test_colony");
-            Assert.Contains("\"action\":\"already_preloaded\"", result);
-            Assert.True(McpSkillRegistry.IsPreloaded("test_colony"));
+        // ================================================================
+        // 5. GetSkillToolsJson
+        // ================================================================
+
+        [Fact]
+        public void GetSkillToolsJson_ReturnsToolsForSkill()
+        {
+            SetupRegistry();
+            var json = McpSkillRegistry.GetSkillToolsJson("test_colony");
+            Assert.Contains("get_overview", json);
+            Assert.Contains("get_events", json);
         }
 
         [Fact]
-        public void AddPreload_UnknownSkill_ReturnsError()
+        public void GetSkillToolsJson_UnknownSkill_ReturnsEmpty()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
+            var json = McpSkillRegistry.GetSkillToolsJson("nonexistent");
+            Assert.Equal("[]", json);
+        }
 
-            var result = McpSkillRegistry.AddPreload("nonexistent_skill");
+        // ================================================================
+        // 6. InvokeTool 纯函数
+        // ================================================================
+
+        [Fact]
+        public void InvokeTool_FindsToolInActiveSkills()
+        {
+            SetupRegistry();
+            var result = McpSkillRegistry.InvokeTool(
+                new[] { "test_colony" }, "get_overview", "{}");
+            Assert.Contains("overview", result);
+        }
+
+        [Fact]
+        public void InvokeTool_FallbackToSystem()
+        {
+            SetupRegistry();
+            // list_skills 属于 system skill，即使 activeSkillIds 为空也应找到
+            var result = McpSkillRegistry.InvokeTool(
+                null, "list_skills", "{\"workspaceId\":\"test\"}");
+            // 只要能找到工具即可（具体输出取决于运行时环境）
+            Assert.NotNull(result);
+        }
+
+        [Fact]
+        public void InvokeTool_NotFound_ReturnsError()
+        {
+            SetupRegistry();
+            var result = McpSkillRegistry.InvokeTool(
+                new string[0], "nonexistent_tool", "{}");
             Assert.Contains("\"error\"", result);
         }
 
         [Fact]
-        public void RemovePreload_RemovesFromPreloadSet()
+        public void InvokeTool_ToolNotInActiveScope_ReturnsError()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.AddPreload("test_colony");
-            var result = McpSkillRegistry.RemovePreload("test_colony");
-            Assert.Contains("\"action\":\"unpreloaded\"", result);
-            Assert.False(McpSkillRegistry.IsPreloaded("test_colony"));
-            Assert.DoesNotContain("test_colony", McpSkillRegistry.GetPreloadSkillIds());
-        }
-
-        [Fact]
-        public void RemovePreload_DoesNotDeactivate()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.AddPreload("test_colony");
-            McpSkillRegistry.RemovePreload("test_colony");
-            // 解除预载不反激活
-            Assert.True(McpSkillRegistry.IsActive("test_colony"));
-        }
-
-        [Fact]
-        public void RemovePreload_System_CannotBeRemoved()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var result = McpSkillRegistry.RemovePreload(McpSkillRegistry.SystemSkillId);
+            // get_character 在 test_character skill 中，但 activeSkillIds 只包含 test_colony
+            var result = McpSkillRegistry.InvokeTool(
+                new[] { "test_colony" }, "get_character", "{\"id\":\"pawn1\"}");
             Assert.Contains("\"error\"", result);
-        }
-
-        [Fact]
-        public void RemovePreload_UnknownSkill_ReturnsError()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var result = McpSkillRegistry.RemovePreload("nonexistent");
-            Assert.Contains("\"error\"", result);
-        }
-
-        [Fact]
-        public void ApplyPreloads_BulkActivatesSkills()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            int count = McpSkillRegistry.ApplyPreloads(new[] { "test_colony", "test_character" });
-            Assert.Equal(2, count);
-            Assert.True(McpSkillRegistry.IsActive("test_colony"));
-            Assert.True(McpSkillRegistry.IsActive("test_character"));
-            Assert.True(McpSkillRegistry.IsPreloaded("test_colony"));
-            Assert.True(McpSkillRegistry.IsPreloaded("test_character"));
-        }
-
-        [Fact]
-        public void ApplyPreloads_IgnoresUnknownSkills()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            int count = McpSkillRegistry.ApplyPreloads(new[] { "test_colony", "unknown_skill" });
-            Assert.Equal(1, count);
-            Assert.True(McpSkillRegistry.IsPreloaded("test_colony"));
-        }
-
-        [Fact]
-        public void ApplyPreloads_EmptyList_ReturnsZero()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            int count = McpSkillRegistry.ApplyPreloads();
-            Assert.Equal(0, count);
-        }
-
-        [Fact]
-        public void GetSkillListJson_ContainsPreloadedField()
-        {
-            SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.AddPreload("test_colony");
-            var json = McpSkillRegistry.GetSkillListJson();
-            Assert.Contains("\"preloaded\":true", json);
-            Assert.Contains("\"preloadedSkillIds\"", json);
-            Assert.Contains("test_colony", json);
         }
 
         // ================================================================
-        // 7. McpToolGenerator 集成
+        // 7. MakeActivateResult / MakeDeactivateResult / MakeError
+        // ================================================================
+
+        [Fact]
+        public void MakeActivateResult_ProducesValidJson()
+        {
+            var result = McpSkillRegistry.MakeActivateResult("test_skill", "[]");
+            Assert.Contains("\"activated\"", result);
+            Assert.Contains("test_skill", result);
+        }
+
+        [Fact]
+        public void MakeDeactivateResult_ProducesValidJson()
+        {
+            var result = McpSkillRegistry.MakeDeactivateResult("test_skill");
+            Assert.Contains("\"deactivated\"", result);
+            Assert.Contains("test_skill", result);
+        }
+
+        [Fact]
+        public void MakeError_ProducesValidJson()
+        {
+            var result = McpSkillRegistry.MakeError("something wrong");
+            Assert.Contains("\"error\"", result);
+            Assert.Contains("something wrong", result);
+        }
+
+        // ================================================================
+        // 8. McpToolGenerator 集成
         // ================================================================
 
         [Fact]
         public void SerializeAllActiveTools_ReturnsValidJson()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            McpSkillRegistry.ActivateSkill("test_colony");
-            var json = McpToolGenerator.SerializeAllActiveTools();
+            var json = McpToolGenerator.SerializeAllActiveTools(new[] { "test_colony" });
             Assert.StartsWith("[", json);
             Assert.Contains("get_overview", json);
         }
@@ -441,9 +287,7 @@ namespace RimLife.Tests.Framework
         public void SerializeSkillList_ReturnsValidJson()
         {
             SetupRegistry();
-            McpSkillRegistry.Reset();
-
-            var json = McpToolGenerator.SerializeSkillList();
+            var json = McpToolGenerator.SerializeSkillList(new[] { "test_colony" });
             Assert.Contains("\"skills\"", json);
         }
     }

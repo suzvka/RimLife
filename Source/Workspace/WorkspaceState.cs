@@ -100,6 +100,9 @@ namespace RimLife.Workspace
         /// <summary>最后活跃时刻 (游戏 tick)。</summary>
         public int LastActivityTick;
 
+        /// <summary>此工作空间激活的 Skill ID 列表。持久化以支持冷启动恢复。</summary>
+        public List<string> ActiveSkillIds;
+
         /// <summary>结束原因描述（Completed / Abandoned 时填充）。</summary>
         public string Outcome;
     }

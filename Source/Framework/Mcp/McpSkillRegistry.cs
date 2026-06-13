@@ -7,14 +7,17 @@ using System.Text;
 namespace RimLife.Framework.Mcp
 {
     /// <summary>
-    /// MCP Skill 注册表。管理技能的元数据、工具注册和激活状态。
+    /// MCP Skill 注册表。管理技能的元数据和工具注册。
     /// 纯静态，零 RimWorld 依赖。
+    /// 
+    /// 激活状态由 WorkspaceManager 独家持有。本注册表提供纯函数：
+    /// 给定一组 activeSkillIds，返回对应的工具定义或 skill 列表。
     /// 
     /// 使用流程：
     ///   1. InitializeDefaults() 注册所有 Skill 元数据
     ///   2. RegisterFromType() 扫描工具类，建立 Skill → Tool 映射
-    ///   3. GetActiveToolsJson() 获取当前激活的全部工具定义（用于 prompt 构造）
-    ///   4. ActivateSkill() / DeactivateSkill() 管理激活状态
+    ///   3. GetActiveToolsJson(activeSkillIds) 获取工具定义（用于 prompt 构造）
+    ///   4. InvokeTool(activeSkillIds, toolName, jsonArgs) 调用工具
     /// </summary>
     public static class McpSkillRegistry
     {
@@ -34,15 +37,9 @@ namespace RimLife.Framework.Mcp
         // skill → McpTool 列表
         private static readonly Dictionary<string, List<McpTool>> _skillTools = new(StringComparer.OrdinalIgnoreCase);
 
-        // 预载集合：agent 指定的高频技能，冷启动自动激活（由 RimLifeCore 持久化到 CacheStore）
-        private static readonly HashSet<string> _preloadedSkills = new(StringComparer.OrdinalIgnoreCase);
-
-        // 当前激活的 skill 集合（始终包含 "system"）
-        private static readonly HashSet<string> _activeSkills = new(StringComparer.OrdinalIgnoreCase) { "system" };
-
         private static readonly object _lock = new();
 
-        /// <summary>系统技能 ID，始终激活。</summary>
+        /// <summary>系统技能 ID，对所有 workspace 隐式可用。</summary>
         public const string SystemSkillId = "system";
 
         // ================================================================
@@ -51,7 +48,6 @@ namespace RimLife.Framework.Mcp
 
         /// <summary>
         /// 注册 7 个业务技能的元数据。调用一次即可。
-        /// 调用后自动将 system skill 设为激活。
         /// </summary>
         public static void InitializeDefaults()
         {
@@ -59,9 +55,6 @@ namespace RimLife.Framework.Mcp
             {
                 _skillMetas.Clear();
                 _skillTools.Clear();
-                _preloadedSkills.Clear();
-                _activeSkills.Clear();
-                _activeSkills.Add(SystemSkillId);
 
                 RegisterSkill("colony_overview", "殖民地全局",
                     "殖民地概览、近期事件、活跃目标、资源库存");
@@ -191,22 +184,27 @@ namespace RimLife.Framework.Mcp
         }
 
         // ================================================================
-        // 查询
+        // 查询（纯函数：输入 activeSkillIds，输出 JSON）
         // ================================================================
 
         /// <summary>
-        /// 获取轻量技能列表 JSON（所有已注册技能，含激活状态）。
-        /// 格式: {"skills": [{"id":"...","name":"...","desc":"...","toolCount":N,"active":bool}, ...]}
+        /// 获取轻量技能列表 JSON（含激活状态）。system 始终显示为 active。
         /// </summary>
-        public static string GetSkillListJson()
+        /// <param name="activeSkillIds">当前激活的业务 skill ID 集合。</param>
+        public static string GetSkillListJson(IEnumerable<string> activeSkillIds)
         {
             lock (_lock)
             {
+                var activeSet = activeSkillIds != null
+                    ? new HashSet<string>(activeSkillIds, StringComparer.OrdinalIgnoreCase)
+                    : new HashSet<string>();
+
                 var skills = new List<string>();
                 foreach (var kv in _skillMetas)
                 {
                     int toolCount = _skillTools.TryGetValue(kv.Key, out var tools) ? tools.Count : 0;
-                    bool active = _activeSkills.Contains(kv.Key);
+                    // system 始终 active，其余按传入集合判断
+                    bool active = kv.Key == SystemSkillId || activeSet.Contains(kv.Key);
 
                     var w = new JsonWriter(128);
                     w.Prop("id", kv.Value.Id);
@@ -214,8 +212,6 @@ namespace RimLife.Framework.Mcp
                     w.Prop("description", kv.Value.Description);
                     w.Prop("toolCount", toolCount);
                     w.Prop("active", active);
-                // preloaded 状态
-                w.Prop("preloaded", _preloadedSkills.Contains(kv.Key));
                     skills.Add(w.Close());
                 }
 
@@ -228,23 +224,9 @@ namespace RimLife.Framework.Mcp
                 }
                 sb.Append(']');
 
-                // 附加已激活列表
                 sb.Append(",\"activeSkillIds\":[");
                 bool first = true;
-                foreach (var id in _activeSkills)
-                {
-                    if (!first) sb.Append(',');
-                    first = false;
-                    sb.Append('"');
-                    sb.Append(JsonHelper.Escape(id));
-                    sb.Append('"');
-                }
-                sb.Append(']');
-
-                // 附加预载列表
-                sb.Append(",\"preloadedSkillIds\":[");
-                first = true;
-                foreach (var id in _preloadedSkills)
+                foreach (var id in activeSet)
                 {
                     if (!first) sb.Append(',');
                     first = false;
@@ -254,26 +236,39 @@ namespace RimLife.Framework.Mcp
                 }
                 sb.Append(']');
                 sb.Append('}');
-
                 return sb.ToString();
             }
         }
 
         /// <summary>
-        /// 获取当前激活技能的全部工具定义 JSON 数组。
+        /// 获取激活工具定义 JSON 数组。system 技能的工具始终包含，然后合并传入的业务技能。
         /// 用于构造发送给 LLM 的 prompt 中的 tools 字段。
         /// </summary>
-        public static string GetActiveToolsJson()
+        /// <param name="activeSkillIds">当前激活的业务 skill ID 集合。</param>
+        public static string GetActiveToolsJson(IEnumerable<string> activeSkillIds)
         {
             lock (_lock)
             {
                 var jsons = new List<string>();
-                foreach (var skillId in _activeSkills)
+
+                // system 技能始终可用
+                if (_skillTools.TryGetValue(SystemSkillId, out var sysTools))
                 {
-                    if (_skillTools.TryGetValue(skillId, out var tools))
+                    foreach (var tool in sysTools)
+                        jsons.Add(McpToolGenerator.Serialize(tool.Definition));
+                }
+
+                // 传入的业务技能
+                if (activeSkillIds != null)
+                {
+                    foreach (var skillId in activeSkillIds)
                     {
-                        foreach (var tool in tools)
-                            jsons.Add(McpToolGenerator.Serialize(tool.Definition));
+                        if (string.IsNullOrEmpty(skillId) || skillId == SystemSkillId) continue;
+                        if (_skillTools.TryGetValue(skillId, out var tools))
+                        {
+                            foreach (var tool in tools)
+                                jsons.Add(McpToolGenerator.Serialize(tool.Definition));
+                        }
                     }
                 }
 
@@ -316,28 +311,6 @@ namespace RimLife.Framework.Mcp
         }
 
         /// <summary>
-        /// 获取当前已激活的技能 ID 列表。
-        /// </summary>
-        public static IReadOnlyList<string> GetActiveSkillIds()
-        {
-            lock (_lock)
-            {
-                return _activeSkills.ToList();
-            }
-        }
-
-        /// <summary>
-        /// 判断技能是否已激活。
-        /// </summary>
-        public static bool IsActive(string skillId)
-        {
-            lock (_lock)
-            {
-                return _activeSkills.Contains(skillId);
-            }
-        }
-
-        /// <summary>
         /// 返回所有已注册的技能 ID 列表。
         /// </summary>
         public static IReadOnlyList<string> GetAllSkillIds()
@@ -357,14 +330,6 @@ namespace RimLife.Framework.Mcp
         }
 
         /// <summary>
-        /// 获取已激活技能总数（含 system）。
-        /// </summary>
-        public static int ActiveSkillCount
-        {
-            get { lock (_lock) { return _activeSkills.Count; } }
-        }
-
-        /// <summary>
         /// 获取已注册工具总数（所有技能）。
         /// </summary>
         public static int TotalToolCount
@@ -381,262 +346,84 @@ namespace RimLife.Framework.Mcp
         }
 
         // ================================================================
-        // 工具调用
+        // 工具调用（纯函数：由调用方提供 activeSkillIds）
         // ================================================================
 
         /// <summary>
-        /// 在当前已激活技能中查找指定名称的工具并调用。
-        /// 对 MethodInfo 工具和 Hook 工具统一处理。
+        /// 在给定激活技能范围内查找并调用工具。
+        /// 搜索顺序：业务技能 → system 技能（fallback）。
         /// </summary>
+        /// <param name="activeSkillIds">当前激活的业务 skill ID 集合。</param>
         /// <param name="toolName">工具名称（Definition.Name）。</param>
         /// <param name="jsonArgs">JSON 对象格式的参数字符串。</param>
         /// <returns>工具返回的 JSON 字符串，未找到或异常时返回 error JSON。</returns>
-        public static string InvokeTool(string toolName, string jsonArgs)
+        public static string InvokeTool(IEnumerable<string> activeSkillIds, string toolName, string jsonArgs)
         {
             if (string.IsNullOrEmpty(toolName))
                 return MakeError("toolName is required");
 
             lock (_lock)
             {
-                foreach (var skillId in _activeSkills)
+                // 1. 先搜传入的业务技能
+                if (activeSkillIds != null)
                 {
-                    if (_skillTools.TryGetValue(skillId, out var tools))
+                    foreach (var skillId in activeSkillIds)
                     {
-                        foreach (var tool in tools)
+                        if (string.IsNullOrEmpty(skillId)) continue;
+                        if (_skillTools.TryGetValue(skillId, out var tools))
                         {
-                            if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
+                            foreach (var tool in tools)
                             {
-                                try
+                                if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    return tool.Invoker(jsonArgs ?? "{}");
-                                }
-                                catch (Exception ex)
-                                {
-                                    return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}";
+                                    try { return tool.Invoker(jsonArgs ?? "{}"); }
+                                    catch (Exception ex) { return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}"; }
                                 }
                             }
                         }
                     }
                 }
-            }
 
-            return MakeError($"Tool '{toolName}' not found or not active.");
-        }
-
-        // ================================================================
-        // 预载管理（冷启动自动激活，持久化由 RimLifeCore 负责）
-        // ================================================================
-
-        /// <summary>
-        /// 将一个技能加入预载列表并立即激活。预载技能在每次冷启动时自动激活。
-        /// system 技能始终预载，无需手动添加。
-        /// </summary>
-        public static string AddPreload(string skillId)
-        {
-            if (string.IsNullOrEmpty(skillId))
-                return MakeError("skillId is required");
-
-            lock (_lock)
-            {
-                if (!_skillMetas.ContainsKey(skillId))
-                    return MakeError($"Skill '{skillId}' not found.");
-
-                if (!_preloadedSkills.Add(skillId))
+                // 2. fallback 到 system（始终可用）
+                if (_skillTools.TryGetValue(SystemSkillId, out var sysTools))
                 {
-                    // 已预载，直接返回当前状态
-                    _activeSkills.Add(skillId); // 确保激活
-                    return MakePreloadResult(skillId, "already_preloaded");
-                }
-
-                _activeSkills.Add(skillId);
-                return MakePreloadResult(skillId, "preloaded");
-            }
-        }
-
-        /// <summary>
-        /// 从预载列表中移除技能，但不反激活（agent 可以继续在当前会话中使用）。
-        /// system 技能不可移除预载。
-        /// </summary>
-        public static string RemovePreload(string skillId)
-        {
-            if (string.IsNullOrEmpty(skillId))
-                return MakeError("skillId is required");
-
-            lock (_lock)
-            {
-                if (string.Equals(skillId, SystemSkillId, StringComparison.OrdinalIgnoreCase))
-                    return MakeError($"Cannot remove preload for system skill '{SystemSkillId}'.");
-
-                if (!_skillMetas.ContainsKey(skillId))
-                    return MakeError($"Skill '{skillId}' not found.");
-
-                bool wasRemoved = _preloadedSkills.Remove(skillId);
-                return MakePreloadResult(skillId, wasRemoved ? "unpreloaded" : "was_not_preloaded");
-            }
-        }
-
-        /// <summary>
-        /// 获取当前预载的技能 ID 列表（供 RimLifeCore 持久化）。
-        /// </summary>
-        public static IReadOnlyList<string> GetPreloadSkillIds()
-        {
-            lock (_lock)
-            {
-                return _preloadedSkills.ToList();
-            }
-        }
-
-        /// <summary>
-        /// 将指定技能列表批量激活（用于冷启动时从 CacheStore 恢复预载配置）。
-        /// 未知的技能 ID 静默跳过。
-        /// </summary>
-        /// <returns>成功激活的技能数。</returns>
-        public static int ApplyPreloads(IEnumerable<string> skillIds)
-        {
-            if (skillIds == null) return 0;
-            int count = 0;
-            lock (_lock)
-            {
-                foreach (var id in skillIds)
-                {
-                    if (string.IsNullOrEmpty(id)) continue;
-                    if (!_skillMetas.ContainsKey(id)) continue;
-                    if (_preloadedSkills.Add(id)) count++;
-                    _activeSkills.Add(id);
+                    foreach (var tool in sysTools)
+                    {
+                        if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            try { return tool.Invoker(jsonArgs ?? "{}"); }
+                            catch (Exception ex) { return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}"; }
+                        }
+                    }
                 }
             }
-            return count;
-        }
 
-        /// <summary>
-        /// 将当前已预载的技能全部激活（冷启动快捷入口，ApplyPreloads 的零参数版本）。
-        /// </summary>
-        /// <returns>成功激活的技能数。</returns>
-        public static int ApplyPreloads()
-        {
-            lock (_lock)
-            {
-                int count = 0;
-                foreach (var id in _preloadedSkills)
-                {
-                    if (_activeSkills.Add(id)) count++;
-                }
-                return count;
-            }
-        }
-
-        /// <summary>
-        /// 判断技能是否已预载。
-        /// </summary>
-        public static bool IsPreloaded(string skillId)
-        {
-            lock (_lock)
-            {
-                return _preloadedSkills.Contains(skillId);
-            }
+            return MakeError($"Tool '{toolName}' not available.");
         }
 
         // ================================================================
-        // 激活管理
+        // 公开 JSON 构造工具（供 WorkspaceManager 使用）
         // ================================================================
 
-        /// <summary>
-        /// 激活一个技能。若技能不存在或已激活则静默返回。
-        /// 返回 JSON: {"activated":["skillId"],"newTools":[...], "activeSkills":[...]}
-        /// </summary>
-        public static string ActivateSkill(string skillId)
-        {
-            if (string.IsNullOrEmpty(skillId))
-                return MakeError("skillId is required");
-
-            lock (_lock)
-            {
-                if (!_skillMetas.ContainsKey(skillId))
-                    return MakeError($"Skill '{skillId}' not found. Use list_skills to see available skills.");
-
-                if (_activeSkills.Contains(skillId))
-                {
-                    // 已激活，返回空工具列表
-                    return MakeActivateResult(skillId, "[]");
-                }
-
-                _activeSkills.Add(skillId);
-
-                string newToolsJson = GetSkillToolsJson(skillId);
-                return MakeActivateResult(skillId, newToolsJson);
-            }
-        }
-
-        /// <summary>
-        /// 反激活一个技能。system 技能不可反激活。
-        /// 返回 JSON: {"deactivated":"skillId","activeSkills":[...]}
-        /// </summary>
-        public static string DeactivateSkill(string skillId)
-        {
-            if (string.IsNullOrEmpty(skillId))
-                return MakeError("skillId is required");
-
-            lock (_lock)
-            {
-                if (string.Equals(skillId, SystemSkillId, StringComparison.OrdinalIgnoreCase))
-                    return MakeError($"Cannot deactivate system skill '{SystemSkillId}'.");
-
-                if (!_skillMetas.ContainsKey(skillId))
-                    return MakeError($"Skill '{skillId}' not found.");
-
-                if (!_activeSkills.Remove(skillId))
-                {
-                    // 未激活，也算成功
-                }
-
-                return MakeDeactivateResult(skillId);
-            }
-        }
-
-        /// <summary>
-        /// 重置激活状态为仅 system。
-        /// </summary>
-        public static void Reset()
-        {
-            lock (_lock)
-            {
-                _activeSkills.Clear();
-                _activeSkills.Add(SystemSkillId);
-            }
-        }
-
-        // ================================================================
-        // 内部 JSON 构造
-        // ================================================================
-
-        private static string MakeActivateResult(string skillId, string newToolsJson)
+        /// <summary>构造激活成功结果 JSON。</summary>
+        public static string MakeActivateResult(string skillId, string newToolsJson)
         {
             var w = new JsonWriter(512);
             w.Array("activated", new List<string> { skillId });
             w.PropRaw("newTools", newToolsJson);
-            w.Array("activeSkills", _activeSkills.ToList());
             return w.Close();
         }
 
-        private static string MakeDeactivateResult(string skillId)
+        /// <summary>构造反激活成功结果 JSON。</summary>
+        public static string MakeDeactivateResult(string skillId)
         {
             var w = new JsonWriter(256);
             w.Prop("deactivated", skillId);
-            w.Array("activeSkills", _activeSkills.ToList());
             return w.Close();
         }
 
-        private static string MakePreloadResult(string skillId, string action)
-        {
-            var w = new JsonWriter(256);
-            w.Prop("action", action);
-            w.Prop("skillId", skillId);
-            w.Array("activeSkills", _activeSkills.ToList());
-            w.Array("preloadedSkills", _preloadedSkills.ToList());
-            return w.Close();
-        }
-
-        private static string MakeError(string message)
+        /// <summary>构造错误结果 JSON。</summary>
+        public static string MakeError(string message)
         {
             var w = new JsonWriter(128);
             w.Prop("error", true);

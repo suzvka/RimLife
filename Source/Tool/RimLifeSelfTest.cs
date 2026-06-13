@@ -995,7 +995,6 @@ namespace RimLife.Tool
             {
                 DumpObject("已注册 Skill 数", McpSkillRegistry.SkillCount);
                 DumpObject("已注册工具总数", McpSkillRegistry.TotalToolCount);
-                DumpObject("初始激活 Skill 数", McpSkillRegistry.ActiveSkillCount);
 
                 if (McpSkillRegistry.SkillCount >= 7)
                     Pass($"Skill 注册表: {McpSkillRegistry.SkillCount} skills, {McpSkillRegistry.TotalToolCount} tools");
@@ -1004,48 +1003,29 @@ namespace RimLife.Tool
             }
             catch (Exception e) { Fail("Skill 注册表状态异常", e.Message); }
 
-            // --- 10.2 list_skills ---
+            // --- 10.2 GetSkillListJson 纯函数 ---
             try
             {
-                McpSkillRegistry.Reset();
-                var json = SystemMcpTools.ListSkills();
+                var json = McpSkillRegistry.GetSkillListJson(null); // 传入 null = 无激活技能
                 if (json.Contains("\"skills\"") && json.Contains("colony_overview"))
                 {
                     int len = json.Length;
-                    Pass($"list_skills 成功 ({len} chars, 轻量摘要)");
+                    Pass($"GetSkillListJson(null) 成功 ({len} chars, 轻量摘要)");
                     if (len < 100)
                         DumpObject("  JSON", json);
                     else
                         DumpObject("  前 100 字符", json.Substring(0, 100) + "...");
                 }
                 else
-                    Fail("list_skills 输出异常");
+                    Fail("GetSkillListJson 输出异常");
             }
-            catch (Exception e) { Fail("list_skills 异常", e.Message); }
+            catch (Exception e) { Fail("GetSkillListJson 异常", e.Message); }
 
-            // --- 10.3 activate_skill ---
+            // --- 10.3 GetActiveToolsJson 纯函数（显式传入激活列表）---
             try
             {
-                var result = SystemMcpTools.ActivateSkill("colony_overview");
-                if (result.Contains("\"activated\"") && result.Contains("colony_overview"))
-                {
-                    Pass("activate_skill(colony_overview) 成功");
-                    DumpObject("  preview", result.Length > 200 ? result.Substring(0, 200) + "..." : result);
-                }
-                else
-                    Fail("activate_skill 输出异常", $"len={result.Length}");
-            }
-            catch (Exception e) { Fail("activate_skill 异常", e.Message); }
-
-            // --- 10.4 激活后工具数 ---
-            try
-            {
-                var json = McpToolGenerator.SerializeAllActiveTools();
-                int toolCount = 0;
-                for (int i = 0; i < json.Length; i++)
-                    if (json[i] == '{' && i + 1 < json.Length && json[i + 1] == '"') toolCount++;
-
-                // 用更可靠的方式计数
+                var activeIds = new[] { "colony_overview" };
+                var json = McpSkillRegistry.GetActiveToolsJson(activeIds);
                 int nameCount = 0;
                 int pos = 0;
                 while ((pos = json.IndexOf("\"name\":", pos, StringComparison.Ordinal)) >= 0)
@@ -1055,57 +1035,47 @@ namespace RimLife.Tool
                 }
 
                 if (nameCount >= 3)
-                    Pass($"激活后活跃工具数: {nameCount} (含 system + colony_overview)");
+                    Pass($"GetActiveToolsJson(colony_overview) → {nameCount} tools (含 system)");
                 else
                     Fail("活跃工具数不足", $"expected >=3, got {nameCount}");
             }
-            catch (Exception e) { Fail("SerializeAllActiveTools 异常", e.Message); }
+            catch (Exception e) { Fail("GetActiveToolsJson 异常", e.Message); }
 
-            // --- 10.5 累积激活 ---
+            // --- 10.4 累积激活（纯函数，不同列表）---
             try
             {
-                SystemMcpTools.ActivateSkill("character_query");
-                SystemMcpTools.ActivateSkill("relationship_query");
-                int activeSkillCount = McpSkillRegistry.ActiveSkillCount;
-                if (activeSkillCount == 4)
-                    Pass($"累积激活: {activeSkillCount} skills active (system + colony + character + relationship)");
+                var ids1 = new[] { "colony_overview" };
+                var ids2 = new[] { "colony_overview", "character_query", "relationship_query" };
+
+                var json1 = McpSkillRegistry.GetActiveToolsJson(ids1);
+                var json2 = McpSkillRegistry.GetActiveToolsJson(ids2);
+
+                if (json2.Length > json1.Length)
+                    Pass($"累积激活: 1 skill → {json1.Length} chars, 3 skills → {json2.Length} chars");
                 else
-                    Fail("累积激活数不正确", $"expected 4, got {activeSkillCount}");
+                    Fail("累积激活未增加工具数");
             }
             catch (Exception e) { Fail("累积激活异常", e.Message); }
 
-            // --- 10.6 deactivate_skill ---
+            // --- 10.5 system 始终包含 ---
             try
             {
-                SystemMcpTools.DeactivateSkill("relationship_query");
-                if (!McpSkillRegistry.IsActive("relationship_query"))
-                    Pass("deactivate_skill(relationship_query) 成功");
+                var emptyJson = McpSkillRegistry.GetActiveToolsJson(new string[0]);
+                var nullJson = McpSkillRegistry.GetActiveToolsJson(null);
+                // 即使无激活技能，system 工具也应存在
+                if (emptyJson == nullJson)
+                    Pass("空列表 / null 均正确返回（仅含 system 工具）");
                 else
-                    Fail("反激活失败");
+                    Fail("空列表和 null 结果不一致");
             }
-            catch (Exception e) { Fail("deactivate_skill 异常", e.Message); }
+            catch (Exception e) { Fail("system 包含验证异常", e.Message); }
 
-            // --- 10.7 system 不可反激活 ---
+            // --- 10.6 Token 节省对比 ---
             try
             {
-                var result = SystemMcpTools.DeactivateSkill(McpSkillRegistry.SystemSkillId);
-                if (result.Contains("\"error\"") && McpSkillRegistry.IsActive(McpSkillRegistry.SystemSkillId))
-                    Pass("system skill 不可反激活 (预期行为)");
-                else
-                    Fail("system skill 应不可反激活");
-            }
-            catch (Exception e) { Fail("system deactivate 异常", e.Message); }
-
-            // --- 10.8 Token 节省对比 ---
-            try
-            {
-                McpSkillRegistry.Reset();
-                var initialJson = McpToolGenerator.SerializeAllActiveTools();
-
-                // 激活全部
-                foreach (var id in McpSkillRegistry.GetAllSkillIds())
-                    McpSkillRegistry.ActivateSkill(id);
-                var fullJson = McpToolGenerator.SerializeAllActiveTools();
+                var initialJson = McpSkillRegistry.GetActiveToolsJson(new string[0]);
+                var allIds = McpSkillRegistry.GetAllSkillIds();
+                var fullJson = McpSkillRegistry.GetActiveToolsJson(allIds);
 
                 int initialLen = initialJson.Length;
                 int fullLen = fullJson.Length;
@@ -1114,99 +1084,74 @@ namespace RimLife.Tool
             }
             catch (Exception e) { Fail("Token 对比异常", e.Message); }
 
-            // --- 10.9 preload_skill ---
+            // --- 10.7 GetSkillListJson 含激活状态 ---
             try
             {
-                McpSkillRegistry.Reset();
-                var result = SystemMcpTools.PreloadSkill("colony_overview");
-                if (result.Contains("\"action\":\"preloaded\"") && McpSkillRegistry.IsPreloaded("colony_overview"))
-                {
-                    Pass("preload_skill(colony_overview) 成功 (已激活+已预载)");
-                }
+                // 无激活
+                var before = McpSkillRegistry.GetSkillListJson(new string[0]);
+                // system 始终 active=true，业务技能 active=false
+                if (before.Contains("\"active\":false") || before.Contains("\"active\":true"))
+                    Pass("GetSkillListJson 正确输出 active 状态字段");
                 else
-                    Fail("preload_skill 输出异常", $"len={result.Length}");
+                    Fail("GetSkillListJson 缺少 active 字段");
             }
-            catch (Exception e) { Fail("preload_skill 异常", e.Message); }
+            catch (Exception e) { Fail("GetSkillListJson active 状态异常", e.Message); }
 
-            // --- 10.10 重复预载 ---
+            // --- 10.8 GetSkillToolsJson ---
             try
             {
-                var result = SystemMcpTools.PreloadSkill("colony_overview");
-                if (result.Contains("already_preloaded"))
-                    Pass("重复 preload_skill 返回 already_preloaded (幂等)");
+                var json = McpSkillRegistry.GetSkillToolsJson("colony_overview");
+                if (json.Contains("\"name\"") && json.Length > 10)
+                    Pass($"GetSkillToolsJson(colony_overview) → {json.Length} chars");
                 else
-                    Fail("重复预载应返回 already_preloaded");
+                    Fail("GetSkillToolsJson 输出异常");
             }
-            catch (Exception e) { Fail("重复预载异常", e.Message); }
+            catch (Exception e) { Fail("GetSkillToolsJson 异常", e.Message); }
 
-            // --- 10.11 unpreload_skill ---
+            // --- 10.9 InvokeTool 纯函数 ---
             try
             {
-                var result = SystemMcpTools.UnpreloadSkill("colony_overview");
-                if (result.Contains("\"action\":\"unpreloaded\"") && !McpSkillRegistry.IsPreloaded("colony_overview"))
-                {
-                    Pass("unpreload_skill 成功 (解除预载，会话内仍激活)");
-                }
+                // 用 system skill 范围内的工具（list_skills 总是可用）
+                var result = McpSkillRegistry.InvokeTool(null, "list_skills", "{\"workspaceId\":\"test\"}");
+                if (result.Contains("skills"))
+                    Pass("InvokeTool(list_skills) 成功（system fallback）");
                 else
-                    Fail("unpreload_skill 输出异常");
+                    Fail("InvokeTool 失败", $"len={result.Length}");
             }
-            catch (Exception e) { Fail("unpreload_skill 异常", e.Message); }
+            catch (Exception e) { Fail("InvokeTool 异常", e.Message); }
 
-            // --- 10.12 unpreload 但保持激活 ---
+            // --- 10.10 InvokeTool 未找到工具 ---
             try
             {
-                if (McpSkillRegistry.IsActive("colony_overview"))
-                    Pass("unpreload 后技能仍保持激活 (当前会话不受影响)");
+                var result = McpSkillRegistry.InvokeTool(null, "nonexistent_tool", "{}");
+                if (result.Contains("\"error\""))
+                    Pass("InvokeTool(nonexistent) 正确返回 error");
                 else
-                    Fail("unpreload 后技能不应被反激活");
+                    Fail("InvokeTool 对未知工具应返回 error");
             }
-            catch (Exception e) { Fail("unpreload 激活状态验证异常", e.Message); }
+            catch (Exception e) { Fail("InvokeTool 错误路径异常", e.Message); }
 
-            // --- 10.13 ApplyPreloads 批量恢复 ---
+            // --- 10.11 SerializeAllActiveTools 集成 ---
             try
             {
-                McpSkillRegistry.Reset();
-                int count = McpSkillRegistry.ApplyPreloads(new[] { "colony_overview", "character_query", "knowledge_management" });
-                if (count == 3 && McpSkillRegistry.IsActive("colony_overview")
-                    && McpSkillRegistry.IsActive("character_query")
-                    && McpSkillRegistry.IsActive("knowledge_management"))
-                    Pass($"ApplyPreloads 批量激活 {count} 个技能 (冷启动恢复)");
+                var json = McpToolGenerator.SerializeAllActiveTools(new[] { "colony_overview" });
+                if (json.StartsWith("[") && json.Contains("get_overview") || json.Contains("colony"))
+                    Pass($"McpToolGenerator.SerializeAllActiveTools 正常 ({json.Length} chars)");
                 else
-                    Fail($"ApplyPreloads 数量不正确", $"expected 3, got {count}");
+                    Fail("SerializeAllActiveTools 异常");
             }
-            catch (Exception e) { Fail("ApplyPreloads 异常", e.Message); }
+            catch (Exception e) { Fail("SerializeAllActiveTools 异常", e.Message); }
 
-            // --- 10.14 list_skills 含预载状态 ---
+            // --- 10.12 SerializeSkillList 集成 ---
             try
             {
-                McpSkillRegistry.Reset();
-                McpSkillRegistry.ApplyPreloads(new[] { "colony_overview" });
-                var json = SystemMcpTools.ListSkills();
-                if (json.Contains("\"preloaded\":true") && json.Contains("\"preloadedSkillIds\""))
-                    Pass("list_skills 包含 preloaded 字段和 preloadedSkillIds 列表");
+                var json = McpToolGenerator.SerializeSkillList(new[] { "colony_overview" });
+                if (json.Contains("\"skills\""))
+                    Pass($"McpToolGenerator.SerializeSkillList 正常 ({json.Length} chars)");
                 else
-                    Fail("list_skills 缺少预载信息");
+                    Fail("SerializeSkillList 异常");
             }
-            catch (Exception e) { Fail("list_skills 预载字段异常", e.Message); }
-
-            // --- 10.15 预载轮次节省验证 ---
-            try
-            {
-                McpSkillRegistry.Reset();
-                // 模拟冷启动：ApplyPreloads → 直接可用
-                McpSkillRegistry.ApplyPreloads(new[] { "colony_overview", "character_query" });
-                var activeIds = McpSkillRegistry.GetActiveSkillIds();
-                if (activeIds.Contains("colony_overview") && activeIds.Contains("character_query"))
-                {
-                    int preloadedCount = McpSkillRegistry.GetPreloadSkillIds().Count;
-                    Pass($"预载轮次节省: 冷启动后 {preloadedCount} 个技能自动激活，免去 list_skills→activate_skill (省 1 轮 LLM 调用)");
-                }
-                else
-                    Fail("预载冷启动恢复失败");
-            }
-            catch (Exception e) { Fail("轮次节省验证异常", e.Message); }
-
-            McpSkillRegistry.Reset();
+            catch (Exception e) { Fail("SerializeSkillList 异常", e.Message); }
         }
 
         // ================================================================

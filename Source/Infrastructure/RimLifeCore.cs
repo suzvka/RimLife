@@ -45,52 +45,6 @@ namespace RimLife.Infrastructure
 
                 _skillRegistryInitialized = true;
             }
-
-            // 冷启动：从缓存恢复预载技能
-            LoadAndApplySkillPreloads();
-        }
-
-        // ----------------------------------------------------------------
-        // 技能预载持久化
-        // ----------------------------------------------------------------
-
-        private const string _skillPreloadsCacheKey = "rimlife_skill_preloads";
-
-        /// <summary>
-        /// 将当前预载的技能列表持久化到 CacheStore。
-        /// </summary>
-        internal static void SaveSkillPreloads()
-        {
-            try
-            {
-                var preloadIds = McpSkillRegistry.GetPreloadSkillIds();
-                CacheStore.Cache(_skillPreloadsCacheKey, preloadIds);
-            }
-            catch (System.Exception e)
-            {
-                Log.Warning($"[RimLife.Core] SaveSkillPreloads failed: {e.Message}");
-            }
-        }
-
-        /// <summary>
-        /// 从 CacheStore 加载预载技能列表并应用到注册表。
-        /// 缓存不可用或为空时静默返回。
-        /// </summary>
-        private static void LoadAndApplySkillPreloads()
-        {
-            try
-            {
-                var preloadIds = CacheStore.FetchCache<List<string>>(_skillPreloadsCacheKey);
-                if (preloadIds != null && preloadIds.Count > 0)
-                {
-                    int count = McpSkillRegistry.ApplyPreloads(preloadIds);
-                    Log.Message($"[RimLife.Core] Preloaded {count} skills from cache: [{string.Join(", ", preloadIds)}]");
-                }
-            }
-            catch (System.Exception e)
-            {
-                Log.Warning($"[RimLife.Core] LoadAndApplySkillPreloads failed: {e.Message}");
-            }
         }
 
         // ----------------------------------------------------------------
