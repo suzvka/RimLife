@@ -65,24 +65,16 @@ namespace RimLife
         {
             try
             {
-                var card = CharacterCardMapper.CreateBasic(pawn).WithSocial(pawn);
-                var si = card.Social;
-                if (si == null) { Log.Message("[SocialInfo] (not collected)"); return; }
-
-                var sb = new StringBuilder(1024);
-                sb.AppendLine($"[SocialInfo Dump] {pawn.Name?.ToStringShort ?? pawn.LabelShortCap}");
-                sb.AppendLine($"ColonyOpinionAvg={si.ColonyOpinionAverage:F1}");
-
-                if (si.Relations != null && si.Relations.Count > 0)
+                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "social");
+                if (string.IsNullOrEmpty(prompt))
                 {
-                    sb.AppendLine("== Relations ==");
-                    foreach (var r in si.Relations)
-                    {
-                        sb.AppendLine($"  {r.OtherName} ({r.OtherID}): type={r.RelationType} opinion={r.Opinion:F0}({r.OpinionTier}) reciprocal={r.IsReciprocal}");
-                    }
+                    Log.Message("[SocialInfo] (not collected)");
+                    return;
                 }
-                else sb.AppendLine("Relations: (none)");
 
+                var sb = new StringBuilder(256);
+                sb.AppendLine($"[SocialInfo Dump] {pawn.Name?.ToStringShort ?? pawn.LabelShortCap}");
+                sb.AppendLine(prompt);
                 Log.Message(sb.ToString());
             }
             catch (Exception e)

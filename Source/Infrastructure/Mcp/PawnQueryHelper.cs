@@ -74,42 +74,12 @@ namespace RimLife.Infrastructure.Mcp
         }
 
         /// <summary>
-        /// 按需构建 CharacterCard：sections 为空时全量，否则按需链式添加。
+        /// 构建仅含身份元数据的 CharacterCard。
+        /// view 参数供调用方透传，层控制由 CardSerializer 完成。
         /// </summary>
-        public static CharacterCard BuildCharacterCard(Pawn pawn, string sections)
+        public static CharacterCard BuildCharacterCard(Pawn pawn, string view)
         {
-            var card = CharacterCardMapper.CreateBasic(pawn);
-
-            if (string.IsNullOrEmpty(sections))
-            {
-                return card
-                    .WithHealth(pawn)
-                    .WithMood(pawn)
-                    .WithSkills(pawn)
-                    .WithNeeds(pawn)
-                    .WithActivity(pawn)
-                    .WithGear(pawn)
-                    .WithBackstory(pawn)
-                    .WithSocial(pawn)
-                    .WithPerspective(pawn)
-                    .WithPsychology(pawn);
-            }
-
-            var parts = new HashSet<string>(
-                sections.Split(new char[] { ',' }).Select(s => s.Trim().ToLowerInvariant()));
-
-            if (parts.Contains("health")) card.WithHealth(pawn);
-            if (parts.Contains("mood")) card.WithMood(pawn);
-            if (parts.Contains("skills")) card.WithSkills(pawn);
-            if (parts.Contains("needs")) card.WithNeeds(pawn);
-            if (parts.Contains("activity")) card.WithActivity(pawn);
-            if (parts.Contains("gear")) card.WithGear(pawn);
-            if (parts.Contains("backstory")) card.WithBackstory(pawn);
-            if (parts.Contains("social")) card.WithSocial(pawn);
-            if (parts.Contains("perspective")) card.WithPerspective(pawn);
-            if (parts.Contains("psychology")) card.WithPsychology(pawn);
-
-            return card;
+            return CharacterCardMapper.CreateBasic(pawn);
         }
 
         /// <summary>

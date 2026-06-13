@@ -20,6 +20,9 @@ namespace RimLife.Infrastructure
             RimLifeCore.Logger = logger;
             MainThreadDispatcher.Logger = logger;
 
+            // 注册 Pawn 语义提示词提供者
+            RimLifeCore.PromptProvider = new PawnPromptProvider();
+
             Instance = new Harmony("RimLife.Core");
             Instance.PatchAll();
             logger.Message("[RimLife.Infrastructure] Harmony patches registered.");

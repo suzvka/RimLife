@@ -21,6 +21,9 @@ namespace RimLife.Infrastructure
         /// <summary>日志接口。由适配层在启动时注入。</summary>
         public static ILogger Logger { get; internal set; }
 
+        /// <summary>Pawn 语义提示词提供者。游戏侧实现，提供各维度的自然语言描述。</summary>
+        public static IPawnPromptProvider PromptProvider { get; internal set; }
+
         /// <summary>
         /// 初始化 MCP Skill 注册表。注册所有 Skill 元数据，
         /// 扫描工具类型自动建立 Skill → Tool 映射。

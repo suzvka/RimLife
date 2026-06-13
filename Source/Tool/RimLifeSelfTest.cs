@@ -429,58 +429,45 @@ namespace RimLife.Tool
             // Health
             try
             {
-                var card = CharacterCardMapper.CreateBasic(pawn);
-                card.WithHealth(pawn);
-                if (card.Health != null)
+                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "health");
+                if (!string.IsNullOrEmpty(prompt))
                 {
-                    Pass("WithHealth 成功");
-                    DumpObject("  PainTier", card.Health.PainTier);
-                    DumpObject("  BleedTier", card.Health.BleedTier);
-                    DumpObject("  Injuries", card.Health.Injuries?.Count ?? 0);
-                    DumpObject("  Capacities", card.Health.Capacities?.Count ?? 0);
+                    Pass("GetSectionPrompt(health) 成功");
+                    DumpObject("  Health", prompt);
                 }
                 else
-                    Fail("WithHealth 返回 null");
+                    Fail("GetSectionPrompt(health) 返回空");
             }
-            catch (Exception e) { Fail("WithHealth 异常", e.Message); }
+            catch (Exception e) { Fail("GetSectionPrompt(health) 异常", e.Message); }
 
             // Mood
             try
             {
-                var card = CharacterCardMapper.CreateBasic(pawn);
-                card.WithMood(pawn);
-                if (card.Mood != null)
+                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "mood");
+                if (!string.IsNullOrEmpty(prompt))
                 {
-                    Pass("WithMood 成功");
-                    DumpObject("  MoodTier", card.Mood.MoodTier);
-                    DumpObject("  MoodLevel", card.Mood.MoodLevel);
-                    DumpObject("  Traits", card.Mood.Traits?.Count ?? 0);
-                    DumpObject("  Thoughts", card.Mood.ActiveThoughts?.Count ?? 0);
+                    Pass("GetSectionPrompt(mood) 成功");
+                    DumpObject("  Mood", prompt);
                 }
                 else
-                    Fail("WithMood 返回 null");
+                    Fail("GetSectionPrompt(mood) 返回空");
             }
-            catch (Exception e) { Fail("WithMood 异常", e.Message); }
+            catch (Exception e) { Fail("GetSectionPrompt(mood) 异常", e.Message); }
 
             // Needs
             try
             {
-                var card = CharacterCardMapper.CreateBasic(pawn);
-                card.WithNeeds(pawn);
-                if (card.Needs != null)
+                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "needs");
+                if (!string.IsNullOrEmpty(prompt))
                 {
-                    Pass("WithNeeds 成功");
-                    DumpObject("  Needs", card.Needs.AllNeeds?.Count ?? 0);
-                    if (card.Needs.AllNeeds != null)
-                    {
-                        foreach (var n in card.Needs.AllNeeds.Take(5))
-                            Log.Message($"    - {n.DefName}: {n.CurLevel:F2} [{n.NeedUrgency}]");
-                    }
+                    Pass("GetSectionPrompt(needs) 成功");
+                    DumpObject("  Needs", prompt);
                 }
                 else
-                    Fail("WithNeeds 返回 null");
+                    // 需求可能为空（动物等）
+                    Pass("GetSectionPrompt(needs) 返回空（可能正常）");
             }
-            catch (Exception e) { Fail("WithNeeds 异常", e.Message); }
+            catch (Exception e) { Fail("GetSectionPrompt(needs) 异常", e.Message); }
 
             // EnvironmentCardMapper
             try
@@ -672,16 +659,13 @@ namespace RimLife.Tool
             {
                 try
                 {
-                    var card = CharacterCardMapper.CreateBasic(pawn)
-                        .WithHealth(pawn)
-                        .WithMood(pawn)
-                        .WithSkills(pawn);
-                    var json = CardSerializer.SerializeCharacterCard(card, "health,mood,skills");
+                    var card = CharacterCardMapper.CreateBasic(pawn);
+                    var json = CardSerializer.SerializeCharacterCard(card, pawn, "static", RimLifeCore.PromptProvider);
                     if (json.Length > 50 && json.Contains("\"id\""))
                     {
                         Pass($"SerializeCharacterCard 成功 ({json.Length} chars)");
                         DumpObject("  pawn", card.Name);
-                        DumpObject("  sections", "health,mood,skills");
+                        DumpObject("  view", "static");
                     }
                     else
                         Fail("SerializeCharacterCard 输出异常");

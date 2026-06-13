@@ -146,58 +146,123 @@ namespace RimLife.Tests.Framework
                 IsAwake = true
             };
 
-            var json = CardSerializer.SerializeCharacterCard(card, null);
+            var json = CardSerializer.SerializeCharacterCard(card, null, null, EmptyProvider);
 
             Assert.Contains("\"id\":\"pawn_1\"", json);
             Assert.Contains("\"name\":\"Alice\"", json);
+            Assert.Contains("\"view\":\"static\"", json);
             Assert.Contains("\"sections\":[]", json); // no sections populated
         }
 
         [Fact]
-        public void SerializeCharacterCard_WithSections_IncludesRequestedSections()
+        public void SerializeCharacterCard_DynamicView_IncludesPerspectiveAndMemory()
         {
             var card = new CharacterCard
             {
-                ID = "pawn_1",
-                Name = "Bob",
-                Skills = new SkillsSection
-                {
-                    AllSkills = new List<SkillEntry>
-                    {
-                        new SkillEntry { DefName = "Shooting", Label = "Shooting", Level = 12, Passion = "Major" }
-                    }
-                },
-                Mood = new MoodSection
-                {
-                    MoodLevel = 0.72f,
-                    MoodTier = "Good",
-                    Traits = new List<TraitEntry>(),
-                    ActiveThoughts = new List<ThoughtEntry>()
-                }
+                ID = "pawn_dyn",
+                Name = "Bob"
             };
 
-            var json = CardSerializer.SerializeCharacterCard(card, "skills,mood");
+            var provider = new MockPromptProvider(new Dictionary<string, string>
+            {
+                ["skills"] = "射击 12🔥, 格斗 5",
+                ["perspective"] = "视野内: Alice(5.2m), Bob(12.1m)",
+                ["memory"] = "心态: 警觉, 回顾: 看见Alice在附近, 最近: 发现Alice, STM: 1, LTM: 0"
+            });
 
-            Assert.Contains("\"Shooting\"", json);
-            Assert.Contains("\"level\":12", json);
-            Assert.Contains("\"moodLevel\":0.72", json);
-            Assert.Contains("\"sections\":[\"mood\",\"skills\"]", json);
-            // 不应包含未请求的 section
-            Assert.DoesNotContain("\"health\"", json);
+            var json = CardSerializer.SerializeCharacterCard(card, null, "dynamic", provider);
+
+            Assert.Contains("\"view\":\"dynamic\"", json);
+            Assert.Contains("\"perspective\"", json);
+            Assert.Contains("\"memory\"", json);
+            Assert.Contains("心态: 警觉", json);
+            Assert.Contains("看见Alice在附近", json);
+            // 静态 section 也应存在
+            Assert.Contains("\"skills\"", json);
+            // full 专属不应出现（provider 的 memory_full 未设置）
+            Assert.DoesNotContain("STM详情", json);
         }
 
         [Fact]
-        public void SerializeCharacterCard_AllSections_WhenEmpty()
+        public void SerializeCharacterCard_FullView_ContainsAllSectionsAndMemoryDetails()
         {
-            var card = CreateFullTestCard();
-            var json = CardSerializer.SerializeCharacterCard(card, "");
+            var card = new CharacterCard
+            {
+                ID = "test_full",
+                Name = "TestPawn",
+                DefName = "Human",
+                Gender = "Male",
+                PawnType = "Character",
+                PawnRelation = "OurParty",
+                AgeBiologicalYears = 30f
+            };
 
+            var provider = new MockPromptProvider(new Dictionary<string, string>
+            {
+                ["health"] = "疼痛: 低(Low), 流血: 无(None)",
+                ["mood"] = "心情: 中等(Neutral)",
+                ["skills"] = "射击 12🔥, 格斗 5",
+                ["needs"] = "食物: 正常, 休息: 正常",
+                ["activity"] = "姿态: 站立, 当前: 搬运",
+                ["gear"] = "穿着: 布制衬衫(一般, 50%)",
+                ["backstory"] = "童年: 矿场童工——在矿场长大",
+                ["social"] = "Alice: 朋友(好感), 殖民地平均: 中等",
+                ["psychology"] = "开放性: 高, 尽责性: 中, 外向性: 低, 宜人性: 中, 神经质: 低",
+                ["perspective"] = "视野内: Alice(5.2m)",
+                ["memory_full"] = "心态: 测试, STM: 1, LTM: 1\n  [STM详情] [100] Obs: 测试\n  [LTM详情] [50] test: 测试"
+            });
+
+            var json = CardSerializer.SerializeCharacterCard(card, null, "full", provider);
+
+            Assert.Contains("\"view\":\"full\"", json);
             Assert.Contains("\"health\"", json);
             Assert.Contains("\"mood\"", json);
             Assert.Contains("\"skills\"", json);
             Assert.Contains("\"needs\"", json);
             Assert.Contains("\"backstory\"", json);
             Assert.Contains("\"psychology\"", json);
+            Assert.Contains("\"memory\"", json);
+            Assert.Contains("心态: 测试", json);
+            // full 专属结构化列表
+            Assert.Contains("STM详情", json);
+            Assert.Contains("LTM详情", json);
+            // 语义化：原始数值不应出现
+            Assert.DoesNotContain("\"summaryPain\"", json);
+            Assert.DoesNotContain("\"summaryBleedRate\"", json);
+            Assert.DoesNotContain("\"moodLevel\"", json);
+            Assert.DoesNotContain("\"baseVector\"", json);
+            Assert.DoesNotContain("\"totalVector\"", json);
+        }
+
+        [Fact]
+        public void SerializeCharacterCard_StaticView_NoMemoryOrPerspective()
+        {
+            var card = new CharacterCard
+            {
+                ID = "test_static",
+                Name = "TestPawn",
+                DefName = "Human",
+                Gender = "Male",
+                PawnType = "Character",
+                PawnRelation = "OurParty"
+            };
+
+            var provider = new MockPromptProvider(new Dictionary<string, string>
+            {
+                ["health"] = "疼痛: 低(Low), 流血: 无(None)",
+                ["psychology"] = "开放性: 高, 尽责性: 中",
+                ["perspective"] = "视野内: Alice(5.2m)",
+                ["memory"] = "心态: 警觉"
+            });
+
+            var json = CardSerializer.SerializeCharacterCard(card, null, "static", provider);
+
+            Assert.Contains("\"view\":\"static\"", json);
+            Assert.Contains("\"health\"", json);
+            Assert.Contains("\"psychology\"", json);
+            // dynamic/full 专属不应出现
+            Assert.DoesNotContain("\"perspective\"", json);
+            Assert.DoesNotContain("\"memory\"", json);
         }
 
         // ================================================================
@@ -362,46 +427,26 @@ namespace RimLife.Tests.Framework
         // 辅助
         // ================================================================
 
-        private static CharacterCard CreateFullTestCard()
+        private static readonly IPawnPromptProvider EmptyProvider = new MockPromptProvider(
+            new Dictionary<string, string>());
+
+        private class MockPromptProvider : IPawnPromptProvider
         {
-            return new CharacterCard
+            private readonly Dictionary<string, string> _sections;
+
+            public MockPromptProvider(Dictionary<string, string> sections)
             {
-                ID = "test_full",
-                Name = "TestPawn",
-                DefName = "Human",
-                Gender = "Male",
-                PawnType = "Character",
-                PawnRelation = "OurParty",
-                AgeBiologicalYears = 30f,
-                Health = new HealthSection
-                {
-                    PainTier = "Low",
-                    BleedTier = "None",
-                    Capacities = new Dictionary<string, float>(),
-                    CapacityTiers = new Dictionary<string, string>(),
-                    Injuries = new List<HealthEntry>()
-                },
-                Mood = new MoodSection
-                {
-                    MoodLevel = 0.5f,
-                    MoodTier = "Neutral",
-                    Traits = new List<TraitEntry>(),
-                    ActiveThoughts = new List<ThoughtEntry>()
-                },
-                Skills = new SkillsSection { AllSkills = new List<SkillEntry>() },
-                Needs = new NeedsSection { AllNeeds = new List<NeedEntry>() },
-                Activity = new ActivitySection { Activities = new List<ActivityEntry>() },
-                Gear = new GearSection { WornGear = new List<GearItem>(), Inventory = new List<GearItem>() },
-                Backstory = new BackstorySection(),
-                Social = new SocialSection { Relations = new List<SocialRelation>() },
-                Perspective = new PerspectiveSection { VisiblePawnSnapshots = new List<PawnRelationSnapshot>() },
-                Psychology = new PsychologySection
-                {
-                    BaseVector = BigFiveVector.Zero,
-                    TotalVector = BigFiveVector.Zero,
-                    ExternalVectors = new Dictionary<string, BigFiveVector>()
-                }
-            };
+                _sections = sections;
+            }
+
+            public string GetSectionPrompt(object pawn, string sectionName, bool includeMemoryDetails = false)
+            {
+                // memory_full is used for full-view memory details
+                if (sectionName == "memory" && includeMemoryDetails)
+                    return _sections.TryGetValue("memory_full", out var full) ? full :
+                           _sections.TryGetValue("memory", out var mem) ? mem : null;
+                return _sections.TryGetValue(sectionName, out var text) ? text : null;
+            }
         }
 
         private class TestGameEvent : IGameEvent

@@ -1,4 +1,6 @@
 using RimLife.Cards;
+using RimLife.Core;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -138,17 +140,18 @@ namespace RimLife.Framework.Mcp
         }
 
         // ================================================================
-        // CharacterCard (可选子模块)
+        // CharacterCard (view 分层)
         // ================================================================
 
         /// <summary>
-        /// 序列化 CharacterCard。sections 为空或 null 时包含全部子模块。
-        /// sections 格式："health,mood,skills"（逗号分隔）。
+        /// 序列化 CharacterCard。view 控制数据层级：
+        /// "static"（默认）= 客观属性；"dynamic" = + 视角/记忆快照；"full" = + 完整记忆流水。
         /// </summary>
-        public static string SerializeCharacterCard(CharacterCard card, string sections)
+        public static string SerializeCharacterCard(CharacterCard card, object pawn, string view,
+            IPawnPromptProvider promptProvider)
         {
             if (card == null) return "{}";
-            var w = new JsonWriter(2048);
+            var w = new JsonWriter(4096);
 
             // 基本元数据（始终包含）
             w.Prop("id", card.ID ?? "");
@@ -164,329 +167,51 @@ namespace RimLife.Framework.Mcp
             w.Prop("isDowned", card.IsDowned);
             w.Prop("isAwake", card.IsAwake);
 
-            // 解析 sections
-            var requested = ParseSections(sections);
-
-            bool health = requested.Count == 0 || requested.Contains("health");
-            bool mood = requested.Count == 0 || requested.Contains("mood");
-            bool skills = requested.Count == 0 || requested.Contains("skills");
-            bool needs = requested.Count == 0 || requested.Contains("needs");
-            bool activity = requested.Count == 0 || requested.Contains("activity");
-            bool gear = requested.Count == 0 || requested.Contains("gear");
-            bool backstory = requested.Count == 0 || requested.Contains("backstory");
-            bool social = requested.Count == 0 || requested.Contains("social");
-            bool perspective = requested.Count == 0 || requested.Contains("perspective");
-            bool psychology = requested.Count == 0 || requested.Contains("psychology");
+            bool isDynamic = string.Equals(view, "dynamic", StringComparison.OrdinalIgnoreCase);
+            bool isFull = string.Equals(view, "full", StringComparison.OrdinalIgnoreCase);
 
             var activeSections = new List<string>();
-            if (health && card.Health != null) { w.PropRaw("health", SerializeHealth(card.Health)); activeSections.Add("health"); }
-            if (mood && card.Mood != null) { w.PropRaw("mood", SerializeMood(card.Mood)); activeSections.Add("mood"); }
-            if (skills && card.Skills != null) { w.PropRaw("skills", SerializeSkills(card.Skills)); activeSections.Add("skills"); }
-            if (needs && card.Needs != null) { w.PropRaw("needs", SerializeNeeds(card.Needs)); activeSections.Add("needs"); }
-            if (activity && card.Activity != null) { w.PropRaw("activity", SerializeActivity(card.Activity)); activeSections.Add("activity"); }
-            if (gear && card.Gear != null) { w.PropRaw("gear", SerializeGear(card.Gear)); activeSections.Add("gear"); }
-            if (backstory && card.Backstory != null) { w.PropRaw("backstory", SerializeBackstory(card.Backstory)); activeSections.Add("backstory"); }
-            if (social && card.Social != null) { w.PropRaw("social", SerializeSocial(card.Social)); activeSections.Add("social"); }
-            if (perspective && card.Perspective != null) { w.PropRaw("perspective", SerializePerspective(card.Perspective)); activeSections.Add("perspective"); }
-            if (psychology && card.Psychology != null) { w.PropRaw("psychology", SerializePsychology(card.Psychology)); activeSections.Add("psychology"); }
 
-            // Sections 数组（始终写入，即使为空）
-            var secSb = new StringBuilder("[");
-            for (int i = 0; i < activeSections.Count; i++)
+            // 静态层（始终包含）
+            AppendSection(w, promptProvider, pawn, "health", activeSections);
+            AppendSection(w, promptProvider, pawn, "mood", activeSections);
+            AppendSection(w, promptProvider, pawn, "skills", activeSections);
+            AppendSection(w, promptProvider, pawn, "needs", activeSections);
+            AppendSection(w, promptProvider, pawn, "activity", activeSections);
+            AppendSection(w, promptProvider, pawn, "gear", activeSections);
+            AppendSection(w, promptProvider, pawn, "backstory", activeSections);
+            AppendSection(w, promptProvider, pawn, "social", activeSections);
+            AppendSection(w, promptProvider, pawn, "psychology", activeSections);
+
+            // 动态层
+            if (isDynamic || isFull)
             {
-                if (i > 0) secSb.Append(',');
-                secSb.Append('"');
-                secSb.Append(JsonHelper.Escape(activeSections[i]));
-                secSb.Append('"');
+                AppendSection(w, promptProvider, pawn, "perspective", activeSections);
+                AppendSection(w, promptProvider, pawn, "memory", activeSections, isFull);
             }
-            secSb.Append(']');
-            w.PropRaw("sections", secSb.ToString());
+
+            // Sections 数组（始终写入）
+            w.Array("sections", activeSections.Count > 0 ? activeSections : null);
+            // 确保空数组也被写入（JsonWriter.Array 在空列表时跳过）
+            if (activeSections.Count == 0)
+                w.PropRaw("sections", "[]");
+            w.Prop("view", isFull ? "full" : isDynamic ? "dynamic" : "static");
             return w.Close();
         }
 
-        private static HashSet<string> ParseSections(string sections)
+        /// <summary>
+        /// 尝试获取 section prompt，非空则写入 JSON prop 并加入 activeSections。
+        /// </summary>
+        private static void AppendSection(JsonWriter w, IPawnPromptProvider promptProvider,
+            object pawn, string sectionName, List<string> activeSections,
+            bool includeMemoryDetails = false)
         {
-            var result = new HashSet<string>();
-            if (string.IsNullOrEmpty(sections)) return result;
-            foreach (var s in sections.Split(new char[] { ',' }))
+            string text = promptProvider.GetSectionPrompt(pawn, sectionName, includeMemoryDetails);
+            if (!string.IsNullOrEmpty(text))
             {
-                var trimmed = s.Trim().ToLowerInvariant();
-                if (trimmed.Length > 0) result.Add(trimmed);
+                w.Prop(sectionName, text);
+                activeSections.Add(sectionName);
             }
-            return result;
-        }
-
-        // --- Health ---
-        private static string SerializeHealth(HealthSection h)
-        {
-            var w = new JsonWriter(512);
-            w.Prop("summaryPain", h.SummaryPain, "F2");
-            w.Prop("summaryBleedRate", h.SummaryBleedRate, "F2");
-            w.Prop("painTier", h.PainTier ?? "");
-            w.Prop("bleedTier", h.BleedTier ?? "");
-
-            if (h.Capacities != null && h.Capacities.Count > 0)
-            {
-                var cw = new JsonWriter(256);
-                foreach (var kv in h.Capacities)
-                    cw.Prop(kv.Key, kv.Value, "F2");
-                w.PropRaw("capacities", cw.Close());
-            }
-
-            if (h.CapacityTiers != null && h.CapacityTiers.Count > 0)
-            {
-                var tw = new JsonWriter(256);
-                foreach (var kv in h.CapacityTiers)
-                    tw.Prop(kv.Key, kv.Value ?? "");
-                w.PropRaw("capacityTiers", tw.Close());
-            }
-
-            if (h.Injuries != null && h.Injuries.Count > 0)
-            {
-                var injuries = new List<string>();
-                foreach (var i in h.Injuries)
-                {
-                    var iw = new JsonWriter(128);
-                    iw.Prop("label", i.Label ?? "");
-                    iw.Prop("part", i.Part ?? "");
-                    iw.Prop("severity", i.Severity, "F2");
-                    iw.Prop("isBleeding", i.IsBleeding);
-                    iw.Prop("isPermanent", i.IsPermanent);
-                    iw.Prop("isInfection", i.IsInfection);
-                    iw.Prop("tendQuality", i.TendQuality, "F2");
-                    iw.Prop("ageTicks", i.AgeTicks);
-                    iw.Prop("immunity", i.Immunity, "F2");
-                    iw.Prop("compDisappears", i.CompDisappears);
-                    injuries.Add(iw.Close());
-                }
-                w.ArrayRaw("injuries", injuries);
-            }
-
-            return w.Close();
-        }
-
-        // --- Mood ---
-        private static string SerializeMood(MoodSection m)
-        {
-            var w = new JsonWriter(512);
-            w.Prop("moodLevel", m.MoodLevel, "F2");
-            w.Prop("moodTier", m.MoodTier ?? "");
-            if (!string.IsNullOrEmpty(m.MentalStateLabel))
-                w.Prop("mentalStateLabel", m.MentalStateLabel);
-
-            if (m.Traits != null && m.Traits.Count > 0)
-            {
-                var traits = new List<string>();
-                foreach (var t in m.Traits)
-                {
-                    var tw = new JsonWriter(64);
-                    tw.Prop("defName", t.DefName ?? "");
-                    tw.Prop("label", t.Label ?? "");
-                    tw.Prop("degree", t.Degree);
-                    traits.Add(tw.Close());
-                }
-                w.ArrayRaw("traits", traits);
-            }
-
-            if (m.ActiveThoughts != null && m.ActiveThoughts.Count > 0)
-            {
-                var thoughts = new List<string>();
-                foreach (var t in m.ActiveThoughts)
-                {
-                    var tw = new JsonWriter(64);
-                    tw.Prop("label", t.Label ?? "");
-                    tw.Prop("moodOffset", t.MoodOffset, "F1");
-                    tw.Prop("durationRatio", t.DurationRatio, "F2");
-                    thoughts.Add(tw.Close());
-                }
-                w.ArrayRaw("activeThoughts", thoughts);
-            }
-
-            return w.Close();
-        }
-
-        // --- Skills ---
-        private static string SerializeSkills(SkillsSection s)
-        {
-            var w = new JsonWriter(512);
-            if (s.AllSkills != null && s.AllSkills.Count > 0)
-            {
-                var skills = new List<string>();
-                foreach (var sk in s.AllSkills)
-                {
-                    var sw = new JsonWriter(64);
-                    sw.Prop("defName", sk.DefName ?? "");
-                    sw.Prop("label", sk.Label ?? "");
-                    sw.Prop("level", sk.Level);
-                    sw.Prop("passion", sk.Passion ?? "");
-                    sw.Prop("hasPassion", sk.HasPassion);
-                    sw.Prop("totallyDisabled", sk.TotallyDisabled);
-                    skills.Add(sw.Close());
-                }
-                w.ArrayRaw("allSkills", skills);
-            }
-            return w.Close();
-        }
-
-        // --- Needs ---
-        private static string SerializeNeeds(NeedsSection n)
-        {
-            var w = new JsonWriter(512);
-            if (n.AllNeeds != null && n.AllNeeds.Count > 0)
-            {
-                var needs = new List<string>();
-                foreach (var nd in n.AllNeeds)
-                {
-                    var nw = new JsonWriter(64);
-                    nw.Prop("defName", nd.DefName ?? "");
-                    nw.Prop("label", nd.Label ?? "");
-                    nw.Prop("curLevel", nd.CurLevel, "F2");
-                    nw.Prop("thresholdLow", nd.ThresholdLow, "F2");
-                    nw.Prop("isCritical", nd.IsCritical);
-                    nw.Prop("needUrgency", nd.NeedUrgency ?? "");
-                    needs.Add(nw.Close());
-                }
-                w.ArrayRaw("allNeeds", needs);
-            }
-            return w.Close();
-        }
-
-        // --- Activity ---
-        private static string SerializeActivity(ActivitySection a)
-        {
-            var w = new JsonWriter(256);
-            w.Prop("posture", a.Posture ?? "");
-            if (a.Activities != null && a.Activities.Count > 0)
-            {
-                var acts = new List<string>();
-                foreach (var ac in a.Activities)
-                {
-                    var aw = new JsonWriter(64);
-                    aw.Prop("jobDefName", ac.JobDefName ?? "");
-                    aw.Prop("jobReport", ac.JobReport ?? "");
-                    acts.Add(aw.Close());
-                }
-                w.ArrayRaw("activities", acts);
-            }
-            return w.Close();
-        }
-
-        // --- Gear ---
-        private static string SerializeGear(GearSection g)
-        {
-            var w = new JsonWriter(512);
-            if (g.WornGear != null && g.WornGear.Count > 0)
-                w.ArrayRaw("wornGear", SerializeGearItems(g.WornGear));
-            if (g.Inventory != null && g.Inventory.Count > 0)
-                w.ArrayRaw("inventory", SerializeGearItems(g.Inventory));
-            return w.Close();
-        }
-
-        private static List<string> SerializeGearItems(IReadOnlyList<GearItem> items)
-        {
-            var result = new List<string>();
-            foreach (var gi in items)
-            {
-                var gw = new JsonWriter(64);
-                gw.Prop("name", gi.Name ?? "");
-                gw.Prop("quality", gi.Quality ?? "");
-                gw.Prop("durability", gi.Durability, "F2");
-                gw.Prop("conditionLabel", gi.ConditionLabel ?? "");
-                gw.Prop("count", gi.Count);
-                result.Add(gw.Close());
-            }
-            return result;
-        }
-
-        // --- Backstory ---
-        private static string SerializeBackstory(BackstorySection b)
-        {
-            var w = new JsonWriter(256);
-            if (b.Childhood.HasValue)
-            {
-                var cw = new JsonWriter(128);
-                cw.Prop("title", b.Childhood.Value.Title ?? "");
-                cw.Prop("description", b.Childhood.Value.Description ?? "");
-                w.PropRaw("childhood", cw.Close());
-            }
-            if (b.Adulthood.HasValue)
-            {
-                var aw = new JsonWriter(128);
-                aw.Prop("title", b.Adulthood.Value.Title ?? "");
-                aw.Prop("description", b.Adulthood.Value.Description ?? "");
-                w.PropRaw("adulthood", aw.Close());
-            }
-            return w.Close();
-        }
-
-        // --- Social ---
-        public static string SerializeSocial(SocialSection s)
-        {
-            var w = new JsonWriter(512);
-            w.Prop("colonyOpinionAverage", s.ColonyOpinionAverage, "F1");
-            if (s.Relations != null && s.Relations.Count > 0)
-            {
-                var rels = new List<string>();
-                foreach (var r in s.Relations)
-                {
-                    var rw = new JsonWriter(64);
-                    rw.Prop("otherID", r.OtherID ?? "");
-                    rw.Prop("otherName", r.OtherName ?? "");
-                    rw.Prop("relationType", r.RelationType ?? "");
-                    rw.Prop("opinion", r.Opinion, "F0");
-                    rw.Prop("opinionTier", r.OpinionTier ?? "");
-                    rw.Prop("isReciprocal", r.IsReciprocal);
-                    rels.Add(rw.Close());
-                }
-                w.ArrayRaw("relations", rels);
-            }
-            return w.Close();
-        }
-
-        // --- Perspective ---
-        private static string SerializePerspective(PerspectiveSection p)
-        {
-            var w = new JsonWriter(256);
-            if (p.VisiblePawnSnapshots != null && p.VisiblePawnSnapshots.Count > 0)
-            {
-                var snaps = new List<string>();
-                foreach (var s in p.VisiblePawnSnapshots)
-                {
-                    var sw = new JsonWriter(64);
-                    sw.Prop("id", s.ID ?? "");
-                    sw.Prop("name", s.Name ?? "");
-                    sw.Prop("defName", s.DefName ?? "");
-                    sw.Prop("distance", s.Distance, "F1");
-                    snaps.Add(sw.Close());
-                }
-                w.ArrayRaw("visiblePawnSnapshots", snaps);
-            }
-            return w.Close();
-        }
-
-        // --- Psychology ---
-        private static string SerializePsychology(PsychologySection p)
-        {
-            var w = new JsonWriter(256);
-            w.Prop("openness", p.Openness ?? "");
-            w.Prop("conscientiousness", p.Conscientiousness ?? "");
-            w.Prop("extraversion", p.Extraversion ?? "");
-            w.Prop("agreeableness", p.Agreeableness ?? "");
-            w.Prop("neuroticism", p.Neuroticism ?? "");
-            w.PropRaw("baseVector", SerializeBigFiveVector(p.BaseVector));
-            w.PropRaw("totalVector", SerializeBigFiveVector(p.TotalVector));
-            return w.Close();
-        }
-
-        private static string SerializeBigFiveVector(BigFiveVector v)
-        {
-            var w = new JsonWriter(64);
-            w.Prop("openness", v.Openness);
-            w.Prop("conscientiousness", v.Conscientiousness);
-            w.Prop("extraversion", v.Extraversion);
-            w.Prop("agreeableness", v.Agreeableness);
-            w.Prop("neuroticism", v.Neuroticism);
-            return w.Close();
         }
 
         // ================================================================

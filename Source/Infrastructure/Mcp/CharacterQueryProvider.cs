@@ -1,4 +1,5 @@
 using RimLife.Cards;
+using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
 using RimLife.Mappers;
@@ -35,22 +36,22 @@ namespace RimLife.Infrastructure.Mcp
         // ================================================================
 
         /// <summary>
-        /// 获取指定角色的完整人物卡，可选指定需要的子模块。
+        /// 获取指定角色的完整人物卡，按 view 分层控制数据量。
         /// </summary>
         [McpTool(Name = "get_character_card",
-                 Description = "获取指定角色的完整人物卡。可选指定需要的子模块以节省上下文。")]
+                 Description = "获取指定角色的完整人物卡。view 控制数据层级：\"static\"（默认）= 客观属性；\"dynamic\" = + 视角/记忆快照；\"full\" = + 完整记忆流水账。")]
         public static string GetCharacterCard(
             [McpParam(Description = "角色唯一 ID（ThingID）")] string pawnId,
-            [McpParam(Description = "需要的子模块：health/mood/skills/needs/activity/gear/backstory/social/perspective/psychology。逗号分隔，留空=全部",
-                      Required = McpRequired.False)] string sections = null)
+            [McpParam(Description = "数据层级：static（默认，客观属性）/ dynamic（+视角/记忆快照）/ full（+完整记忆流水）",
+                      Required = McpRequired.False)] string view = null)
         {
             try
             {
                 var pawn = PawnQueryHelper.FindPawnById(pawnId);
                 if (pawn == null) return "{}";
 
-                var card = PawnQueryHelper.BuildCharacterCard(pawn, sections);
-                return CardSerializer.SerializeCharacterCard(card, sections);
+                var card = PawnQueryHelper.BuildCharacterCard(pawn, view);
+                return CardSerializer.SerializeCharacterCard(card, pawn, view, RimLifeCore.PromptProvider);
             }
             catch (Exception e)
             {
@@ -121,29 +122,17 @@ namespace RimLife.Infrastructure.Mcp
                         if (skill == null || skill.Level < skillLevel) continue;
                     }
 
-                    // 构建卡片：basic + 按需子模块
+                    // 构建卡片：basic only，序列化时由 promptProvider 按需填充
                     var card = CharacterCardMapper.CreateBasic(p);
-                    if (!string.IsNullOrEmpty(skillDefName))
-                        card.WithSkills(p);
-                    if (!string.IsNullOrEmpty(moodTier))
-                        card.WithMood(p);
-                    if (injuredOnly)
-                        card.WithHealth(p);
 
                     results.Add(card);
                 }
 
-                // 序列化为列表
+                // 序列化为列表（find_characters 始终使用 static view）
                 var jsons = new List<string>();
+                var promptProvider = RimLifeCore.PromptProvider;
                 foreach (var c in results)
-                {
-                    var activeSections = new List<string>();
-                    if (c.Skills != null) activeSections.Add("skills");
-                    if (c.Mood != null) activeSections.Add("mood");
-                    if (c.Health != null) activeSections.Add("health");
-                    string secs = activeSections.Count > 0 ? string.Join(",", activeSections) : null;
-                    jsons.Add(CardSerializer.SerializeCharacterCard(c, secs));
-                }
+                    jsons.Add(CardSerializer.SerializeCharacterCard(c, null, "static", promptProvider));
 
                 return PawnQueryHelper.SerializeJsonArray(jsons);
             }

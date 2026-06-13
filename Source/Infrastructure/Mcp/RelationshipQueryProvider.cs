@@ -1,6 +1,6 @@
 using RimLife.Cards;
+using RimLife.Core;
 using RimLife.Framework.Mcp;
-using RimLife.Mappers;
 using System;
 using System.Collections.Generic;
 using Verse;
@@ -39,10 +39,8 @@ namespace RimLife.Infrastructure.Mcp
                 var pawn = PawnQueryHelper.FindPawnById(pawnId);
                 if (pawn == null) return "{}";
 
-                var card = CharacterCardMapper.CreateBasic(pawn).WithSocial(pawn);
-                if (card.Social == null) return "{}";
-
-                return CardSerializer.SerializeSocial(card.Social);
+                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "social");
+                return prompt ?? "{}";
             }
             catch (Exception e)
             {

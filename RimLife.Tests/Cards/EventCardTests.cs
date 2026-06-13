@@ -135,20 +135,17 @@ namespace RimLife.Tests.Cards
         // ================================================================
 
         [Fact]
-        public void CharacterCard_Defaults_AllowNullSections()
+        public void CharacterCard_Defaults_AllowNullIdentity()
         {
             var card = new CharacterCard();
 
-            Assert.Null(card.Health);
-            Assert.Null(card.Mood);
-            Assert.Null(card.Skills);
-            Assert.Null(card.Needs);
-            Assert.Null(card.Activity);
-            Assert.Null(card.Gear);
-            Assert.Null(card.Backstory);
-            Assert.Null(card.Social);
-            Assert.Null(card.Perspective);
-            Assert.Null(card.Psychology);
+            // 默认值应为 null / false / 0
+            Assert.Null(card.ID);
+            Assert.Null(card.Name);
+            Assert.False(card.IsDead);
+            Assert.False(card.IsDowned);
+            Assert.False(card.IsAwake);
+            Assert.Equal(0f, card.AgeBiologicalYears);
         }
 
         [Fact]
