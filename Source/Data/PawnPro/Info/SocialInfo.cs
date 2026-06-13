@@ -73,6 +73,17 @@ namespace RimLife
             return new SocialInfo(relations, colonyAvg);
         }
 
+        public string ToPrompt()
+        {
+            if (Relations == null || Relations.Count == 0) return null;
+
+            var parts = Relations.Select(dr => $"{dr.OtherName}: {dr.RelationType}({dr.OpinionTier})").ToList();
+            string avgTier = SemanticLabels.MapOpinionTier(ColonyOpinionAverage);
+            parts.Add($"殖民地平均: {avgTier}");
+
+            return string.Join(", ", parts);
+        }
+
         /// <summary>
         /// 异步创建社交关系快照。
         /// </summary>

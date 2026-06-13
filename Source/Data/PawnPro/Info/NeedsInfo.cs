@@ -72,6 +72,22 @@ namespace RimLife
             return new NeedsInfo(allNeedsList);
         }
 
+        public string ToPrompt()
+        {
+            if (AllNeeds == null || AllNeeds.Count == 0) return null;
+
+            var parts = new List<string>();
+            foreach (var need in AllNeeds)
+            {
+                if (need.NeedUrgency != "Normal" || need.CurLevel < 0.5f)
+                {
+                    parts.Add($"{need.Label}: {need.NeedUrgency}");
+                }
+            }
+
+            return parts.Count > 0 ? string.Join(", ", parts) : null;
+        }
+
         public static Task<NeedsInfo> CreateFromAsync(Pawn p)
         {
             if (p == null) return Task.FromResult(new NeedsInfo());

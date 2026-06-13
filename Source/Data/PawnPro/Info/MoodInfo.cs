@@ -102,6 +102,36 @@ namespace RimLife
             return new MoodInfo(moodLevel, SemanticLabels.MapMoodTier(moodLevel), mentalStateLabel, traits, activeThoughts);
         }
 
+        public string ToPrompt()
+        {
+            var sb = new StringBuilder(256);
+            sb.Append("心情: ");
+            sb.Append(MoodTier);
+
+            if (!string.IsNullOrEmpty(MentalStateLabel))
+            {
+                sb.Append(" [");
+                sb.Append(MentalStateLabel);
+                sb.Append(']');
+            }
+
+            if (Traits != null && Traits.Count > 0)
+            {
+                var traitStrs = Traits.Select(t => $"{t.Label}[{t.Degree:+0;-0}]");
+                sb.Append("; 特性: ");
+                sb.Append(string.Join(", ", traitStrs));
+            }
+
+            if (ActiveThoughts != null && ActiveThoughts.Count > 0)
+            {
+                var thoughtStrs = ActiveThoughts.Take(5).Select(t => $"{t.Label}({t.MoodOffset:+0.#;-0.#})");
+                sb.Append("; 想法: ");
+                sb.Append(string.Join(", ", thoughtStrs));
+            }
+
+            return sb.ToString();
+        }
+
         public static Task<MoodInfo> CreateFromAsync(Pawn p)
         {
             if (p == null) return Task.FromResult(new MoodInfo());

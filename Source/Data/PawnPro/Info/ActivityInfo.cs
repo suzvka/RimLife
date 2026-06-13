@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Verse;
 using Verse.AI;
@@ -74,6 +75,28 @@ namespace RimLife
             }
 
             return new ActivityInfo(posture, activities);
+        }
+
+        public string ToPrompt()
+        {
+            var sb = new StringBuilder(128);
+            sb.Append("姿态: ");
+            sb.Append(Posture ?? "?");
+
+            if (Activities != null && Activities.Count > 0)
+            {
+                sb.Append(", 当前: ");
+                sb.Append(Activities[0].JobReport);
+
+                if (Activities.Count > 1)
+                {
+                    var queueParts = Activities.Skip(1).Take(3).Select(a => a.JobReport);
+                    sb.Append(", 队列: ");
+                    sb.Append(string.Join(" → ", queueParts));
+                }
+            }
+
+            return sb.ToString();
         }
 
         public static Task<ActivityInfo> CreateFromAsync(Pawn p)

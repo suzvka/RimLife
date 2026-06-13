@@ -62,6 +62,37 @@ namespace RimLife
                 Count = thing.stackCount
             };
         }
+
+        public string ToPrompt()
+        {
+            var sb = new StringBuilder(256);
+
+            if (WornGear != null && WornGear.Count > 0)
+            {
+                var parts = WornGear.Select(g => FormatGearPrompt(g));
+                sb.Append("穿着: ");
+                sb.Append(string.Join(", ", parts));
+            }
+
+            if (Inventory != null && Inventory.Count > 0)
+            {
+                if (sb.Length > 0) sb.Append("; ");
+                var parts = Inventory.Select(g => FormatGearPrompt(g));
+                sb.Append("背包: ");
+                sb.Append(string.Join(", ", parts));
+            }
+
+            return sb.Length > 0 ? sb.ToString() : null;
+        }
+
+        private static string FormatGearPrompt(GearItem g)
+        {
+            string extra = !string.IsNullOrEmpty(g.Quality) ? $"{g.Quality}, {g.ConditionLabel}" : g.ConditionLabel;
+            if (g.Count > 1)
+                return $"{g.Name} ×{g.Count}({extra})";
+            else
+                return $"{g.Name}({extra})";
+        }
     }
 
     public struct GearItem

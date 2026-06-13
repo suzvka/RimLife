@@ -64,7 +64,30 @@ namespace RimLife
 
 			return new SkillsInfo(list);
 		}
-
+		
+		public string ToPrompt()
+		{
+			if (AllSkills == null || AllSkills.Count == 0) return null;
+		
+			var parts = new List<string>();
+			foreach (var sr in AllSkills)
+			{
+				string passionStr = sr.Passion switch
+				{
+					"Major" => "🔥",
+					"Minor" => "🔥?",
+					_ => ""
+				};
+		
+				string entry = sr.TotallyDisabled
+					? $"{sr.Label} 禁用"
+					: $"{sr.Label} {sr.Level}{passionStr}";
+				parts.Add(entry);
+			}
+		
+			return parts.Count > 0 ? string.Join(", ", parts) : null;
+		}
+		
 		/// <summary>
 		/// 通过将工作分派到主线程来异步创建 SkillsInfo 快照。
 		/// </summary>

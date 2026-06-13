@@ -1,6 +1,7 @@
 ﻿using RimWorld;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Verse;
 using RimLife.Framework;
@@ -77,6 +78,20 @@ namespace RimLife
             }
 
             return new Perspective(visiblePawns);
+        }
+
+        public string ToPrompt()
+        {
+            if (VisiblePawnSnapshots == null || VisiblePawnSnapshots.Count == 0) return null;
+
+            var sb = new StringBuilder(256);
+            sb.Append("视野内: ");
+            var parts = VisiblePawnSnapshots
+                .OrderBy(v => v.Distance)
+                .Take(10)
+                .Select(v => $"{v.Name}({v.Distance:F1}m)");
+            sb.Append(string.Join(", ", parts));
+            return sb.ToString();
         }
 
         public static Task<Perspective> CreateFromAsync(Pawn p)

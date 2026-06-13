@@ -51,6 +51,19 @@ namespace RimLife
 
             return new BackstoryInfo(childhood, adulthood);
         }
+
+        public string ToPrompt()
+        {
+            if (Childhood == null && Adulthood == null) return null;
+
+            var parts = new List<string>();
+            if (Childhood.HasValue)
+                parts.Add($"童年: {Childhood.Value.Title}——{Childhood.Value.Description}");
+            if (Adulthood.HasValue)
+                parts.Add($"成年: {Adulthood.Value.Title}——{Adulthood.Value.Description}");
+
+            return parts.Count > 0 ? string.Join("; ", parts) : null;
+        }
     }
 
     public struct BackstoryEntry

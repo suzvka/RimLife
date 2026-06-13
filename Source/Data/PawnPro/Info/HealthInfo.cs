@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEngine;
+using System.Text;
 using Verse;
 using RimLife.Framework;
 
@@ -185,6 +186,48 @@ namespace RimLife
 
 
         #endregion
+        public string ToPrompt()
+        {
+            var sb = new StringBuilder(256);
+            sb.Append("疼痛: ");
+            sb.Append(PainTier);
+            sb.Append(", 流血: ");
+            sb.Append(BleedTier);
+
+            foreach (var kv in CapacityTiers)
+            {
+                if (kv.Value != "Normal" || (Capacities.TryGetValue(kv.Key, out float v) && v < 0.9f))
+                {
+                    sb.Append(", ");
+                    sb.Append(kv.Key);
+                    sb.Append(": ");
+                    sb.Append(kv.Value);
+                }
+            }
+
+            if (Injuries != null && Injuries.Count > 0)
+            {
+                var injuryParts = new List<string>();
+                foreach (var h in Injuries)
+                {
+                    string flags = "";
+                    if (h.IsBleeding) flags += "🩸";
+                    if (h.IsPermanent) flags += "永久";
+                    if (h.IsInfection) flags += "感染";
+                    string entry = string.IsNullOrEmpty(flags)
+                        ? $"{h.Part}·{h.Label}"
+                        : $"{h.Part}·{h.Label}({flags})";
+                    injuryParts.Add(entry);
+                }
+                if (injuryParts.Count > 0)
+                {
+                    sb.Append("; 受伤: ");
+                    sb.Append(string.Join(", ", injuryParts));
+                }
+            }
+
+            return sb.ToString();
+        }
     }
 
     public struct HealthEntry
