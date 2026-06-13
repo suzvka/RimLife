@@ -17,24 +17,57 @@ namespace RimLife.Infrastructure
     /// </summary>
     public class PawnPromptProvider : IPawnPromptProvider
     {
-        public string GetSectionPrompt(object pawn, string sectionName, bool includeMemoryDetails = false)
+        public string GetCharacterPrompt(string pawnId, string view)
         {
-            if (!(pawn is Pawn p) || p == null) return null;
+            var pawn = ResolvePawn(pawnId);
+            if (pawn == null) return null;
 
-            switch (sectionName)
+            bool isDynamic = string.Equals(view, "dynamic", StringComparison.OrdinalIgnoreCase);
+            bool isFull = string.Equals(view, "full", StringComparison.OrdinalIgnoreCase);
+
+            var sb = new StringBuilder(4096);
+
+            // === Static layer (always included) ===
+            AppendIfNotNull(sb, "【健康】", SerializeHealth(pawn));
+            AppendIfNotNull(sb, "【心情】", SerializeMood(pawn));
+            AppendIfNotNull(sb, "【技能】", SerializeSkills(pawn));
+            AppendIfNotNull(sb, "【需求】", SerializeNeeds(pawn));
+            AppendIfNotNull(sb, "【活动】", SerializeActivity(pawn));
+            AppendIfNotNull(sb, "【装备】", SerializeGear(pawn));
+            AppendIfNotNull(sb, "【背景】", SerializeBackstory(pawn));
+            AppendIfNotNull(sb, "【社交】", SerializeSocial(pawn));
+            AppendIfNotNull(sb, "【人格】", SerializePsychology(pawn));
+
+            // === Dynamic layer ===
+            if (isDynamic || isFull)
             {
-                case "health": return SerializeHealth(p);
-                case "mood": return SerializeMood(p);
-                case "skills": return SerializeSkills(p);
-                case "needs": return SerializeNeeds(p);
-                case "activity": return SerializeActivity(p);
-                case "gear": return SerializeGear(p);
-                case "backstory": return SerializeBackstory(p);
-                case "social": return SerializeSocial(p);
-                case "perspective": return SerializePerspective(p);
-                case "psychology": return SerializePsychology(p);
-                case "memory": return SerializeMemory(p, includeMemoryDetails);
-                default: return null;
+                AppendIfNotNull(sb, "【视野】", SerializePerspective(pawn));
+                AppendIfNotNull(sb, "【记忆】", SerializeMemory(pawn, isFull));
+            }
+
+            return sb.Length > 0 ? sb.ToString().TrimEnd() : null;
+        }
+
+        public string GetSocialPrompt(string pawnId)
+        {
+            var pawn = ResolvePawn(pawnId);
+            if (pawn == null) return null;
+            return SerializeSocial(pawn);
+        }
+
+        private static Pawn ResolvePawn(string pawnId)
+        {
+            if (string.IsNullOrEmpty(pawnId)) return null;
+            return Mcp.PawnQueryHelper.FindPawnById(pawnId);
+        }
+
+        private static void AppendIfNotNull(StringBuilder sb, string header, string text)
+        {
+            if (!string.IsNullOrEmpty(text))
+            {
+                if (sb.Length > 0) sb.Append('\n');
+                sb.Append(header);
+                sb.Append(text);
             }
         }
 

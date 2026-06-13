@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using RimLife;
 
 namespace RimLife.Cards
 {
@@ -21,53 +22,12 @@ namespace RimLife.Cards
         public string LightLabel;
 
         /// <summary>室内信息（Outdoors 时为 null）。</summary>
-        public RoomSection Room;
+        public RoomInfo Room;
 
         /// <summary>室外天气信息（Indoors 时为 null）。</summary>
-        public WeatherSection Weather;
+        public WeatherInfo Weather;
 
         /// <summary>环境内物品分类摘要。</summary>
         public Dictionary<string, int> ThingSummary;
-    }
-
-    // ================================================================
-    // Room Section
-    // ================================================================
-
-    public class RoomSection
-    {
-        /// <summary>房间角色标签（卧室、餐厅、监狱...）。</summary>
-        public string RoleLabel;
-
-        /// <summary>房间数值统计。</summary>
-        public RoomStats BaseStats;
-
-        /// <summary>语义标签列表。</summary>
-        public IReadOnlyList<string> Tags;
-
-        /// <summary>房间内物品分类摘要。</summary>
-        public Dictionary<string, int> ThingSummary;
-    }
-
-    public struct RoomStats
-    {
-        public float Impressiveness;
-        public float Beauty;
-        public float Wealth;
-        public float Space;
-        public float Cleanliness;
-    }
-
-    // ================================================================
-    // Weather Section
-    // ================================================================
-
-    public struct WeatherSection
-    {
-        public string Label;
-        public string Description;
-        public bool IsRain;
-        public bool IsSnow;
-        public float WindSpeed;
     }
 }

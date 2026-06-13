@@ -426,48 +426,19 @@ namespace RimLife.Tool
             }
             catch (Exception e) { Fail("CreateBasic 异常", e.Message); }
 
-            // Health
+            // CharacterPrompt (static view)
             try
             {
-                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "health");
+                var prompt = RimLifeCore.PromptProvider?.GetCharacterPrompt(pawn.ThingID, "static");
                 if (!string.IsNullOrEmpty(prompt))
                 {
-                    Pass("GetSectionPrompt(health) 成功");
-                    DumpObject("  Health", prompt);
+                    Pass("GetCharacterPrompt(static) 成功");
+                    DumpObject("  Prompt (first 200 chars)", prompt.Length > 200 ? prompt.Substring(0, 200) + "..." : prompt);
                 }
                 else
-                    Fail("GetSectionPrompt(health) 返回空");
+                    Fail("GetCharacterPrompt(static) 返回空");
             }
-            catch (Exception e) { Fail("GetSectionPrompt(health) 异常", e.Message); }
-
-            // Mood
-            try
-            {
-                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "mood");
-                if (!string.IsNullOrEmpty(prompt))
-                {
-                    Pass("GetSectionPrompt(mood) 成功");
-                    DumpObject("  Mood", prompt);
-                }
-                else
-                    Fail("GetSectionPrompt(mood) 返回空");
-            }
-            catch (Exception e) { Fail("GetSectionPrompt(mood) 异常", e.Message); }
-
-            // Needs
-            try
-            {
-                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "needs");
-                if (!string.IsNullOrEmpty(prompt))
-                {
-                    Pass("GetSectionPrompt(needs) 成功");
-                    DumpObject("  Needs", prompt);
-                }
-                else
-                    // 需求可能为空（动物等）
-                    Pass("GetSectionPrompt(needs) 返回空（可能正常）");
-            }
-            catch (Exception e) { Fail("GetSectionPrompt(needs) 异常", e.Message); }
+            catch (Exception e) { Fail("GetCharacterPrompt(static) 异常", e.Message); }
 
             // EnvironmentCardMapper
             try
@@ -660,7 +631,7 @@ namespace RimLife.Tool
                 try
                 {
                     var card = CharacterCardMapper.CreateBasic(pawn);
-                    var json = CardSerializer.SerializeCharacterCard(card, pawn, "static", RimLifeCore.PromptProvider);
+                    var json = CardSerializer.SerializeCharacterCard(card, "static", RimLifeCore.PromptProvider);
                     if (json.Length > 50 && json.Contains("\"id\""))
                     {
                         Pass($"SerializeCharacterCard 成功 ({json.Length} chars)");

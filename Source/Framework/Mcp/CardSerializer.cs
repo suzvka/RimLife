@@ -147,7 +147,7 @@ namespace RimLife.Framework.Mcp
         /// 序列化 CharacterCard。view 控制数据层级：
         /// "static"（默认）= 客观属性；"dynamic" = + 视角/记忆快照；"full" = + 完整记忆流水。
         /// </summary>
-        public static string SerializeCharacterCard(CharacterCard card, object pawn, string view,
+        public static string SerializeCharacterCard(CharacterCard card, string view,
             IPawnPromptProvider promptProvider)
         {
             if (card == null) return "{}";
@@ -167,51 +167,12 @@ namespace RimLife.Framework.Mcp
             w.Prop("isDowned", card.IsDowned);
             w.Prop("isAwake", card.IsAwake);
 
-            bool isDynamic = string.Equals(view, "dynamic", StringComparison.OrdinalIgnoreCase);
-            bool isFull = string.Equals(view, "full", StringComparison.OrdinalIgnoreCase);
+            // 一次调用获取全部语义文本
+            string prompt = promptProvider?.GetCharacterPrompt(card.ID, view);
+            w.Prop("prompt", prompt ?? "");
 
-            var activeSections = new List<string>();
-
-            // 静态层（始终包含）
-            AppendSection(w, promptProvider, pawn, "health", activeSections);
-            AppendSection(w, promptProvider, pawn, "mood", activeSections);
-            AppendSection(w, promptProvider, pawn, "skills", activeSections);
-            AppendSection(w, promptProvider, pawn, "needs", activeSections);
-            AppendSection(w, promptProvider, pawn, "activity", activeSections);
-            AppendSection(w, promptProvider, pawn, "gear", activeSections);
-            AppendSection(w, promptProvider, pawn, "backstory", activeSections);
-            AppendSection(w, promptProvider, pawn, "social", activeSections);
-            AppendSection(w, promptProvider, pawn, "psychology", activeSections);
-
-            // 动态层
-            if (isDynamic || isFull)
-            {
-                AppendSection(w, promptProvider, pawn, "perspective", activeSections);
-                AppendSection(w, promptProvider, pawn, "memory", activeSections, isFull);
-            }
-
-            // Sections 数组（始终写入）
-            w.Array("sections", activeSections.Count > 0 ? activeSections : null);
-            // 确保空数组也被写入（JsonWriter.Array 在空列表时跳过）
-            if (activeSections.Count == 0)
-                w.PropRaw("sections", "[]");
-            w.Prop("view", isFull ? "full" : isDynamic ? "dynamic" : "static");
+            w.Prop("view", string.IsNullOrEmpty(view) ? "static" : view);
             return w.Close();
-        }
-
-        /// <summary>
-        /// 尝试获取 section prompt，非空则写入 JSON prop 并加入 activeSections。
-        /// </summary>
-        private static void AppendSection(JsonWriter w, IPawnPromptProvider promptProvider,
-            object pawn, string sectionName, List<string> activeSections,
-            bool includeMemoryDetails = false)
-        {
-            string text = promptProvider.GetSectionPrompt(pawn, sectionName, includeMemoryDetails);
-            if (!string.IsNullOrEmpty(text))
-            {
-                w.Prop(sectionName, text);
-                activeSections.Add(sectionName);
-            }
         }
 
         // ================================================================

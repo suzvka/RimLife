@@ -1,3 +1,4 @@
+using RimLife;
 using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework.Mcp;
@@ -146,12 +147,12 @@ namespace RimLife.Tests.Framework
                 IsAwake = true
             };
 
-            var json = CardSerializer.SerializeCharacterCard(card, null, null, EmptyProvider);
+            var json = CardSerializer.SerializeCharacterCard(card, null, EmptyProvider);
 
             Assert.Contains("\"id\":\"pawn_1\"", json);
             Assert.Contains("\"name\":\"Alice\"", json);
             Assert.Contains("\"view\":\"static\"", json);
-            Assert.Contains("\"sections\":[]", json); // no sections populated
+            Assert.Contains("\"prompt\":\"\"", json); // no sections populated
         }
 
         [Fact]
@@ -170,17 +171,16 @@ namespace RimLife.Tests.Framework
                 ["memory"] = "心态: 警觉, 回顾: 看见Alice在附近, 最近: 发现Alice, STM: 1, LTM: 0"
             });
 
-            var json = CardSerializer.SerializeCharacterCard(card, null, "dynamic", provider);
+            var json = CardSerializer.SerializeCharacterCard(card, "dynamic", provider);
 
             Assert.Contains("\"view\":\"dynamic\"", json);
-            Assert.Contains("\"perspective\"", json);
-            Assert.Contains("\"memory\"", json);
+            Assert.Contains("\"prompt\"", json);
+            Assert.Contains("射击", json);
             Assert.Contains("心态: 警觉", json);
             Assert.Contains("看见Alice在附近", json);
-            // 静态 section 也应存在
-            Assert.Contains("\"skills\"", json);
-            // full 专属不应出现（provider 的 memory_full 未设置）
+            // full 专属不应出现
             Assert.DoesNotContain("STM详情", json);
+            Assert.DoesNotContain("LTM详情", json);
         }
 
         [Fact]
@@ -212,16 +212,15 @@ namespace RimLife.Tests.Framework
                 ["memory_full"] = "心态: 测试, STM: 1, LTM: 1\n  [STM详情] [100] Obs: 测试\n  [LTM详情] [50] test: 测试"
             });
 
-            var json = CardSerializer.SerializeCharacterCard(card, null, "full", provider);
+            var json = CardSerializer.SerializeCharacterCard(card, "full", provider);
 
             Assert.Contains("\"view\":\"full\"", json);
-            Assert.Contains("\"health\"", json);
-            Assert.Contains("\"mood\"", json);
-            Assert.Contains("\"skills\"", json);
-            Assert.Contains("\"needs\"", json);
-            Assert.Contains("\"backstory\"", json);
-            Assert.Contains("\"psychology\"", json);
-            Assert.Contains("\"memory\"", json);
+            Assert.Contains("\"prompt\"", json);
+            Assert.Contains("疼痛", json);
+            Assert.Contains("心情", json);
+            Assert.Contains("射击", json);
+            Assert.Contains("矿场", json);
+            Assert.Contains("开放性", json);
             Assert.Contains("心态: 测试", json);
             // full 专属结构化列表
             Assert.Contains("STM详情", json);
@@ -255,14 +254,15 @@ namespace RimLife.Tests.Framework
                 ["memory"] = "心态: 警觉"
             });
 
-            var json = CardSerializer.SerializeCharacterCard(card, null, "static", provider);
+            var json = CardSerializer.SerializeCharacterCard(card, "static", provider);
 
             Assert.Contains("\"view\":\"static\"", json);
-            Assert.Contains("\"health\"", json);
-            Assert.Contains("\"psychology\"", json);
+            Assert.Contains("\"prompt\"", json);
+            Assert.Contains("疼痛", json);
+            Assert.Contains("开放性", json);
             // dynamic/full 专属不应出现
-            Assert.DoesNotContain("\"perspective\"", json);
-            Assert.DoesNotContain("\"memory\"", json);
+            Assert.DoesNotContain("视野内", json);
+            Assert.DoesNotContain("心态: 警觉", json);
         }
 
         // ================================================================
@@ -316,7 +316,7 @@ namespace RimLife.Tests.Framework
                 LightLevel = 0.8f,
                 ThermalComfort = "Comfortable",
                 LightLabel = "Bright",
-                Weather = new WeatherSection
+                Weather = new WeatherInfo
                 {
                     Label = "Rain",
                     Description = "It's raining.",
@@ -341,7 +341,7 @@ namespace RimLife.Tests.Framework
                 Type = "Indoors",
                 Temperature = 21f,
                 LightLevel = 0.5f,
-                Room = new RoomSection
+                Room = new RoomInfo
                 {
                     RoleLabel = "Bedroom",
                     BaseStats = new RoomStats
@@ -434,18 +434,59 @@ namespace RimLife.Tests.Framework
         {
             private readonly Dictionary<string, string> _sections;
 
+            private static readonly string[] StaticSections =
+                { "health", "mood", "skills", "needs", "activity", "gear", "backstory", "social", "psychology" };
+
             public MockPromptProvider(Dictionary<string, string> sections)
             {
                 _sections = sections;
             }
 
-            public string GetSectionPrompt(object pawn, string sectionName, bool includeMemoryDetails = false)
+            public string GetCharacterPrompt(string pawnId, string view)
             {
-                // memory_full is used for full-view memory details
-                if (sectionName == "memory" && includeMemoryDetails)
-                    return _sections.TryGetValue("memory_full", out var full) ? full :
-                           _sections.TryGetValue("memory", out var mem) ? mem : null;
-                return _sections.TryGetValue(sectionName, out var text) ? text : null;
+                bool isDynamic = string.Equals(view, "dynamic", System.StringComparison.OrdinalIgnoreCase);
+                bool isFull = string.Equals(view, "full", System.StringComparison.OrdinalIgnoreCase);
+
+                var sb = new System.Text.StringBuilder();
+
+                // Static layer
+                foreach (var key in StaticSections)
+                {
+                    if (_sections.TryGetValue(key, out var text) && !string.IsNullOrEmpty(text))
+                    {
+                        if (sb.Length > 0) sb.Append('\n');
+                        sb.Append('【');
+                        sb.Append(key);
+                        sb.Append("】");
+                        sb.Append(text);
+                    }
+                }
+
+                // Dynamic layer
+                if (isDynamic || isFull)
+                {
+                    if (_sections.TryGetValue("perspective", out var persp) && !string.IsNullOrEmpty(persp))
+                    {
+                        if (sb.Length > 0) sb.Append('\n');
+                        sb.Append("【perspective】");
+                        sb.Append(persp);
+                    }
+
+                    string memKey = isFull && _sections.ContainsKey("memory_full") ? "memory_full" : "memory";
+                    if (_sections.TryGetValue(memKey, out var mem) && !string.IsNullOrEmpty(mem))
+                    {
+                        if (sb.Length > 0) sb.Append('\n');
+                        sb.Append("【memory】");
+                        sb.Append(mem);
+                    }
+                }
+
+                return sb.Length > 0 ? sb.ToString() : null;
+            }
+
+            public string GetSocialPrompt(string pawnId)
+            {
+                return _sections.TryGetValue("social", out var text) ? text : null;
             }
         }
 

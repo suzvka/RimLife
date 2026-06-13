@@ -65,7 +65,7 @@ namespace RimLife
         {
             try
             {
-                var prompt = RimLifeCore.PromptProvider?.GetSectionPrompt(pawn, "social");
+                var prompt = RimLifeCore.PromptProvider?.GetSocialPrompt(pawn.ThingID);
                 if (string.IsNullOrEmpty(prompt))
                 {
                     Log.Message("[SocialInfo] (not collected)");

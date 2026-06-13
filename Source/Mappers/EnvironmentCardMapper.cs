@@ -83,9 +83,9 @@ namespace RimLife.Mappers
         // 子映射
         // ================================================================
 
-        private static WeatherSection MapWeather(Map map)
+        private static WeatherInfo MapWeather(Map map)
         {
-            return new WeatherSection
+            return new WeatherInfo
             {
                 Label = map.weatherManager.CurWeatherPerceived.LabelCap,
                 Description = map.weatherManager.CurWeatherPerceived.description,
@@ -95,9 +95,9 @@ namespace RimLife.Mappers
             };
         }
 
-        private static RoomSection MapRoom(Room room)
+        private static RoomInfo MapRoom(Room room)
         {
-            return new RoomSection
+            return new RoomInfo
             {
                 RoleLabel = room.Role?.label ?? "Unknown",
                 BaseStats = new RoomStats

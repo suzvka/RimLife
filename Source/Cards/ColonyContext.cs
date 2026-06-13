@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using RimLife;
 
 namespace RimLife.Cards
 {
@@ -98,35 +99,4 @@ namespace RimLife.Cards
 
 
     }
-
-    // ================================================================
-    // 配套数据结构
-    // ================================================================
-
-    /// <summary>
-    /// 殖民者轻量摘要（不展开子模块）。
-    /// </summary>
-    public struct ColonistSummary
-    {
-        public string ID;
-        public string Name;
-        public bool IsDowned;
-        public bool IsDead;
-        public string CurrentJob;
-        public string MoodTier;
-        public string PainTier;
-        public string PawnRelation;
-    }
-
-    /// <summary>
-    /// 派系关系快照。
-    /// </summary>
-    public struct FactionStanding
-    {
-        public string FactionName;
-        public float Goodwill;
-        public string RelationLabel;
-    }
-
-
 }

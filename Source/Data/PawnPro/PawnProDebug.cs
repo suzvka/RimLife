@@ -48,17 +48,31 @@ namespace RimLife
                 var pp = RimLifeCore.PromptProvider;
                 if (pp == null) { sb.AppendLine("(PromptProvider not available)"); Log.Message(sb.ToString()); return; }
 
-                AppendSectionPrompt(pp, pawn, "health", "Health", sb);
-                AppendSectionPrompt(pp, pawn, "mood", "Mood", sb);
-                AppendSectionPrompt(pp, pawn, "needs", "Needs", sb);
-                AppendSectionPrompt(pp, pawn, "activity", "Activity", sb);
-                AppendSectionPrompt(pp, pawn, "skills", "Skills", sb);
-                AppendSectionPrompt(pp, pawn, "gear", "Gear", sb);
-                AppendSectionPrompt(pp, pawn, "backstory", "Backstory", sb);
-                AppendSectionPrompt(pp, pawn, "perspective", "Perspective", sb);
-                AppendSectionPrompt(pp, pawn, "social", "Social", sb);
-                AppendSectionPrompt(pp, pawn, "psychology", "Psychology", sb);
-                AppendSectionPrompt(pp, pawn, "memory", "Memory", sb);
+                var fullPrompt = pp.GetCharacterPrompt(pawn.ThingID, "full");
+                if (!string.IsNullOrEmpty(fullPrompt))
+                {
+                    // 按【】分隔符拆分，逐节打印
+                    var sections = fullPrompt.Split('\n');
+                    string currentSection = "";
+                    foreach (var line in sections)
+                    {
+                        if (line.StartsWith("【"))
+                        {
+                            // 找到下一个【时，输出上一节
+                            if (currentSection.Length > 0) sb.AppendLine(currentSection);
+                            currentSection = line;
+                        }
+                        else
+                        {
+                            currentSection += " " + line;
+                        }
+                    }
+                    if (currentSection.Length > 0) sb.AppendLine(currentSection);
+                }
+                else
+                {
+                    sb.AppendLine("(no prompt data)");
+                }
 
                 Log.Message(sb.ToString());
             }
@@ -66,15 +80,6 @@ namespace RimLife
             {
                 Log.Error($"[PawnPro Debug] Failed to dump pawn: {ex}");
             }
-        }
-
-        private static void AppendSectionPrompt(IPawnPromptProvider pp, Pawn pawn,
-            string sectionName, string label, StringBuilder sb)
-        {
-            var text = pp.GetSectionPrompt(pawn, sectionName);
-            sb.AppendLine($"== {label} ==");
-            sb.AppendLine(string.IsNullOrEmpty(text) ? "(not collected)" : text);
-            sb.AppendLine();
         }
     }
 
