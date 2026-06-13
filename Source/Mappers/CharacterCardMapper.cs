@@ -112,6 +112,12 @@ namespace RimLife.Mappers
             return card;
         }
 
+        public static CharacterCard WithMemory(this CharacterCard card, Pawn p)
+        {
+            card.Memory = MapMemory(p);
+            return card;
+        }
+
         // ================================================================
         // 完整构建（昂贵）
         // ================================================================
@@ -131,7 +137,8 @@ namespace RimLife.Mappers
                 .WithBackstory(p)
                 .WithSocial(p)
                 .WithPerspective(p)
-                .WithPsychology(p);
+                .WithPsychology(p)
+                .WithMemory(p);
         }
 
         /// <summary>
@@ -587,6 +594,39 @@ namespace RimLife.Mappers
             if (sum == 0) return "Average";
             if (sum <= 3) return "High";
             return "VeryHigh";
+        }
+
+        // ================================================================
+        // Memory Section 映射
+        // ================================================================
+
+        private static MemorySection MapMemory(Pawn p)
+        {
+            if (p?.health?.hediffSet == null)
+                return null;
+
+            try
+            {
+                var hediffDef = DefDatabase<HediffDef>.GetNamedSilentFail("PawnProMemory");
+                if (hediffDef == null) return null;
+
+                var hediff = p.health.hediffSet.GetFirstHediffOfDef(hediffDef);
+                if (hediff == null) return null;
+
+                var comp = hediff.TryGetComp<HediffComp_PawnMemory>();
+                if (comp == null) return null;
+
+                int currentTick = Find.TickManager?.TicksGame ?? 0;
+                return new MemorySection
+                {
+                    Snapshot = comp.CreateSnapshot(currentTick)
+                };
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife.CharacterCardMapper] MapMemory failed: {e.Message}");
+                return null;
+            }
         }
 
         // ================================================================

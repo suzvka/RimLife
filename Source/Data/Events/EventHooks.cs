@@ -60,11 +60,55 @@ namespace RimLife
                     InteractionDef = intDef.defName ?? "Unknown",
                     Outcome = intDef.label ?? ""
                 });
+
+                // 写入双方 Pawn 的短期记忆
+                AppendPawnMemory(initiator, recipient, intDef);
             }
             catch (Exception e)
             {
                 Log.Warning($"[RimLife:EventHooks] SocialInteract hook failed: {e.Message}");
             }
+        }
+
+        /// <summary>
+        /// 向互动双方的 PawnProMemory 追加短期记忆。
+        /// </summary>
+        private static void AppendPawnMemory(Pawn initiator, Pawn recipient, InteractionDef intDef)
+        {
+            try
+            {
+                int tick = Find.TickManager?.TicksGame ?? 0;
+
+                // 发起者的记忆
+                AppendMemoryToPawn(initiator, tick, "Interaction",
+                    $"与 {recipient.Name?.ToStringShort ?? recipient.LabelShortCap} 进行了{intDef.label ?? "互动"}",
+                    recipient.ThingID);
+
+                // 接受者的记忆
+                AppendMemoryToPawn(recipient, tick, "Interaction",
+                    $"{initiator.Name?.ToStringShort ?? initiator.LabelShortCap} 与你进行了{intDef.label ?? "互动"}",
+                    initiator.ThingID);
+            }
+            catch (System.Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] AppendPawnMemory failed: {e.Message}");
+            }
+        }
+
+        private static void AppendMemoryToPawn(Pawn pawn, int tick, string type, string summary, string relatedPawnId)
+        {
+            if (pawn?.health?.hediffSet == null) return;
+
+            var hediffDef = DefDatabase<HediffDef>.GetNamedSilentFail("PawnProMemory");
+            if (hediffDef == null) return;
+
+            var hediff = pawn.health.hediffSet.GetFirstHediffOfDef(hediffDef);
+            if (hediff == null) return;
+
+            var comp = hediff.TryGetComp<HediffComp_PawnMemory>();
+            if (comp == null) return;
+
+            comp.AddShortTerm(new ShortTermMemory(tick, type, summary, relatedPawnId));
         }
     }
 

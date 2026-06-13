@@ -39,6 +39,7 @@ namespace RimLife.Infrastructure
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.DirectorMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Workspace.WorkspaceMcpTools));
+                count += McpSkillRegistry.RegisterFromType(typeof(Mcp.PawnMemoryMcpTools));
 
                 Log.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
 

@@ -33,6 +33,7 @@ namespace RimLife.Cards
         public SocialSection Social;
         public PerspectiveSection Perspective;
         public PsychologySection Psychology;
+        public MemorySection Memory;
     }
 
     // ================================================================
@@ -284,5 +285,19 @@ namespace RimLife.Cards
         {
             return $"O={Openness} C={Conscientiousness} E={Extraversion} A={Agreeableness} N={Neuroticism}";
         }
+    }
+
+    // ================================================================
+    // Memory Section
+    // ================================================================
+
+    /// <summary>
+    /// 记忆 Section：封装从 HediffComp_PawnMemory 提取的快照视图。
+    /// null 表示未采集。
+    /// </summary>
+    public class MemorySection
+    {
+        /// <summary>记忆快照数据。</summary>
+        public MemorySnapshot Snapshot;
     }
 }
