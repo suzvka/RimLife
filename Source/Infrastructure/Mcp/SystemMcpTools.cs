@@ -25,7 +25,10 @@ namespace RimLife.Infrastructure.Mcp
                 var wm = RimLifeCore.Workspaces;
                 if (wm == null)
                     return McpSkillRegistry.MakeError("WorkspaceManager not available.");
-                var activeIds = wm.GetActiveSkillIds(workspaceId);
+                var ws = wm?.Get(workspaceId);
+                if (ws == null)
+                    return McpSkillRegistry.MakeError("Workspace not found.");
+                var activeIds = ws.SkillSlot.ActiveSkillIds;
                 return McpSkillRegistry.GetSkillListJson(activeIds);
             }
             catch (Exception e)
@@ -51,7 +54,10 @@ namespace RimLife.Infrastructure.Mcp
                 var wm = RimLifeCore.Workspaces;
                 if (wm == null)
                     return McpSkillRegistry.MakeError("WorkspaceManager not available.");
-                return wm.ActivateSkill(workspaceId, skillId);
+                var ws = wm?.Get(workspaceId);
+                if (ws == null)
+                    return McpSkillRegistry.MakeError("Workspace not found.");
+                return ws.SkillSlot.Activate(skillId);
             }
             catch (Exception e)
             {
@@ -76,7 +82,10 @@ namespace RimLife.Infrastructure.Mcp
                 var wm = RimLifeCore.Workspaces;
                 if (wm == null)
                     return McpSkillRegistry.MakeError("WorkspaceManager not available.");
-                return wm.DeactivateSkill(workspaceId, skillId);
+                var ws = wm?.Get(workspaceId);
+                if (ws == null)
+                    return McpSkillRegistry.MakeError("Workspace not found.");
+                return ws.SkillSlot.Deactivate(skillId);
             }
             catch (Exception e)
             {

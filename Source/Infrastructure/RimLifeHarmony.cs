@@ -20,9 +20,6 @@ namespace RimLife.Infrastructure
             RimLifeCore.Logger = logger;
             MainThreadDispatcher.Logger = logger;
 
-            // 注册 Pawn 语义提示词提供者（社交关系查询用）
-            RimLifeCore.PromptProvider = new PawnPro();
-
             // 注册人物卡维度内容提供者（钩子模式）
             RimLifeCore.RegisterContentProvider(new HealthContentProvider());
             RimLifeCore.RegisterContentProvider(new MoodContentProvider());

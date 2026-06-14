@@ -70,7 +70,7 @@ namespace RimLife.Workspace
         // ================================================================
 
         /// <summary>
-        /// 推送一个新轮次到工作空间。仅 Screenwriter 可调用，内部由 WorkspaceManager 校验。
+        /// 推送一个新轮次到工作空间。仅 Screenwriter 可调用，内部由 IWorkspace 校验。
         /// </summary>
         [McpTool(Name = "push_round",
                  Description = "向工作空间推送一个新轮次：前情提要 + 正式台词。只有 Active 空间可推送。推送后 CurrentRecap 自动更新。")]
@@ -88,9 +88,12 @@ namespace RimLife.Workspace
                 var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
+                var ws = manager.Get(workspaceId);
+                if (ws == null) return "{}";
+
                 var eventIdList = ParseStringList(triggerEventIds);
-                bool ok = manager.PushRound(workspaceId, recap, narrative, eventIdList,
-                                            WorkspaceRole.Screenwriter);
+                bool ok = ws.PushRound(recap, narrative, eventIdList,
+                                       WorkspaceRole.Screenwriter);
                 if (!ok) return "{}";
 
                 return SerializeWriterView(manager.Get(workspaceId));
@@ -107,7 +110,7 @@ namespace RimLife.Workspace
         // ================================================================
 
         /// <summary>
-        /// 编剧上报剧情线推进状态信号。仅 Screenwriter 可调用，内部由 WorkspaceManager 校验。
+        /// 编剧上报剧情线推进状态信号。仅 Screenwriter 可调用，内部由 IWorkspace 校验。
         /// </summary>
         [McpTool(Name = "signal_workspace_status",
                  Description = "上报剧情线推进状态信号。导演据此信号做分支/合并/关闭决策。\n" +
@@ -128,14 +131,17 @@ namespace RimLife.Workspace
                 var manager = _getWorkspaceManager();
                 if (manager == null) return "{}";
 
+                var ws = manager.Get(workspaceId);
+                if (ws == null) return "{}";
+
                 if (!Enum.TryParse<SignalType>(signalType, true, out var parsedType))
                 {
                     _logger.Warning($"[RimLife.WritingMcp] signal_workspace_status: invalid signalType '{signalType}'.");
                     return "{}";
                 }
 
-                bool ok = manager.ReportSignal(workspaceId, parsedType, note, suggestedTargetId,
-                                               WorkspaceRole.Screenwriter);
+                bool ok = ws.ReportSignal(parsedType, note, suggestedTargetId,
+                                          WorkspaceRole.Screenwriter);
                 if (!ok) return "{}";
 
                 return SerializeWriterView(manager.Get(workspaceId));
@@ -154,7 +160,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 编剧视图序列化：含完整轮次列表和叙事内容。
         /// </summary>
-        private string SerializeWriterView(WorkspaceState ws)
+        private string SerializeWriterView(IWorkspace ws)
         {
             if (ws == null) return "{}";
 
@@ -174,10 +180,8 @@ namespace RimLife.Workspace
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
-            // CurrentRecap — 编剧的上下文窗口
             w.Prop("currentRecap", ws.CurrentRecap ?? "");
 
-            // Rounds — 编剧的写作日志（含叙事内容）
             if (ws.Rounds != null && ws.Rounds.Count > 0)
             {
                 var roundJsons = new List<string>();
@@ -186,7 +190,6 @@ namespace RimLife.Workspace
                 w.ArrayRaw("rounds", roundJsons);
             }
 
-            // LastSignal — 编剧也可看到自己上报的信号
             if (ws.LastSignal.HasValue)
             {
                 var sig = ws.LastSignal.Value;

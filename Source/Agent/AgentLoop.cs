@@ -13,7 +13,7 @@ namespace RimLife.Agent
 {
     /// <summary>
     /// Agent 循环。纯逻辑组件，零游戏引擎依赖。
-    /// 通过订阅 AgentEventPool.OnThresholdReached 被动激活。
+    /// 通过订阅 IEventLog.OnThresholdReached 被动激活。
     ///
     /// 生命周期：
     /// 1. 池子通知阈值达到 → OnPoolChanged()

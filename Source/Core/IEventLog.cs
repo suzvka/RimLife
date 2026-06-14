@@ -7,7 +7,7 @@ namespace RimLife.Core
     /// <summary>
     /// 事件日志抽象接口。提供 append-only 写入、按条件查询，以及 pending 缓冲区的阈值激活能力。
     /// AgentLoop 依赖此接口获取待处理事件并订阅激活通知。
-    /// 实现：AgentEventPool。
+    /// 实现：WorkspaceEventPool。
     /// </summary>
     public interface IEventLog
     {

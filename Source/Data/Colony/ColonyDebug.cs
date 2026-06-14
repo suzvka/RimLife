@@ -65,7 +65,9 @@ namespace RimLife
         {
             try
             {
-                var prompt = RimLifeCore.PromptProvider?.GetSocialPrompt(pawn.ThingID);
+                var socialProvider = RimLifeCore.ContentProviders
+                    .Find(p => p.SectionName == "social");
+                var prompt = socialProvider?.GetContent(pawn.ThingID, "static");
                 if (string.IsNullOrEmpty(prompt))
                 {
                     Log.Message("[SocialInfo] (not collected)");
@@ -137,7 +139,7 @@ namespace RimLife
         {
             try
             {
-                var eventLog = RimLifeCore.EventLog;
+                var eventLog = RimLifeCore.GetDirectorWorkspace()?.EventPool;
                 if (eventLog == null)
                 {
                     Log.Message("[EventLog Dump] (no event log available - game not loaded?)");

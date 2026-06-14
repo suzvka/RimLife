@@ -39,7 +39,7 @@ namespace RimLife
     /// 注意：此类是数据快照，不会自动更新。必须在主游戏线程上创建和访问。
     /// 数据的时序一致性不被严格保证；它适用于描述性或叙事性目的，不适用于需要实时验证的系统。
     /// </summary>
-    public class PawnPro : IPawnPromptProvider
+    public class PawnPro
     {
         // 原始的 Pawn 引用，用于按需提取数据。
         private readonly Pawn _sourcePawn;
@@ -77,9 +77,6 @@ namespace RimLife
             PawnType = GetPawnType(pawn);
             PawnRelation = GetPawnRelation(pawn);
         }
-
-        // 无参构造：仅用于 IPawnPromptProvider 单例注册，_sourcePawn 为 null
-        internal PawnPro() { }
 
         // --- 2. 延迟加载模块 ---
 
@@ -132,26 +129,6 @@ namespace RimLife
             if (p.RaceProps.IsMechanoid) return PawnType.Mechanoid;
             if (p.RaceProps.Insect) return PawnType.Insect;
             return PawnType.Other;
-        }
-
-        // ================================================================
-        // IPawnPromptProvider implementation
-        // 注意：GetCharacterPrompt 已迁移至 ICharacterContentProvider 钩子模式。
-        //       各 section 的独立提供者见 CharacterContentProviders.cs。
-        // ================================================================
-
-        public string GetSocialPrompt(string pawnId)
-        {
-            var pawn = ResolvePawn(pawnId);
-            if (pawn == null) return null;
-            var pp = new PawnPro(pawn);
-            return pp.Social?.ToPrompt();
-        }
-
-        private static Pawn ResolvePawn(string pawnId)
-        {
-            if (string.IsNullOrEmpty(pawnId)) return null;
-            return PawnQueryHelper.FindPawnById(pawnId);
         }
 
         // ================================================================

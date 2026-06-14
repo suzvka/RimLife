@@ -1,6 +1,9 @@
 using RimLife.Cards;
+using RimLife.Core;
 using RimLife.Driver;
+using RimLife.Framework.Mcp;
 using RimLife.Workspace;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
@@ -8,8 +11,8 @@ using Xunit;
 namespace RimLife.Tests.Driver
 {
     /// <summary>
-    /// 工作空间内部事件池测试。覆盖 EventPool 生命周期、PushEvent、
-    /// Locked 状态、激活条件。
+    /// 工作空间内部事件池测试。覆盖 EventPool 生命周期、Append、
+    /// Drain、阈值回调、激活条件。
     /// </summary>
     public class WorkspaceEventPoolTests
     {
@@ -39,7 +42,7 @@ namespace RimLife.Tests.Driver
             };
         }
 
-        private static WorkspaceState CreateWorkspace(string id = "ws-001")
+        private static WorkspaceState CreateWorkspaceState(string id = "ws-001")
         {
             return new WorkspaceState
             {
@@ -53,98 +56,75 @@ namespace RimLife.Tests.Driver
             };
         }
 
+        private static WorkspaceEventPool CreatePool(string wsId = "ws-001")
+        {
+            var ws = CreateWorkspaceState(wsId);
+            return new WorkspaceEventPool(ws, CreateConfig(), CardSerializer.Default, () => { });
+        }
+
         // ================================================================
         // EventPool 初始化
         // ================================================================
 
         [Fact]
-        public void EventPool_DefaultsToNull()
+        public void EventPool_InitialState()
         {
-            var ws = new WorkspaceState();
-            Assert.Null(ws.EventPool);
-        }
-
-        [Fact]
-        public void EnsureEventPool_CreatesPoolWhenNull()
-        {
-            var ws = CreateWorkspace();
-            Assert.Null(ws.EventPool);
-
-            var pool = new AgentEventPool(CreateConfig());
-            ws.EventPool = pool;
-
-            Assert.NotNull(ws.EventPool);
-            Assert.Equal(0, ws.EventPool.PendingCount);
-        }
-
-        [Fact]
-        public void EnsureEventPool_Idempotent_DoesNotReplace()
-        {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig());
-
-            ws.EventPool.Append(MakeEvent("e1", "Major"));
-            Assert.Equal(1, ws.EventPool.PendingCount);
-
-            // 第二次不应替换（幂等性由调用方保证——WorkspaceManager.EnsureEventPool
-            // 检查 ws.EventPool != null 后跳过）
-            Assert.Equal(1, ws.EventPool.PendingCount);
+            var pool = CreatePool();
+            Assert.Equal(0, pool.PendingCount);
+            Assert.Equal(0, pool.TotalImportance);
+            Assert.Equal(0, pool.TotalAppended);
         }
 
         // ================================================================
-        // PushEvent（move 语义）
+        // Append（写入语义）
         // ================================================================
 
         [Fact]
-        public void PushEvent_IncreasesPendingCount()
+        public void Append_IncreasesPendingCount()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig());
+            var pool = CreatePool();
 
-            ws.EventPool.Append(MakeEvent("e1", "Minor"));
-            Assert.Equal(1, ws.EventPool.PendingCount);
+            pool.Append(MakeEvent("e1", "Minor"));
+            Assert.Equal(1, pool.PendingCount);
 
-            ws.EventPool.Append(MakeEvent("e2", "Major"));
-            Assert.Equal(2, ws.EventPool.PendingCount);
+            pool.Append(MakeEvent("e2", "Major"));
+            Assert.Equal(2, pool.PendingCount);
         }
 
         [Fact]
-        public void PushEvent_CalculatesImportance()
+        public void Append_CalculatesImportance()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig());
+            var pool = CreatePool();
 
-            ws.EventPool.Append(MakeEvent("e1", "Minor"));   // weight 1
-            ws.EventPool.Append(MakeEvent("e2", "Major"));   // weight 3
-            ws.EventPool.Append(MakeEvent("e3", "Extreme"));  // weight 5
+            pool.Append(MakeEvent("e1", "Minor"));   // weight 1
+            pool.Append(MakeEvent("e2", "Major"));   // weight 3
+            pool.Append(MakeEvent("e3", "Extreme"));  // weight 5
 
-            Assert.Equal(9, ws.EventPool.TotalImportance);
+            Assert.Equal(9, pool.TotalImportance);
         }
 
         [Fact]
-        public void PushEvent_Null_DoesNotAffectPool()
+        public void Append_Null_DoesNotAffectPool()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig());
+            var pool = CreatePool();
 
-            ws.EventPool.Append(null);
-            Assert.Equal(0, ws.EventPool.PendingCount);
+            pool.Append(null);
+            Assert.Equal(0, pool.PendingCount);
         }
 
         [Fact]
         public void DrainPending_ReturnsEventsAndClears()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig());
+            var pool = CreatePool();
 
-            ws.EventPool.Append(MakeEvent("e1", "Minor"));
-            ws.EventPool.Append(MakeEvent("e2", "Major"));
+            pool.Append(MakeEvent("e1", "Minor"));
+            pool.Append(MakeEvent("e2", "Major"));
 
-            var drained = ws.EventPool.DrainPending();
+            var drained = pool.DrainPending();
 
             Assert.Equal(2, drained.Count);
-            Assert.Equal(0, ws.EventPool.PendingCount);
-            Assert.Equal(0, ws.EventPool.TotalImportance);
+            Assert.Equal(0, pool.PendingCount);
+            Assert.Equal(0, pool.TotalImportance);
         }
 
         // ================================================================
@@ -154,19 +134,18 @@ namespace RimLife.Tests.Driver
         [Fact]
         public void OnThresholdReached_NotFiredWhenNoSubscriber()
         {
-            var pool = new AgentEventPool(CreateConfig());
+            var pool = CreatePool();
             // 无订阅者时，Append 不应抛异常
             pool.Append(MakeEvent("e1", "Major"));
             pool.Append(MakeEvent("e2", "Major"));
             pool.Append(MakeEvent("e3", "Major"));
-            // 仅验证无异常即可
             Assert.Equal(3, pool.PendingCount);
         }
 
         [Fact]
         public void OnThresholdReached_FiresWhenCountExceeded()
         {
-            var pool = new AgentEventPool(CreateConfig()); // threshold=3
+            var pool = CreatePool(); // threshold=3
             int fireCount = 0;
             pool.OnThresholdReached += () => fireCount++;
 
@@ -181,7 +160,7 @@ namespace RimLife.Tests.Driver
         [Fact]
         public void OnThresholdReached_FiresWhenImportanceExceeded()
         {
-            var pool = new AgentEventPool(CreateConfig()); // imp threshold=10
+            var pool = CreatePool(); // imp threshold=10
             int fireCount = 0;
             pool.OnThresholdReached += () => fireCount++;
 
@@ -194,7 +173,7 @@ namespace RimLife.Tests.Driver
         [Fact]
         public void OnThresholdReached_FiresMultipleTimes()
         {
-            var pool = new AgentEventPool(CreateConfig());
+            var pool = CreatePool();
             int fireCount = 0;
             pool.OnThresholdReached += () => fireCount++;
 
@@ -220,79 +199,74 @@ namespace RimLife.Tests.Driver
         [Fact]
         public void Activation_CountThreshold_Satisfied()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig()); // threshold=3
+            var pool = CreatePool(); // threshold=3
 
-            ws.EventPool.Append(MakeEvent("e1", "Minor"));
-            ws.EventPool.Append(MakeEvent("e2", "Minor"));
-            ws.EventPool.Append(MakeEvent("e3", "Minor"));
+            pool.Append(MakeEvent("e1", "Minor"));
+            pool.Append(MakeEvent("e2", "Minor"));
+            pool.Append(MakeEvent("e3", "Minor"));
 
-            Assert.True(ws.EventPool.PendingCount >= 3);
+            Assert.True(pool.PendingCount >= 3);
         }
 
         [Fact]
         public void Activation_CountThreshold_NotSatisfied()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig()); // threshold=3
+            var pool = CreatePool(); // threshold=3
 
-            ws.EventPool.Append(MakeEvent("e1", "Minor"));
-            ws.EventPool.Append(MakeEvent("e2", "Minor"));
+            pool.Append(MakeEvent("e1", "Minor"));
+            pool.Append(MakeEvent("e2", "Minor"));
 
-            Assert.False(ws.EventPool.PendingCount >= 3);
+            Assert.False(pool.PendingCount >= 3);
         }
 
         [Fact]
         public void Activation_ImportanceThreshold_Satisfied()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig()); // imp threshold=10
+            var pool = CreatePool(); // imp threshold=10
 
             // 2 Major(6) + 1 Extreme(5) = 11
-            ws.EventPool.Append(MakeEvent("e1", "Major"));
-            ws.EventPool.Append(MakeEvent("e2", "Major"));
-            ws.EventPool.Append(MakeEvent("e3", "Extreme"));
+            pool.Append(MakeEvent("e1", "Major"));
+            pool.Append(MakeEvent("e2", "Major"));
+            pool.Append(MakeEvent("e3", "Extreme"));
 
-            Assert.True(ws.EventPool.TotalImportance >= 10);
+            Assert.True(pool.TotalImportance >= 10);
         }
 
         [Fact]
         public void Activation_ImportanceThreshold_NotSatisfied()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig()); // imp threshold=10
+            var pool = CreatePool(); // imp threshold=10
 
             // 3 Major = 9
-            ws.EventPool.Append(MakeEvent("e1", "Major"));
-            ws.EventPool.Append(MakeEvent("e2", "Major"));
-            ws.EventPool.Append(MakeEvent("e3", "Major"));
+            pool.Append(MakeEvent("e1", "Major"));
+            pool.Append(MakeEvent("e2", "Major"));
+            pool.Append(MakeEvent("e3", "Major"));
 
-            Assert.False(ws.EventPool.TotalImportance >= 10);
+            Assert.False(pool.TotalImportance >= 10);
         }
 
         [Fact]
         public void Activation_EitherCountOrImportance_Triggers()
         {
-            var ws = CreateWorkspace();
-            ws.EventPool = new AgentEventPool(CreateConfig()); // count=3, imp=10
+            var pool = CreatePool(); // count=3, imp=10
 
             // Count 不够，但 Importance 够了
-            ws.EventPool.Append(MakeEvent("e1", "Extreme")); // weight 5
-            ws.EventPool.Append(MakeEvent("e2", "Extreme")); // weight 5
+            pool.Append(MakeEvent("e1", "Extreme")); // weight 5
+            pool.Append(MakeEvent("e2", "Extreme")); // weight 5
 
-            Assert.False(ws.EventPool.PendingCount >= 3);   // count not met
-            Assert.True(ws.EventPool.TotalImportance >= 10);  // imp met
+            Assert.False(pool.PendingCount >= 3);   // count not met
+            Assert.True(pool.TotalImportance >= 10);  // imp met
 
             // Drain 后重置
-            ws.EventPool.DrainPending();
+            pool.DrainPending();
 
             // Importance 不够，但 Count 够了
-            ws.EventPool.Append(MakeEvent("e1", "Minor"));
-            ws.EventPool.Append(MakeEvent("e2", "Minor"));
-            ws.EventPool.Append(MakeEvent("e3", "Minor"));
+            pool.Append(MakeEvent("e1", "Minor"));
+            pool.Append(MakeEvent("e2", "Minor"));
+            pool.Append(MakeEvent("e3", "Minor"));
 
-            Assert.True(ws.EventPool.PendingCount >= 3);    // count met
-            Assert.False(ws.EventPool.TotalImportance >= 10); // imp not met
+            Assert.True(pool.PendingCount >= 3);    // count met
+            Assert.False(pool.TotalImportance >= 10); // imp not met
         }
 
         // ================================================================
@@ -302,37 +276,31 @@ namespace RimLife.Tests.Driver
         [Fact]
         public void MultipleWorkspaces_IndependentPools()
         {
-            var wsA = CreateWorkspace("ws-a");
-            var wsB = CreateWorkspace("ws-b");
+            var poolA = CreatePool("ws-a");
+            var poolB = CreatePool("ws-b");
 
-            wsA.EventPool = new AgentEventPool(CreateConfig());
-            wsB.EventPool = new AgentEventPool(CreateConfig());
+            poolA.Append(MakeEvent("e1", "Major"));
+            poolA.Append(MakeEvent("e2", "Major"));
+            poolB.Append(MakeEvent("e3", "Extreme"));
 
-            wsA.EventPool.Append(MakeEvent("e1", "Major"));
-            wsA.EventPool.Append(MakeEvent("e2", "Major"));
-            wsB.EventPool.Append(MakeEvent("e3", "Extreme"));
-
-            Assert.Equal(2, wsA.EventPool.PendingCount);
-            Assert.Equal(1, wsB.EventPool.PendingCount);
+            Assert.Equal(2, poolA.PendingCount);
+            Assert.Equal(1, poolB.PendingCount);
         }
 
         [Fact]
         public void MultipleWorkspaces_IndependentCallbacks()
         {
-            var wsA = CreateWorkspace("ws-a");
-            var wsB = CreateWorkspace("ws-b");
-
-            wsA.EventPool = new AgentEventPool(CreateConfig());
-            wsB.EventPool = new AgentEventPool(CreateConfig());
+            var poolA = CreatePool("ws-a");
+            var poolB = CreatePool("ws-b");
 
             int fireA = 0, fireB = 0;
-            wsA.EventPool.OnThresholdReached += () => fireA++;
-            wsB.EventPool.OnThresholdReached += () => fireB++;
+            poolA.OnThresholdReached += () => fireA++;
+            poolB.OnThresholdReached += () => fireB++;
 
             // 仅触发 A
-            wsA.EventPool.Append(MakeEvent("e1", "Major"));
-            wsA.EventPool.Append(MakeEvent("e2", "Major"));
-            wsA.EventPool.Append(MakeEvent("e3", "Major"));
+            poolA.Append(MakeEvent("e1", "Major"));
+            poolA.Append(MakeEvent("e2", "Major"));
+            poolA.Append(MakeEvent("e3", "Major"));
 
             Assert.Equal(1, fireA);
             Assert.Equal(0, fireB);
@@ -345,8 +313,8 @@ namespace RimLife.Tests.Driver
         [Fact]
         public void Callback_DoesNotCrossFireBetweenPools()
         {
-            var poolA = new AgentEventPool(CreateConfig());
-            var poolB = new AgentEventPool(CreateConfig());
+            var poolA = CreatePool("ws-a");
+            var poolB = CreatePool("ws-b");
 
             int fireB = 0;
             poolB.OnThresholdReached += () => fireB++;

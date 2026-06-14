@@ -164,7 +164,7 @@ namespace RimLife.Tests.Framework
                 Name = "Bob"
             };
 
-            var provider = new MockPromptProvider(new Dictionary<string, string>
+            var provider = MakeProviders(new Dictionary<string, string>
             {
                 ["skills"] = "射击 12🔥, 格斗 5",
                 ["perspective"] = "视野内: Alice(5.2m), Bob(12.1m)",
@@ -197,7 +197,7 @@ namespace RimLife.Tests.Framework
                 AgeBiologicalYears = 30f
             };
 
-            var provider = new MockPromptProvider(new Dictionary<string, string>
+            var provider = MakeProviders(new Dictionary<string, string>
             {
                 ["health"] = "疼痛: 低(Low), 流血: 无(None)",
                 ["mood"] = "心情: 中等(Neutral)",
@@ -246,7 +246,7 @@ namespace RimLife.Tests.Framework
                 PawnRelation = "OurParty"
             };
 
-            var provider = new MockPromptProvider(new Dictionary<string, string>
+            var provider = MakeProviders(new Dictionary<string, string>
             {
                 ["health"] = "疼痛: 低(Low), 流血: 无(None)",
                 ["psychology"] = "开放性: 高, 尽责性: 中",
@@ -427,66 +427,31 @@ namespace RimLife.Tests.Framework
         // 辅助
         // ================================================================
 
-        private static readonly IPawnPromptProvider EmptyProvider = new MockPromptProvider(
-            new Dictionary<string, string>());
+        private static readonly IReadOnlyList<ICharacterContentProvider> EmptyProvider
+            = new List<ICharacterContentProvider>();
 
-        private class MockPromptProvider : IPawnPromptProvider
+        private static IReadOnlyList<ICharacterContentProvider> MakeProviders(Dictionary<string, string> sections)
         {
-            private readonly Dictionary<string, string> _sections;
+            var list = new List<ICharacterContentProvider>();
+            foreach (var kv in sections)
+                list.Add(new MockContentProvider(kv.Key, kv.Value));
+            return list;
+        }
 
-            private static readonly string[] StaticSections =
-                { "health", "mood", "skills", "needs", "activity", "gear", "backstory", "social", "psychology" };
+        private class MockContentProvider : ICharacterContentProvider
+        {
+            private readonly string _content;
+            public string SectionName { get; }
 
-            public MockPromptProvider(Dictionary<string, string> sections)
+            public MockContentProvider(string sectionName, string content)
             {
-                _sections = sections;
+                SectionName = sectionName;
+                _content = content;
             }
 
-            public string GetCharacterPrompt(string pawnId, string view)
+            public string GetContent(string pawnId, string view)
             {
-                bool isDynamic = string.Equals(view, "dynamic", System.StringComparison.OrdinalIgnoreCase);
-                bool isFull = string.Equals(view, "full", System.StringComparison.OrdinalIgnoreCase);
-
-                var sb = new System.Text.StringBuilder();
-
-                // Static layer
-                foreach (var key in StaticSections)
-                {
-                    if (_sections.TryGetValue(key, out var text) && !string.IsNullOrEmpty(text))
-                    {
-                        if (sb.Length > 0) sb.Append('\n');
-                        sb.Append('【');
-                        sb.Append(key);
-                        sb.Append("】");
-                        sb.Append(text);
-                    }
-                }
-
-                // Dynamic layer
-                if (isDynamic || isFull)
-                {
-                    if (_sections.TryGetValue("perspective", out var persp) && !string.IsNullOrEmpty(persp))
-                    {
-                        if (sb.Length > 0) sb.Append('\n');
-                        sb.Append("【perspective】");
-                        sb.Append(persp);
-                    }
-
-                    string memKey = isFull && _sections.ContainsKey("memory_full") ? "memory_full" : "memory";
-                    if (_sections.TryGetValue(memKey, out var mem) && !string.IsNullOrEmpty(mem))
-                    {
-                        if (sb.Length > 0) sb.Append('\n');
-                        sb.Append("【memory】");
-                        sb.Append(mem);
-                    }
-                }
-
-                return sb.Length > 0 ? sb.ToString() : null;
-            }
-
-            public string GetSocialPrompt(string pawnId)
-            {
-                return _sections.TryGetValue("social", out var text) ? text : null;
+                return _content;
             }
         }
 

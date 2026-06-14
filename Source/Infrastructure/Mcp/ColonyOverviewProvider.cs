@@ -67,7 +67,7 @@ namespace RimLife.Infrastructure.Mcp
         {
             try
             {
-                var eventLog = RimLifeCore.EventLog;
+                var eventLog = RimLifeCore.GetDirectorWorkspace()?.EventPool;
                 if (eventLog == null) return "[]";
 
                 var query = new EventQuery();

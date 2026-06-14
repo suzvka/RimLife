@@ -12,41 +12,30 @@ using System.Threading;
 namespace RimLife.Workspace
 {
     /// <summary>
-    /// 工作空间管理器。负责上下文空间的全部生命周期：
-    /// 创建、查询、挂起/恢复、完成/废弃、分支、合并、回合推送。
-    /// 工作空间只存 Agent 的写作日志（Rounds），不重复存储事件数据。
+    /// 工作空间管理器。职责：CRUD、分支/合并结构操作、事件路由。
+    /// 工作空间内部组件（事件池、技能槽）通过 IWorkspace 接口访问，管理器不关心。
     /// 通过 RimLifeCore.SaveStore 持久化到存档文件。
-    ///
-    /// 身份校验规则：
-    /// - Director: create / branch / merge / suspend / resume / close
-    /// - Screenwriter: push_round / signal_workspace_status
     /// </summary>
     public class WorkspaceManager : IDisposable, IWorkspaceManager
     {
-        private readonly List<WorkspaceState> _workspaces = new List<WorkspaceState>();
+        private readonly List<WorkspaceImpl> _workspaces = new List<WorkspaceImpl>();
         private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
         private readonly IAuthorityStore _store;
         private readonly ILogger _logger;
         private readonly Func<string> _timeProvider;
         private readonly DriverConfig _driverConfig;
         private readonly ICardSerializer _serializer;
-        private readonly Action<string> _onScreenwriterNeeded;
+        private readonly Action<string> _onWorkspaceReady;
         private const string StoreKey = "rimlife_workspaces";
 
-        /// <summary>
-        /// 创建 WorkspaceManager 实例并尝试从存档加载已有工作空间。
-        /// </summary>
-        /// <param name="store">权威存储（SaveStore）。</param>
-        /// <param name="logger">日志接口。</param>
-        /// <param name="timeProvider">时间字符串提供者。框架原样透传，不解析语义。</param>
-        public WorkspaceManager(IAuthorityStore store, ILogger logger, Func<string> timeProvider, DriverConfig driverConfig, ICardSerializer serializer = null, Action<string> onScreenwriterNeeded = null)
+        public WorkspaceManager(IAuthorityStore store, ILogger logger, Func<string> timeProvider, DriverConfig driverConfig, ICardSerializer serializer = null, Action<string> onWorkspaceReady = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
             _driverConfig = driverConfig ?? DriverConfig.CreateDefault();
             _serializer = serializer ?? CardSerializer.Default;
-            _onScreenwriterNeeded = onScreenwriterNeeded;
+            _onWorkspaceReady = onWorkspaceReady;
             LoadFromStore();
         }
 
@@ -58,19 +47,47 @@ namespace RimLife.Workspace
                 EventArg.WithPayload(("workspaceId", workspaceId ?? "")));
         }
 
+        private void SaveToStore()
+        {
+            try
+            {
+                var wsJsons = new List<string>();
+                foreach (var ws in _workspaces)
+                    wsJsons.Add(SerializeWorkspace(ws.State));
+
+                var sb = new StringBuilder("[");
+                for (int i = 0; i < wsJsons.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    sb.Append(wsJsons[i]);
+                }
+                sb.Append(']');
+
+                _store.Store(StoreKey, sb.ToString());
+            }
+            catch (Exception e)
+            {
+                _logger.Warning($"[RimLife.Workspace] Failed to save workspaces: {e.Message}");
+            }
+        }
+
+        private WorkspaceImpl Wrap(WorkspaceState state)
+        {
+            return new WorkspaceImpl(
+                state,
+                _driverConfig,
+                _serializer,
+                _timeProvider,
+                saveCallback: SaveToStore,
+                publishUpdated: PublishUpdated,
+                logger: _logger);
+        }
+
         // ================================================================
         // CRUD
         // ================================================================
 
-        /// <summary>
-        /// 创建新的工作空间。
-        /// </summary>
-        /// <param name="label">人类可读标签。</param>
-        /// <param name="colonistIds">关联的殖民者 ThingID 列表。</param>
-        /// <param name="tags">语义标签列表。</param>
-        /// <param name="createdByRole">创建者角色（Director 或 Screenwriter）。</param>
-        /// <returns>创建的工作空间状态。</returns>
-        public WorkspaceState Create(string label, List<string> colonistIds, List<string> tags, WorkspaceRole createdByRole)
+        public IWorkspace Create(string label, List<string> colonistIds, List<string> tags, WorkspaceRole createdByRole)
         {
             string now = Now();
 
@@ -96,10 +113,12 @@ namespace RimLife.Workspace
                 LastSignal = null
             };
 
+            var impl = Wrap(ws);
+
             _rwLock.EnterWriteLock();
             try
             {
-                _workspaces.Add(ws);
+                _workspaces.Add(impl);
                 SaveToStore();
             }
             finally { _rwLock.ExitWriteLock(); }
@@ -107,13 +126,11 @@ namespace RimLife.Workspace
             _logger.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id}, role={createdByRole})");
             EventBus.Publish(FrameworkEvents.WorkspaceCreated,
                 EventArg.WithPayload(("workspaceId", ws.Id), ("label", ws.Label ?? "")));
-            return ws;
+            _onWorkspaceReady?.Invoke(ws.Id);
+            return impl;
         }
 
-        /// <summary>
-        /// 按 ID 获取工作空间。
-        /// </summary>
-        public WorkspaceState Get(string id)
+        public IWorkspace Get(string id)
         {
             if (string.IsNullOrEmpty(id)) return null;
             _rwLock.EnterReadLock();
@@ -121,58 +138,38 @@ namespace RimLife.Workspace
             finally { _rwLock.ExitReadLock(); }
         }
 
-        /// <summary>
-        /// 列出工作空间，可按状态过滤。
-        /// </summary>
-        /// <param name="status">过滤状态，null 表示全部。</param>
-        public IReadOnlyList<WorkspaceState> List(WorkspaceStatus? status = null)
+        public IReadOnlyList<IWorkspace> List(WorkspaceStatus? status = null)
         {
             _rwLock.EnterReadLock();
             try
             {
                 if (status.HasValue)
-                    return _workspaces.Where(w => w.Status == status.Value).ToList();
-                return _workspaces.ToList();
+                    return _workspaces.Where(w => w.Status == status.Value).Cast<IWorkspace>().ToList();
+                return _workspaces.Cast<IWorkspace>().ToList();
             }
             finally { _rwLock.ExitReadLock(); }
         }
 
-        /// <summary>
-        /// 获取所有活跃状态的工作空间。
-        /// </summary>
-        public IReadOnlyList<WorkspaceState> GetActive()
+        public IReadOnlyList<IWorkspace> GetActive()
         {
             return List(WorkspaceStatus.Active);
         }
 
-        /// <summary>
-        /// 更新工作空间状态。
-        /// </summary>
-        /// <param name="id">工作空间 ID。</param>
-        /// <param name="newStatus">新状态。</param>
-        /// <param name="outcome">结束原因（Completed/Abandoned 时有效）。</param>
-        /// <returns>是否成功。</returns>
         public bool UpdateStatus(string id, WorkspaceStatus newStatus, string outcome = null)
         {
-            var ws = Get(id);
-            if (ws == null) return false;
+            var impl = GetImpl(id);
+            if (impl == null) return false;
 
-            // 验证状态转换合法性
-            if (!IsValidTransition(ws.Status, newStatus))
+            if (!IsValidTransition(impl.Status, newStatus))
             {
-                _logger.Warning($"[RimLife.Workspace] Invalid status transition for '{ws.Label}': {ws.Status} → {newStatus}");
+                _logger.Warning($"[RimLife.Workspace] Invalid status transition for '{impl.Label}': {impl.Status} → {newStatus}");
                 return false;
             }
 
-            string now = Now();
-            ws.Status = newStatus;
-            ws.LastActivityAt = now;
-            if (outcome != null)
-                ws.Outcome = outcome;
-
+            impl.SetStatus(newStatus, outcome);
             SaveToStore();
 
-            _logger.Message($"[RimLife.Workspace] Workspace '{ws.Label}' status: {newStatus}");
+            _logger.Message($"[RimLife.Workspace] Workspace '{impl.Label}' status: {newStatus}");
 
             if (newStatus == WorkspaceStatus.Completed || newStatus == WorkspaceStatus.Abandoned)
                 EventBus.Publish(FrameworkEvents.WorkspaceClosed,
@@ -184,108 +181,28 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 回合推送
-        // ================================================================
-
-        /// <summary>
-        /// 推送一个新轮次到工作空间。编剧每轮生成结束后调用。
-        /// </summary>
-        /// <param name="workspaceId">目标工作空间 ID。</param>
-        /// <param name="recap">编剧写的前情提要。</param>
-        /// <param name="narrative">编剧写的正式台词。</param>
-        /// <param name="triggerEventIds">本轮触发的事件 ID 列表（溯源用）。</param>
-        /// <param name="callerRole">调用者角色（仅 Screenwriter 可推送）。</param>
-        /// <param name="callerId">调用者 Agent ID（可选，用于审计）。</param>
-        /// <returns>是否成功。</returns>
-        public bool PushRound(string workspaceId, string recap, string narrative, List<string> triggerEventIds,
-                              WorkspaceRole callerRole, string callerId = null)
-        {
-            if (string.IsNullOrEmpty(recap) && string.IsNullOrEmpty(narrative)) return false;
-
-            // 身份校验：只有 Screenwriter 可以推送回合
-            if (callerRole != WorkspaceRole.Screenwriter)
-            {
-                _logger.Warning($"[RimLife.Workspace] PushRound rejected: caller is {callerRole}, only Screenwriter can push rounds.");
-                return false;
-            }
-
-            var ws = Get(workspaceId);
-            if (ws == null)
-            {
-                _logger.Warning($"[RimLife.Workspace] PushRound failed: workspace '{workspaceId}' not found.");
-                return false;
-            }
-
-            if (ws.Status != WorkspaceStatus.Active)
-            {
-                _logger.Warning($"[RimLife.Workspace] PushRound failed: workspace '{ws.Label}' is not Active (status={ws.Status}).");
-                return false;
-            }
-
-            string now = Now();
-            int nextSeq = (ws.Rounds?.Count) ?? 0;
-
-            var round = new WorkspaceRound
-            {
-                Seq = nextSeq,
-                Type = RoundType.Normal,
-                Recap = recap ?? "",
-                Narrative = narrative ?? "",
-                CreatedAt = now,
-                TriggerEventIds = triggerEventIds ?? new List<string>(),
-                AuthorRole = callerRole,
-                AuthorId = callerId
-            };
-
-            if (ws.Rounds == null)
-                ws.Rounds = new List<WorkspaceRound>();
-            ws.Rounds.Add(round);
-
-            // 更新 CurrentRecap 供下一轮注入 prompt
-            ws.CurrentRecap = recap ?? "";
-            ws.LastActivityAt = now;
-
-            SaveToStore();
-
-            PublishUpdated(workspaceId);
-            return true;
-        }
-
-        // ================================================================
         // 分支
         // ================================================================
 
-        /// <summary>
-        /// 从父工作空间分叉创建新的子工作空间。仅 Director 可调用。
-        /// 拷贝父空间的 Rounds 历史，并追加一条 Branch 轮记录分支声明。
-        /// </summary>
-        /// <param name="parentId">父工作空间 ID。</param>
-        /// <param name="newLabel">新工作空间标签。</param>
-        /// <param name="branchRecap">编剧写的分支前情提要（作为子空间的初始 CurrentRecap）。</param>
-        /// <param name="callerRole">调用者角色（仅 Director 可分支）。</param>
-        /// <returns>新创建的子工作空间，失败返回 null。</returns>
-        public WorkspaceState Branch(string parentId, string newLabel, string branchRecap, WorkspaceRole callerRole)
+        public IWorkspace Branch(string parentId, string newLabel, string branchRecap, WorkspaceRole callerRole)
         {
-            // 身份校验：只有 Director 可以分支
             if (callerRole != WorkspaceRole.Director)
             {
                 _logger.Warning($"[RimLife.Workspace] Branch rejected: caller is {callerRole}, only Director can branch.");
                 return null;
             }
 
-            var parent = Get(parentId);
-            if (parent == null)
+            var parentImpl = GetImpl(parentId);
+            if (parentImpl == null)
             {
                 _logger.Warning($"[RimLife.Workspace] Branch failed: parent workspace '{parentId}' not found.");
                 return null;
             }
 
+            var parent = parentImpl.State;
             string now = Now();
 
-            // 拷贝父空间的 Rounds 历史（浅拷贝，WorkspaceRound 是值类型 struct）
             var copiedRounds = new List<WorkspaceRound>(parent.Rounds ?? new List<WorkspaceRound>());
-
-            // 追加一条 Branch 声明轮（由 Director 记录）
             int branchSeq = copiedRounds.Count;
             var branchRound = new WorkspaceRound
             {
@@ -300,7 +217,6 @@ namespace RimLife.Workspace
             };
             copiedRounds.Add(branchRound);
 
-            // 拷贝父空间的激活技能列表
             var childSkillIds = new List<string>(parent.ActiveSkillIds ?? new List<string>());
 
             var child = new WorkspaceState
@@ -325,10 +241,12 @@ namespace RimLife.Workspace
                 LastSignal = null
             };
 
+            var childImpl = Wrap(child);
+
             _rwLock.EnterWriteLock();
             try
             {
-                _workspaces.Add(child);
+                _workspaces.Add(childImpl);
                 SaveToStore();
             }
             finally { _rwLock.ExitWriteLock(); }
@@ -336,47 +254,39 @@ namespace RimLife.Workspace
             _logger.Message($"[RimLife.Workspace] Branched workspace '{child.Label}' (id={child.Id}) from '{parent.Label}'");
             EventBus.Publish(FrameworkEvents.WorkspaceCreated,
                 EventArg.WithPayload(("workspaceId", child.Id), ("label", child.Label ?? ""), ("parentId", parentId)));
-            return child;
+            return childImpl;
         }
 
         // ================================================================
         // 合并
         // ================================================================
 
-        /// <summary>
-        /// 将源空间和目标的 Rounds 按 Seq 合并去重，追加一条 Merge 轮记录合并声明，然后废弃源空间。
-        /// 仅 Director 可调用。
-        /// </summary>
-        /// <param name="sourceId">源工作空间 ID。</param>
-        /// <param name="targetId">目标工作空间 ID。</param>
-        /// <param name="mergeRecap">编剧写的合并前情提要（作为目标空间新的 CurrentRecap）。</param>
-        /// <param name="callerRole">调用者角色（仅 Director 可合并）。</param>
-        /// <returns>是否成功。</returns>
         public bool Merge(string sourceId, string targetId, string mergeRecap, WorkspaceRole callerRole)
         {
-            // 身份校验：只有 Director 可以合并
             if (callerRole != WorkspaceRole.Director)
             {
                 _logger.Warning($"[RimLife.Workspace] Merge rejected: caller is {callerRole}, only Director can merge.");
                 return false;
             }
 
-            var source = Get(sourceId);
-            var target = Get(targetId);
+            var sourceImpl = GetImpl(sourceId);
+            var targetImpl = GetImpl(targetId);
 
-            if (source == null || target == null)
+            if (sourceImpl == null || targetImpl == null)
             {
                 _logger.Warning($"[RimLife.Workspace] Merge failed: source '{sourceId}' or target '{targetId}' not found.");
                 return false;
             }
 
-            if (source.Id == target.Id)
+            if (sourceId == targetId)
             {
                 _logger.Warning($"[RimLife.Workspace] Merge failed: source and target are the same workspace.");
                 return false;
             }
 
-            // 合并 Rounds：按 Seq 去重后排序
+            var source = sourceImpl.State;
+            var target = targetImpl.State;
+
             var mergedRounds = new List<WorkspaceRound>(target.Rounds ?? new List<WorkspaceRound>());
             var existingSeqs = new HashSet<int>(mergedRounds.Select(r => r.Seq));
 
@@ -393,7 +303,6 @@ namespace RimLife.Workspace
             }
             mergedRounds = mergedRounds.OrderBy(r => r.Seq).ToList();
 
-            // 追加一条 Merge 声明轮（由 Director 记录）
             int mergeSeq = mergedRounds.Count;
             string now = Now();
             var mergeRound = new WorkspaceRound
@@ -409,12 +318,10 @@ namespace RimLife.Workspace
             };
             mergedRounds.Add(mergeRound);
 
-            // 记录合并来源
             if (target.MergedFromIds == null)
                 target.MergedFromIds = new List<string>();
             target.MergedFromIds.Add(sourceId);
 
-            // 合并角色列表（去重）
             if (source.ColonistIds != null)
             {
                 if (target.ColonistIds == null)
@@ -426,7 +333,6 @@ namespace RimLife.Workspace
                 }
             }
 
-            // 合并语义标签（去重）
             if (source.Tags != null)
             {
                 if (target.Tags == null)
@@ -442,7 +348,6 @@ namespace RimLife.Workspace
             target.CurrentRecap = mergeRecap ?? "";
             target.LastActivityAt = now;
 
-            // 合并激活技能：将源空间独有的技能并入目标空间
             if (source.ActiveSkillIds != null && source.ActiveSkillIds.Count > 0)
             {
                 if (target.ActiveSkillIds == null)
@@ -454,7 +359,6 @@ namespace RimLife.Workspace
                 }
             }
 
-            // 废弃源空间
             source.Status = WorkspaceStatus.Abandoned;
             source.LastActivityAt = now;
             source.Outcome = $"Merged into '{target.Label}' ({target.Id})";
@@ -468,161 +372,55 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 编剧信号
+        // 事件路由
         // ================================================================
 
-        /// <summary>
-        /// 编剧上报推进状态信号。仅 Screenwriter 可调用。
-        /// 导演通过信号了解剧情线推进情况，据此做结构决策。
-        /// </summary>
-        /// <param name="workspaceId">目标工作空间 ID。</param>
-        /// <param name="signalType">信号类型。</param>
-        /// <param name="note">编剧给导演的简短说明（≤200字）。</param>
-        /// <param name="suggestedTargetId">ReadyForMerge 时的建议目标空间 ID。</param>
-        /// <param name="callerRole">调用者角色（仅 Screenwriter 可上报信号）。</param>
-        /// <returns>是否成功。</returns>
-        public bool ReportSignal(string workspaceId, SignalType signalType, string note,
-                                 string suggestedTargetId, WorkspaceRole callerRole)
+        public bool RouteEvents(string workspaceId, IReadOnlyList<IGameEvent> events)
         {
-            // 身份校验：只有 Screenwriter 可以上报信号
-            if (callerRole != WorkspaceRole.Screenwriter)
-            {
-                _logger.Warning($"[RimLife.Workspace] ReportSignal rejected: caller is {callerRole}, " +
-                            "only Screenwriter can report signals.");
-                return false;
-            }
-
-            var ws = Get(workspaceId);
-            if (ws == null)
-            {
-                _logger.Warning($"[RimLife.Workspace] ReportSignal failed: workspace '{workspaceId}' not found.");
-                return false;
-            }
-
-            string now = Now();
-            ws.LastSignal = new StorylineSignal
-            {
-                Type = signalType,
-                ReportedAt = now,
-                Note = note ?? "",
-                SuggestedTargetId = suggestedTargetId
-            };
-            ws.LastActivityAt = now;
-
-            SaveToStore();
-            _logger.Message($"[RimLife.Workspace] Workspace '{ws.Label}' reported signal: {signalType}");
-
-            PublishUpdated(workspaceId);
-            return true;
-        }
-
-        // ================================================================
-        // 事件路由（导演 → 工作空间）
-        // ================================================================
-
-        /// <summary>
-        /// 将事件推送到指定工作空间的事件 KV 缓存。
-        /// 追加后评估阈值，达到阈值时激活编剧 Agent。
-        /// </summary>
-        public bool PushEvent(string workspaceId, IGameEvent evt)
-        {
-            if (evt == null) return false;
-            var ws = Get(workspaceId);
+            var ws = GetImpl(workspaceId);
             if (ws == null || ws.Status != WorkspaceStatus.Active) return false;
+            if (events == null || events.Count == 0) return false;
 
-            string now = Now();
-            if (ws.EventCache == null) ws.EventCache = new Dictionary<string, string>();
-            if (ws.PendingEventIds == null) ws.PendingEventIds = new List<string>();
-
-            string eventJson = _serializer.SerializeEvent(evt);
-            ws.EventCache[evt.EventID] = eventJson;
-            ws.PendingEventIds.Add(evt.EventID);
-            ws.PendingImportance += _driverConfig.GetSeverityWeight(evt.Severity);
-            ws.LastActivityAt = now;
-
-            SaveToStore();
-            PublishUpdated(workspaceId);
-
-            if (EvaluatePendingThreshold(ws))
-            {
-                _onScreenwriterNeeded?.Invoke(workspaceId);
-            }
+            foreach (var evt in events)
+                ws.EventPool.Append(evt);
 
             return true;
         }
 
-        /// <summary>
-        /// Drain 工作空间的 pending 事件并清空。返回反序列化后的 IGameEvent 列表。
-        /// 编剧 Agent 调用此方法获取待处理事件。
-        /// </summary>
-        public IReadOnlyList<IGameEvent> DrainPendingEvents(string workspaceId)
-        {
-            var ws = Get(workspaceId);
-            if (ws == null) return new List<IGameEvent>();
+        // ================================================================
+        // 内部辅助
+        // ================================================================
 
-            var events = new List<IGameEvent>();
-            if (ws.PendingEventIds != null && ws.EventCache != null)
+        private WorkspaceImpl GetImpl(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            _rwLock.EnterReadLock();
+            try { return _workspaces.FirstOrDefault(w => w.Id == id); }
+            finally { _rwLock.ExitReadLock(); }
+        }
+
+        private static bool IsValidTransition(WorkspaceStatus from, WorkspaceStatus to)
+        {
+            if (from == to) return true;
+            switch (from)
             {
-                foreach (var eventId in ws.PendingEventIds)
-                {
-                    if (ws.EventCache.TryGetValue(eventId, out var json))
-                    {
-                        var evt = _serializer.DeserializeEvent(json);
-                        if (evt != null) events.Add(evt);
-                    }
-                }
-                ws.PendingEventIds.Clear();
+                case WorkspaceStatus.Active:
+                case WorkspaceStatus.Suspended:
+                    return to == WorkspaceStatus.Active
+                        || to == WorkspaceStatus.Suspended
+                        || to == WorkspaceStatus.Completed
+                        || to == WorkspaceStatus.Abandoned;
+                case WorkspaceStatus.Completed:
+                case WorkspaceStatus.Abandoned:
+                    return false;
+                default:
+                    return false;
             }
-            ws.PendingImportance = 0;
-            ws.LastActivityAt = Now();
-            SaveToStore();
-            PublishUpdated(workspaceId);
-            return events;
-        }
-
-        /// <summary>
-        /// 获取工作空间待处理事件数（不 drain，供查询）。
-        /// </summary>
-        public int GetPendingCount(string workspaceId)
-        {
-            var ws = Get(workspaceId);
-            return ws?.PendingEventIds?.Count ?? 0;
-        }
-
-        private bool EvaluatePendingThreshold(WorkspaceState ws)
-        {
-            int count = ws.PendingEventIds?.Count ?? 0;
-            return count >= _driverConfig.CountThreshold
-                || ws.PendingImportance >= _driverConfig.ImportanceThreshold;
         }
 
         // ================================================================
         // 持久化
         // ================================================================
-
-        private void SaveToStore()
-        {
-            try
-            {
-                var wsJsons = new List<string>();
-                foreach (var ws in _workspaces)
-                    wsJsons.Add(SerializeWorkspace(ws));
-
-                var sb = new StringBuilder("[");
-                for (int i = 0; i < wsJsons.Count; i++)
-                {
-                    if (i > 0) sb.Append(',');
-                    sb.Append(wsJsons[i]);
-                }
-                sb.Append(']');
-
-                _store.Store(StoreKey, sb.ToString());
-            }
-            catch (Exception e)
-            {
-                _logger.Warning($"[RimLife.Workspace] Failed to save workspaces: {e.Message}");
-            }
-        }
 
         private void LoadFromStore()
         {
@@ -637,12 +435,16 @@ namespace RimLife.Workspace
                 {
                     var ws = DeserializeWorkspace(dict);
                     if (ws != null)
-                    {
-                        _workspaces.Add(ws);
-                    }
+                        _workspaces.Add(Wrap(ws));
                 }
 
                 _logger.Message($"[RimLife.Workspace] Loaded {_workspaces.Count} workspaces from save.");
+
+                foreach (var ws in _workspaces)
+                {
+                    if (ws.Status == WorkspaceStatus.Active)
+                        _onWorkspaceReady?.Invoke(ws.Id);
+                }
             }
             catch (Exception e)
             {
@@ -651,7 +453,7 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 序列化
+        // 序列化（与之前完全一致）
         // ================================================================
 
         private string SerializeWorkspace(WorkspaceState ws)
@@ -663,39 +465,21 @@ namespace RimLife.Workspace
             w.Prop("createdByRole", ws.CreatedByRole.ToString());
             if (ws.ParentId != null)
                 w.Prop("parentId", ws.ParentId);
-
-            // MergedFromIds
             if (ws.MergedFromIds != null && ws.MergedFromIds.Count > 0)
                 w.Array("mergedFromIds", ws.MergedFromIds);
-
-            // ColonistIds
             if (ws.ColonistIds != null && ws.ColonistIds.Count > 0)
                 w.Array("colonistIds", ws.ColonistIds);
-
-            // Tags
             if (ws.Tags != null && ws.Tags.Count > 0)
                 w.Array("tags", ws.Tags);
-
-            // CurrentRecap
             if (!string.IsNullOrEmpty(ws.CurrentRecap))
                 w.Prop("currentRecap", ws.CurrentRecap);
-
-            // ActiveSkillIds
             if (ws.ActiveSkillIds != null && ws.ActiveSkillIds.Count > 0)
                 w.Array("activeSkillIds", ws.ActiveSkillIds);
-
-            // EventCache（KV 缓存）
             if (ws.EventCache != null && ws.EventCache.Count > 0)
                 w.PropRaw("eventCache", _serializer.SerializeEventCache(ws.EventCache));
-
-            // PendingEventIds
             if (ws.PendingEventIds != null && ws.PendingEventIds.Count > 0)
                 w.Array("pendingEventIds", ws.PendingEventIds);
-
-            // PendingImportance
             w.Prop("pendingImportance", ws.PendingImportance);
-
-            // Rounds
             if (ws.Rounds != null && ws.Rounds.Count > 0)
             {
                 var roundJsons = new List<string>();
@@ -703,13 +487,10 @@ namespace RimLife.Workspace
                     roundJsons.Add(SerializeRound(r));
                 w.ArrayRaw("rounds", roundJsons);
             }
-
             w.Prop("createdAt", ws.CreatedAt ?? "");
             w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
-
-            // LastSignal
             if (ws.LastSignal.HasValue)
             {
                 var sig = ws.LastSignal.Value;
@@ -722,7 +503,6 @@ namespace RimLife.Workspace
                     sigWriter.Prop("suggestedTargetId", sig.SuggestedTargetId);
                 w.PropRaw("lastSignal", sigWriter.Close());
             }
-
             return w.Close();
         }
 
@@ -735,14 +515,11 @@ namespace RimLife.Workspace
             if (!string.IsNullOrEmpty(r.Narrative))
                 w.Prop("narrative", r.Narrative);
             w.Prop("createdAt", r.CreatedAt ?? "");
-
             if (r.TriggerEventIds != null && r.TriggerEventIds.Count > 0)
                 w.Array("triggerEventIds", r.TriggerEventIds);
-
             w.Prop("authorRole", r.AuthorRole.ToString());
             if (!string.IsNullOrEmpty(r.AuthorId))
                 w.Prop("authorId", r.AuthorId);
-
             return w.Close();
         }
 
@@ -796,13 +573,8 @@ namespace RimLife.Workspace
                 };
                 result.Add(r);
             }
-
             return result;
         }
-
-        // ================================================================
-        // 辅助
-        // ================================================================
 
         private static WorkspaceStatus ParseStatus(string s)
         {
@@ -876,115 +648,12 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 技能管理（WorkspaceState.ActiveSkillIds 是唯一权威源）
-        // ================================================================
-
-        /// <summary>
-        /// 为指定工作空间激活一个 Skill。直接修改 WorkspaceState 并持久化。
-        /// </summary>
-        /// <returns>激活结果 JSON（供 LLM 工具调用返回）。</returns>
-        public string ActivateSkill(string workspaceId, string skillId)
-        {
-            var ws = Get(workspaceId);
-            if (ws == null)
-                return McpSkillRegistry.MakeError($"Workspace '{workspaceId}' not found.");
-
-            if (string.IsNullOrEmpty(skillId))
-                return McpSkillRegistry.MakeError("skillId is required");
-
-            if (string.Equals(skillId, McpSkillRegistry.SystemSkillId, StringComparison.OrdinalIgnoreCase))
-                return McpSkillRegistry.MakeError($"System skill '{McpSkillRegistry.SystemSkillId}' is always active.");
-
-            if (ws.ActiveSkillIds == null)
-                ws.ActiveSkillIds = new List<string>();
-
-            string newToolsJson;
-            if (!ws.ActiveSkillIds.Contains(skillId))
-            {
-                ws.ActiveSkillIds.Add(skillId);
-                newToolsJson = McpSkillRegistry.GetSkillToolsJson(skillId);
-            }
-            else
-            {
-                newToolsJson = "[]"; // 已激活，无新工具
-            }
-
-            ws.LastActivityAt = Now();
-            SaveToStore();
-            PublishUpdated(workspaceId);
-            return McpSkillRegistry.MakeActivateResult(skillId, newToolsJson);
-        }
-
-        /// <summary>
-        /// 为指定工作空间停用一个 Skill。直接修改 WorkspaceState 并持久化。
-        /// </summary>
-        /// <returns>反激活结果 JSON（供 LLM 工具调用返回）。</returns>
-        public string DeactivateSkill(string workspaceId, string skillId)
-        {
-            var ws = Get(workspaceId);
-            if (ws == null)
-                return McpSkillRegistry.MakeError($"Workspace '{workspaceId}' not found.");
-
-            if (string.IsNullOrEmpty(skillId))
-                return McpSkillRegistry.MakeError("skillId is required");
-
-            if (string.Equals(skillId, McpSkillRegistry.SystemSkillId, StringComparison.OrdinalIgnoreCase))
-                return McpSkillRegistry.MakeError($"Cannot deactivate system skill '{McpSkillRegistry.SystemSkillId}'.");
-
-            if (ws.ActiveSkillIds != null)
-                ws.ActiveSkillIds.Remove(skillId);
-
-            ws.LastActivityAt = Now();
-            SaveToStore();
-            PublishUpdated(workspaceId);
-            return McpSkillRegistry.MakeDeactivateResult(skillId);
-        }
-
-        /// <summary>
-        /// 获取指定工作空间的已激活 Skill ID 列表。
-        /// </summary>
-        public IReadOnlyList<string> GetActiveSkillIds(string workspaceId)
-        {
-            var ws = Get(workspaceId);
-            return ws?.ActiveSkillIds ?? new List<string>();
-        }
-
-        /// <summary>
-        /// 验证工作空间状态转换是否合法。
-        /// Active → Suspended/Completed/Abandoned
-        /// Suspended → Active/Completed/Abandoned
-        /// Completed/Abandoned → (不可转换)
-        /// </summary>
-        private static bool IsValidTransition(WorkspaceStatus from, WorkspaceStatus to)
-        {
-            if (from == to) return true;
-
-            switch (from)
-            {
-                case WorkspaceStatus.Active:
-                case WorkspaceStatus.Suspended:
-                    return to == WorkspaceStatus.Active
-                        || to == WorkspaceStatus.Suspended
-                        || to == WorkspaceStatus.Completed
-                        || to == WorkspaceStatus.Abandoned;
-
-                case WorkspaceStatus.Completed:
-                case WorkspaceStatus.Abandoned:
-                    return false; // 终态不可逆转
-
-                default:
-                    return false;
-            }
-        }
-
-        // ================================================================
         // IDisposable
         // ================================================================
 
-        /// <summary>持久化最终状态并清空内存。</summary>
         public void Dispose()
         {
-            try { SaveToStore(); } catch { /* 持久化失败不应阻断释放 */ }
+            try { SaveToStore(); } catch { }
             _rwLock.EnterWriteLock();
             try { _workspaces.Clear(); }
             finally { _rwLock.ExitWriteLock(); }

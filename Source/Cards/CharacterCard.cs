@@ -4,7 +4,7 @@ namespace RimLife.Cards
 {
     /// <summary>
     /// 人物卡：聚合单个角色的身份元数据。
-    /// 纯 DTO，零 RimWorld 依赖。各维度的语义描述由 IPawnPromptProvider 动态生成。
+    /// 纯 DTO，零 RimWorld 依赖。各维度的语义描述由 ICharacterContentProvider 动态生成。
     /// </summary>
     public class CharacterCard
     {

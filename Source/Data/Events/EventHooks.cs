@@ -23,7 +23,7 @@ namespace RimLife
         {
             try
             {
-                RimLifeCore.EventLog?.Append(
+                RimLifeCore.GetDirectorWorkspace()?.EventPool?.Append(
                     EventCardMapper.FromLetter(textLetterDef, label, text, lookTargets, relatedFaction));
             }
             catch (Exception e)
@@ -49,7 +49,7 @@ namespace RimLife
                 if (initiator == null) return;
 
                 // 写入 EventLog（事件卡）
-                RimLifeCore.EventLog?.Append(EventCardMapper.FromSocialInteraction(initiator, recipient, intDef));
+                RimLifeCore.GetDirectorWorkspace()?.EventPool?.Append(EventCardMapper.FromSocialInteraction(initiator, recipient, intDef));
 
                 // 写入 InteractionHistoryStore（流水记录）
                 RimLifeCore.InteractionStore?.Append(new Cards.InteractionRecord
@@ -123,7 +123,7 @@ namespace RimLife
             if (__instance == null) return;
             try
             {
-                RimLifeCore.EventLog?.Append(EventCardMapper.FromFactionChange(__instance, newFaction));
+                RimLifeCore.GetDirectorWorkspace()?.EventPool?.Append(EventCardMapper.FromFactionChange(__instance, newFaction));
             }
             catch (Exception e)
             {

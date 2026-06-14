@@ -1,6 +1,20 @@
 namespace RimLife.Core
 {
     /// <summary>
+    /// Pawn 视图层级常量。与 <see cref="ICharacterContentProvider.GetContent"/> 的 view 参数配合使用，
+    /// 消除拼写风险。
+    /// </summary>
+    public static class PawnView
+    {
+        /// <summary>客观属性（默认）。</summary>
+        public const string Static = "static";
+        /// <summary>客观属性 + 视角/记忆快照。</summary>
+        public const string Dynamic = "dynamic";
+        /// <summary>完整数据，含记忆流水。</summary>
+        public const string Full = "full";
+    }
+
+    /// <summary>
     /// 角色人物卡内容提供者接口（钩子模式）。
     /// 游戏侧实现多个此接口的实例，分别提供健康、心情、技能等各维度的自然语言描述。
     /// 框架收集所有 Provider 的产出后按 SectionName 组装为结构化 JSON。

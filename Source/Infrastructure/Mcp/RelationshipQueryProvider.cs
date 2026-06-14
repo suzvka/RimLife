@@ -39,7 +39,9 @@ namespace RimLife.Infrastructure.Mcp
                 var pawn = PawnQueryHelper.FindPawnById(pawnId);
                 if (pawn == null) return "{}";
 
-                var prompt = RimLifeCore.PromptProvider?.GetSocialPrompt(pawnId);
+                var socialProvider = RimLifeCore.ContentProviders
+                    .Find(p => p.SectionName == "social");
+                var prompt = socialProvider?.GetContent(pawnId, PawnView.Static);
                 return prompt ?? "{}";
             }
             catch (Exception e)

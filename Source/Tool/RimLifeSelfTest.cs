@@ -152,13 +152,14 @@ namespace RimLife.Tool
             else
                 Skip("SaveIdResolver 未设置 (可能是新档，FinalizeInit 尚未调用)");
 
-            if (RimLifeCore.EventLog != null)
+            var directorWs = RimLifeCore.GetDirectorWorkspace();
+            if (directorWs?.EventPool != null)
             {
-                Pass($"EventLog 可用 ({RimLifeCore.EventLog.GetType().Name})");
-                DumpObject("  TotalAppended", RimLifeCore.EventLog.TotalAppended);
+                Pass($"EventPool 可用 ({directorWs.EventPool.GetType().Name})");
+                DumpObject("  TotalAppended", directorWs.EventPool.TotalAppended);
             }
             else
-                Skip("EventLog 未初始化 (SaveStore 为 null?)");
+                Skip("EventPool 未初始化 (无导演工作空间)");
         }
 
         // ================================================================
@@ -299,10 +300,10 @@ namespace RimLife.Tool
 
             DumpObject("SaveStore", RimLifeCore.SaveStore != null ? "已注册" : "null");
 
-            var log = RimLifeCore.EventLog;
+            var log = RimLifeCore.GetDirectorWorkspace()?.EventPool;
             if (log == null)
             {
-                Skip("EventLog 为 null，无法测试 (SaveStore 未就绪?)");
+                Skip("EventPool 为 null，无法测试 (无导演工作空间?)");
                 return;
             }
 
@@ -788,7 +789,7 @@ namespace RimLife.Tool
             // --- 9.2 get_recent_events ---
             try
             {
-                var eventLog = RimLifeCore.EventLog;
+                var eventLog = RimLifeCore.GetDirectorWorkspace()?.EventPool;
                 if (eventLog != null && eventLog.TotalAppended > 0)
                 {
                     var json = ColonyOverviewProvider.GetRecentEvents(5);
@@ -869,23 +870,6 @@ namespace RimLife.Tool
                     Fail("find_characters(injured) 输出异常");
             }
             catch (Exception e) { Fail("find_characters(injured) 异常", e.Message); }
-
-            // --- 9.6 query_events ---
-            try
-            {
-                var eventLog = RimLifeCore.EventLog;
-                if (eventLog != null && eventLog.TotalAppended > 0)
-                {
-                    var json = EventQueryProvider.QueryEvents(tagsAny: "Combat", limit: 5);
-                    if (json.StartsWith("[") && json.EndsWith("]"))
-                        Pass("query_events(Combat) 成功");
-                    else
-                        Fail("query_events 输出异常");
-                }
-                else
-                    Skip("query_events — EventLog 为空");
-            }
-            catch (Exception e) { Fail("query_events 异常", e.Message); }
 
             // --- 9.7 get_relationships ---
             if (pawnId != null)
@@ -1137,28 +1121,28 @@ namespace RimLife.Tool
         {
             Section("11. AgentLoop");
 
-            // --- 11.1 AgentEventPool 类型 ---
+            // --- 11.1 EventPool 类型 ---
             try
             {
-                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
+                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
                 if (pool != null)
                 {
-                    Pass($"EventLog 是 AgentEventPool ({pool.GetType().Name})");
+                    Pass($"EventPool 可用 ({pool.GetType().Name})");
                     DumpObject("  PendingCount", pool.PendingCount);
                     DumpObject("  TotalImportance", pool.TotalImportance);
-                    DumpObject("  RecentEvents", pool.RecentEvents.Count);
+                    DumpObject("  RecentEvents", pool.Count(EventQuery.All));
                     DumpObject("  TotalAppended", pool.TotalAppended);
                 }
                 else
-                    Fail("EventLog 不是 AgentEventPool 类型");
+                    Fail("EventPool 不可用 (无导演工作空间)");
             }
-            catch (Exception e) { Fail("AgentEventPool 类型检查异常", e.Message); }
+            catch (Exception e) { Fail("EventPool 类型检查异常", e.Message); }
 
             // --- 11.2 Pending/Drain 生命周期 ---
             try
             {
-                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
-                if (pool == null) { Skip("AgentEventPool 不可用"); return; }
+                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
+                if (pool == null) { Skip("EventPool 不可用"); return; }
 
                 int before = pool.PendingCount;
 
@@ -1183,14 +1167,14 @@ namespace RimLife.Tool
                 foreach (var evt in drained)
                     pool.Append(evt);
 
-                // Clear
-                pool.ClearPending();
+                // Drain 清空
+                pool.DrainPending();
                 if (pool.PendingCount == 0)
-                    Pass("ClearPending 清空成功");
+                    Pass("DrainPending 清空成功");
                 else
-                    Fail("ClearPending 后 PendingCount != 0");
+                    Fail("DrainPending 后 PendingCount != 0");
             }
-            catch (Exception e) { Fail("Drain/Clear 测试异常", e.Message); }
+            catch (Exception e) { Fail("Drain 测试异常", e.Message); }
 
             // --- 11.3 重要度计算 ---
             try
@@ -1200,10 +1184,10 @@ namespace RimLife.Tool
                      $"Major={config.GetSeverityWeight("Major")}, " +
                      $"Extreme={config.GetSeverityWeight("Extreme")}");
 
-                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
-                if (pool == null) { Skip("AgentEventPool 不可用"); return; }
+                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
+                if (pool == null) { Skip("EventPool 不可用"); return; }
 
-                pool.ClearPending();
+                pool.DrainPending();
                 pool.Append(MakeTestEvent("imp_1", new List<string> { "Test" }, 1, "Minor"));
                 pool.Append(MakeTestEvent("imp_2", new List<string> { "Test" }, 2, "Major"));
                 pool.Append(MakeTestEvent("imp_3", new List<string> { "Test" }, 3, "Extreme"));
@@ -1217,17 +1201,17 @@ namespace RimLife.Tool
                 else
                     Fail($"TotalImportance 不正确: {pool.TotalImportance} != {expected}");
 
-                pool.ClearPending();
+                pool.DrainPending();
             }
             catch (Exception e) { Fail("重要度计算异常", e.Message); }
 
             // --- 11.4 OnThresholdReached 回调 ---
             try
             {
-                var pool = RimLifeCore.EventLog as Driver.AgentEventPool;
-                if (pool == null) { Skip("AgentEventPool 不可用"); return; }
+                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
+                if (pool == null) { Skip("EventPool 不可用"); return; }
 
-                pool.ClearPending();
+                pool.DrainPending();
 
                 bool callbackFired = false;
                 Action handler = () => { callbackFired = true; };
@@ -1245,14 +1229,14 @@ namespace RimLife.Tool
                     Fail("OnThresholdReached: 数量达标但未触发");
 
                 pool.OnThresholdReached -= handler;
-                pool.ClearPending();
+                pool.DrainPending();
             }
             catch (Exception e) { Fail("OnThresholdReached 测试异常", e.Message); }
 
             // --- 11.5 DirectorAgent 状态 ---
             try
             {
-                var director = RimLifeCore.DirectorAgent;
+                var director = RimLifeCore.GetDirectorAgent();
                 if (director != null)
                 {
                     Pass("DirectorAgent 已创建");
@@ -1285,66 +1269,55 @@ namespace RimLife.Tool
                     var ws = activeWs[0];
                     Pass($"工作空间 '{ws.Label}' 存在 (Active workspace count={activeWs.Count})");
 
-                    DumpObject("  EventCache", ws.EventCache == null ? "null" : $"{ws.EventCache.Count} entries");
-                    DumpObject("  PendingEventIds", ws.PendingEventIds == null ? "null" : $"{ws.PendingEventIds.Count} pending");
-                    DumpObject("  PendingImportance", ws.PendingImportance);
+                    DumpObject("  EventPool.PendingCount", ws.EventPool.PendingCount);
+                    DumpObject("  EventPool.TotalImportance", ws.EventPool.TotalImportance);
                     DumpObject("  Role", ws.CreatedByRole.ToString());
                 }
                 else
                 {
                     Pass("无活跃工作空间 — 创建测试空间验证字段");
-                    var testWs = new WorkspaceState
-                    {
-                        Id = "selftest_ws",
-                        Label = "Selftest Workspace",
-                        Status = WorkspaceStatus.Active,
-                        CreatedByRole = WorkspaceRole.Screenwriter,
-                        ActiveSkillIds = new List<string> { "workspace_writing" }
-                    };
-
-                    if (testWs.EventCache == null && testWs.PendingEventIds == null)
-                        Pass("EventCache/PendingEventIds 默认为 null (预期)");
+                    var testWs = wsManager.Create("FieldTest", null, null, WorkspaceRole.Screenwriter);
+                    if (testWs.EventPool.PendingCount == 0 && testWs.EventPool.TotalImportance == 0)
+                        Pass("EventPool 初始状态为空 (预期)");
                     else
-                        Fail("EventCache/PendingEventIds 应默认为 null");
+                        Fail("EventPool 初始状态异常");
                 }
             }
             catch (Exception e) { Fail("字段存在性测试异常", e.Message); }
 
-            // --- 12.2 事件推入工作空间 KV 缓存 ---
+            // --- 12.2 事件推入工作空间事件池 ---
             try
             {
                 var wsManager = RimLifeCore.Workspaces;
                 if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
-                // 通过 WorkspaceManager 创建测试空间
                 var testWs = wsManager.Create("PushTest", null, null, WorkspaceRole.Director);
 
                 var evt = MakeTestEvent("ws_test_1", new List<string> { "Test", "Combat" }, 1000, "Major");
-                bool pushed = wsManager.PushEvent(testWs.Id, evt);
-                if (pushed && wsManager.GetPendingCount(testWs.Id) == 1)
-                    Pass($"PushEvent 后 PendingCount=1");
+                bool pushed = wsManager.RouteEvents(testWs.Id, new List<IGameEvent> { evt });
+                if (pushed && testWs.EventPool.PendingCount == 1)
+                    Pass($"RouteEvents 后 PendingCount=1");
                 else
-                    Fail($"PushEvent 后 PendingCount={wsManager.GetPendingCount(testWs.Id)} (expected 1)");
+                    Fail($"RouteEvents 后 PendingCount={testWs.EventPool.PendingCount} (expected 1)");
 
                 // 验证重要度
                 var config = RimLifeCore.DriverConfig;
                 int weight = config.GetSeverityWeight("Major");
-                var updated = wsManager.Get(testWs.Id);
-                if (updated != null && updated.PendingImportance == weight)
-                    Pass($"PendingImportance={weight} (Major权重正确)");
+                if (testWs.EventPool.TotalImportance == weight)
+                    Pass($"TotalImportance={weight} (Major权重正确)");
                 else
-                    Fail($"PendingImportance={updated?.PendingImportance ?? -1} (expected {weight})");
+                    Fail($"TotalImportance={testWs.EventPool.TotalImportance} (expected {weight})");
 
                 // Drain
-                var drained = wsManager.DrainPendingEvents(testWs.Id);
-                if (drained.Count == 1 && wsManager.GetPendingCount(testWs.Id) == 0)
-                    Pass("DrainPendingEvents 清空工作空间事件 KV 缓存");
+                var drained = testWs.EventPool.DrainPending();
+                if (drained.Count == 1 && testWs.EventPool.PendingCount == 0)
+                    Pass("DrainPending 清空工作空间事件池");
                 else
-                    Fail($"DrainPendingEvents 异常: drained={drained.Count}, pending={wsManager.GetPendingCount(testWs.Id)}");
+                    Fail($"DrainPending 异常: drained={drained.Count}, pending={testWs.EventPool.PendingCount}");
             }
-            catch (Exception e) { Fail("PushEvent 测试异常", e.Message); }
+            catch (Exception e) { Fail("RouteEvents 测试异常", e.Message); }
 
-            // --- 12.3 阈值回调（通过 WorkspaceManager.PushEvent 触发） ---
+            // --- 12.3 阈值回调（通过 RouteEvents 触发） ---
             try
             {
                 var wsManager = RimLifeCore.Workspaces;
@@ -1354,22 +1327,16 @@ namespace RimLife.Tool
                 var config = RimLifeCore.DriverConfig;
 
                 // 填充事件到阈值
-                int pushed = 0;
+                var events = new List<IGameEvent>();
                 for (int i = 0; i < config.CountThreshold; i++)
-                {
-                    if (wsManager.PushEvent(testWs.Id, MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, "Major")))
-                        pushed++;
-                }
+                    events.Add(MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, "Major"));
 
-                if (pushed == config.CountThreshold)
-                    Pass($"PushEvent 达到阈值 (pushed={pushed}, threshold={config.CountThreshold})");
-                else
-                    Fail($"PushEvent 未达到预期: pushed={pushed}, threshold={config.CountThreshold}");
+                wsManager.RouteEvents(testWs.Id, events);
 
-                if (wsManager.GetPendingCount(testWs.Id) == config.CountThreshold)
-                    Pass("事件全部累积在 pending 中");
+                if (testWs.EventPool.PendingCount == config.CountThreshold)
+                    Pass($"RouteEvents 达到阈值 (count={testWs.EventPool.PendingCount}, threshold={config.CountThreshold})");
                 else
-                    Fail($"PendingCount={wsManager.GetPendingCount(testWs.Id)} (expected {config.CountThreshold})");
+                    Fail($"PendingCount={testWs.EventPool.PendingCount} (expected {config.CountThreshold})");
             }
             catch (Exception e) { Fail("工作空间回调测试异常", e.Message); }
 
@@ -1383,11 +1350,12 @@ namespace RimLife.Tool
                 var testWs = wsManager.Create("ActivationTest", null, null, WorkspaceRole.Director);
 
                 // 填充极端事件：1个Extreme即可满足重要性
-                wsManager.PushEvent(testWs.Id, MakeTestEvent("act_1", new List<string> { "Test" }, 1, "Extreme"));
+                wsManager.RouteEvents(testWs.Id, new List<IGameEvent> {
+                    MakeTestEvent("act_1", new List<string> { "Test" }, 1, "Extreme")
+                });
 
-                var updated = wsManager.Get(testWs.Id);
-                int count = wsManager.GetPendingCount(testWs.Id);
-                int importance = updated?.PendingImportance ?? 0;
+                int count = testWs.EventPool.PendingCount;
+                int importance = testWs.EventPool.TotalImportance;
                 bool countOk = count >= config.CountThreshold;
                 bool impOk = importance >= config.ImportanceThreshold;
 
@@ -1441,7 +1409,7 @@ namespace RimLife.Tool
                 new FloatMenuOption("1. 基础设施 (SaveStore/CacheStore/EventLog)", () => TestInfrastructure()),
                 new FloatMenuOption("2. JSON 往返 (ParseDict/Serialize/Writer)", () => TestJsonRoundTrip()),
                 new FloatMenuOption("3. Framework 纯逻辑 (SemanticLabels/RandomInt)", () => TestFramework()),
-                new FloatMenuOption("4. EventLog(AgentEventPool) 集成 (Append/Query/Count)", () => TestEventLog()),
+                new FloatMenuOption("4. EventPool 集成 (Append/Query/Count)", () => TestEventLog()),
                 new FloatMenuOption("5. Mapper 数据采集 (CharacterCard/EnvironmentCard)", () => TestMappers()),
                 new FloatMenuOption("6. EventCardMapper 构造 (FromDeath/FromSocial/...)", () => TestEventCardMapper()),
                 new FloatMenuOption("7. Harmony Patch 状态", () => TestHarmonyStatus()),

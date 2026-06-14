@@ -1,6 +1,8 @@
+using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
+using RimLife.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,13 +17,11 @@ namespace RimLife.Workspace
     public class DirectionMcpProvider : IMcpHookProvider
     {
         private readonly Func<IWorkspaceManager> _getWorkspaceManager;
-        private readonly Func<IEventLog> _getEventLog;
         private readonly ILogger _logger;
 
-        public DirectionMcpProvider(Func<IWorkspaceManager> getWorkspaceManager, Func<IEventLog> getEventLog, ILogger logger)
+        public DirectionMcpProvider(Func<IWorkspaceManager> getWorkspaceManager, ILogger logger)
         {
             _getWorkspaceManager = getWorkspaceManager ?? throw new ArgumentNullException(nameof(getWorkspaceManager));
-            _getEventLog = getEventLog;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -302,18 +302,22 @@ namespace RimLife.Workspace
                 if (manager == null)
                     return "{\"success\":false,\"error\":\"WorkspaceManager unavailable\"}";
 
-                var eventLog = _getEventLog?.Invoke();
+                var directorWs = RimLifeCore.GetDirectorWorkspace();
                 var ids = ParseStringList(eventIds);
                 if (ids.Count == 0)
                     return "{\"success\":false,\"error\":\"no eventIds provided\"}";
 
                 int routed = 0;
+                var events = new List<IGameEvent>();
                 foreach (var id in ids)
                 {
-                    var evt = eventLog?.GetById(id);
-                    if (evt != null && manager.PushEvent(workspaceId, evt))
-                        routed++;
+                    var evt = directorWs?.EventPool?.GetById(id);
+                    if (evt != null)
+                        events.Add(evt);
                 }
+
+                if (events.Count > 0 && manager.RouteEvents(workspaceId, events))
+                    routed = events.Count;
 
                 var w = new JsonWriter(128);
                 w.Prop("success", routed > 0);
@@ -337,7 +341,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 导演视图序列化：含元数据、信号、轮次统计，不含具体叙事内容。
         /// </summary>
-        private string SerializeDirectorView(WorkspaceState ws)
+        private string SerializeDirectorView(IWorkspace ws)
         {
             if (ws == null) return "{}";
 
@@ -358,7 +362,6 @@ namespace RimLife.Workspace
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
-            // LastSignal — 导演决策的关键依据
             if (ws.LastSignal.HasValue)
             {
                 var sig = ws.LastSignal.Value;
@@ -378,7 +381,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 导演视图摘要列表（轻量，不含轮次详情，含信号）。
         /// </summary>
-        private string SerializeDirectorSummaryList(IReadOnlyList<WorkspaceState> workspaces)
+        private string SerializeDirectorSummaryList(IReadOnlyList<IWorkspace> workspaces)
         {
             if (workspaces == null || workspaces.Count == 0) return "[]";
 
@@ -395,7 +398,7 @@ namespace RimLife.Workspace
         /// <summary>
         /// 单个工作空间的导演摘要（轻量）。
         /// </summary>
-        private string SerializeDirectorSummary(WorkspaceState ws)
+        private string SerializeDirectorSummary(IWorkspace ws)
         {
             var w = new JsonWriter(256);
             w.Prop("id", ws.Id ?? "");
