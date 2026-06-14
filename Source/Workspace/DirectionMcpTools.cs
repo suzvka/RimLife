@@ -15,11 +15,13 @@ namespace RimLife.Workspace
     public class DirectionMcpProvider : IMcpHookProvider
     {
         private readonly Func<IWorkspaceManager> _getWorkspaceManager;
+        private readonly Func<IEventLog> _getEventLog;
         private readonly ILogger _logger;
 
-        public DirectionMcpProvider(Func<IWorkspaceManager> getWorkspaceManager, ILogger logger)
+        public DirectionMcpProvider(Func<IWorkspaceManager> getWorkspaceManager, Func<IEventLog> getEventLog, ILogger logger)
         {
             _getWorkspaceManager = getWorkspaceManager ?? throw new ArgumentNullException(nameof(getWorkspaceManager));
+            _getEventLog = getEventLog;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -39,6 +41,7 @@ namespace RimLife.Workspace
                 McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(CloseWorkspace)), this),
                 McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(BranchWorkspace)), this),
                 McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(MergeWorkspaces)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(RouteEventToWorkspace)), this),
             };
         }
         // ================================================================
@@ -276,6 +279,54 @@ namespace RimLife.Workspace
             {
                 _logger.Warning($"[RimLife.DirectionMcp] merge_workspaces failed: {e.Message}");
                 return "{}";
+            }
+        }
+
+        // ================================================================
+        // 事件路由（导演 → 工作空间）
+        // ================================================================
+
+        /// <summary>
+        /// 将全局事件路由到指定工作空间的事件缓存。
+        /// 多次路由可累积事件，触发编剧。事件 ID 见待处理事件列表中的 eventId。
+        /// </summary>
+        [McpTool(Name = "route_event_to_workspace",
+                 Description = "将指定全局事件路由到目标工作空间的内部事件缓存。多次路由累积事件触发编剧。事件 ID 见待处理事件列表的 eventId 字段。")]
+        public string RouteEventToWorkspace(
+            [McpParam(Description = "目标工作空间 ID")] string workspaceId,
+            [McpParam(Description = "要路由的事件 ID，多个用逗号分隔，如 'letter_Raid_12345,death_pawn_001_67890'")] string eventIds)
+        {
+            try
+            {
+                var manager = _getWorkspaceManager();
+                if (manager == null)
+                    return "{\"success\":false,\"error\":\"WorkspaceManager unavailable\"}";
+
+                var eventLog = _getEventLog?.Invoke();
+                var ids = ParseStringList(eventIds);
+                if (ids.Count == 0)
+                    return "{\"success\":false,\"error\":\"no eventIds provided\"}";
+
+                int routed = 0;
+                foreach (var id in ids)
+                {
+                    var evt = eventLog?.GetById(id);
+                    if (evt != null && manager.PushEvent(workspaceId, evt))
+                        routed++;
+                }
+
+                var w = new JsonWriter(128);
+                w.Prop("success", routed > 0);
+                w.Prop("routed", routed);
+                w.Prop("total", ids.Count);
+                if (routed < ids.Count)
+                    w.Prop("warning", $"{ids.Count - routed} event(s) not found or workspace inactive");
+                return w.Close();
+            }
+            catch (Exception e)
+            {
+                _logger.Warning($"[RimLife.DirectionMcp] route_event_to_workspace failed: {e.Message}");
+                return "{\"success\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
 

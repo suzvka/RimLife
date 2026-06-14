@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using RimLife.Cards;
 using RimLife.Workspace;
 
 namespace RimLife.Core
@@ -48,5 +49,20 @@ namespace RimLife.Core
 
         /// <summary>获取指定工作空间的已激活 Skill ID 列表。</summary>
         IReadOnlyList<string> GetActiveSkillIds(string workspaceId);
+
+        /// <summary>
+        /// 将事件推送到指定工作空间的事件 KV 缓存。
+        /// 仅导演调用；推送后评估阈值可能触发编剧 Agent。
+        /// </summary>
+        bool PushEvent(string workspaceId, IGameEvent evt);
+
+        /// <summary>
+        /// Drain 工作空间的 pending 事件，返回反序列化后的 IGameEvent 列表。
+        /// 编剧 Agent drain 后清空 pending 列表和重要度累计值。
+        /// </summary>
+        IReadOnlyList<IGameEvent> DrainPendingEvents(string workspaceId);
+
+        /// <summary>获取工作空间待处理事件数（不 drain）。</summary>
+        int GetPendingCount(string workspaceId);
     }
 }

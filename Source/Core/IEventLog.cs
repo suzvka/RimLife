@@ -25,6 +25,9 @@ namespace RimLife.Core
         /// <summary>最近一条事件，无事件时返回 null。</summary>
         IGameEvent Latest { get; }
 
+        /// <summary>按事件 ID 查找事件（查 recent 缓冲区）。路由工具依赖此方法。</summary>
+        IGameEvent GetById(string eventId);
+
         /// <summary>累计追加的事件总数。</summary>
         int TotalAppended { get; }
 

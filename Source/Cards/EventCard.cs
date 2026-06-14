@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace RimLife.Cards
 {
@@ -32,6 +33,47 @@ namespace RimLife.Cards
 
         /// <summary>松结构扩展参数 (事件特有的数据)。</summary>
         IDictionary<string, string> Payload { get; }
+    }
+
+    /// <summary>
+    /// IGameEvent 的具体可序列化实现。供事件缓存（KV 存储）和反序列化使用。
+    /// 与 EventCardMapper.EventCardImpl 等价，但为 public 可在框架各处复用。
+    /// </summary>
+    public class EventCardData : IGameEvent
+    {
+        public string EventID { get; set; }
+        public string DefName { get; set; }
+        public List<string> Tags { get; set; }
+        public int Tick { get; set; }
+        public string Severity { get; set; }
+        public List<EventActorRef> Actors { get; set; }
+        public string MapHint { get; set; }
+        public Dictionary<string, string> Payload { get; set; }
+
+        IReadOnlyList<string> IGameEvent.Tags => Tags;
+        IReadOnlyList<EventActorRef> IGameEvent.Actors => Actors;
+        IDictionary<string, string> IGameEvent.Payload => Payload;
+
+        /// <summary>从任意 IGameEvent 深拷贝创建。</summary>
+        public static EventCardData From(IGameEvent source)
+        {
+            if (source == null) return null;
+            return new EventCardData
+            {
+                EventID = source.EventID,
+                DefName = source.DefName,
+                Tags = source.Tags != null ? new List<string>(source.Tags) : new List<string>(),
+                Tick = source.Tick,
+                Severity = source.Severity,
+                Actors = source.Actors != null
+                    ? source.Actors.Select(a => new EventActorRef { ID = a.ID, Name = a.Name, Role = a.Role, RefType = a.RefType }).ToList()
+                    : new List<EventActorRef>(),
+                MapHint = source.MapHint,
+                Payload = source.Payload != null
+                    ? new Dictionary<string, string>(source.Payload)
+                    : new Dictionary<string, string>()
+            };
+        }
     }
 
     /// <summary>

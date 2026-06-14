@@ -28,6 +28,9 @@ namespace RimLife.Workspace
         private readonly IAuthorityStore _store;
         private readonly ILogger _logger;
         private readonly Func<string> _timeProvider;
+        private readonly DriverConfig _driverConfig;
+        private readonly ICardSerializer _serializer;
+        private readonly Action<string> _onScreenwriterNeeded;
         private const string StoreKey = "rimlife_workspaces";
 
         /// <summary>
@@ -36,11 +39,14 @@ namespace RimLife.Workspace
         /// <param name="store">权威存储（SaveStore）。</param>
         /// <param name="logger">日志接口。</param>
         /// <param name="timeProvider">时间字符串提供者。框架原样透传，不解析语义。</param>
-        public WorkspaceManager(IAuthorityStore store, ILogger logger, Func<string> timeProvider)
+        public WorkspaceManager(IAuthorityStore store, ILogger logger, Func<string> timeProvider, DriverConfig driverConfig, ICardSerializer serializer = null, Action<string> onScreenwriterNeeded = null)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+            _driverConfig = driverConfig ?? DriverConfig.CreateDefault();
+            _serializer = serializer ?? CardSerializer.Default;
+            _onScreenwriterNeeded = onScreenwriterNeeded;
             LoadFromStore();
         }
 
@@ -83,6 +89,9 @@ namespace RimLife.Workspace
                 CreatedAt = now,
                 LastActivityAt = now,
                 ActiveSkillIds = new List<string>(),
+                EventCache = new Dictionary<string, string>(),
+                PendingEventIds = new List<string>(),
+                PendingImportance = 0,
                 Outcome = null,
                 LastSignal = null
             };
@@ -309,6 +318,9 @@ namespace RimLife.Workspace
                 CreatedAt = now,
                 LastActivityAt = now,
                 ActiveSkillIds = childSkillIds,
+                EventCache = new Dictionary<string, string>(),
+                PendingEventIds = new List<string>(),
+                PendingImportance = 0,
                 Outcome = null,
                 LastSignal = null
             };
@@ -505,6 +517,86 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
+        // 事件路由（导演 → 工作空间）
+        // ================================================================
+
+        /// <summary>
+        /// 将事件推送到指定工作空间的事件 KV 缓存。
+        /// 追加后评估阈值，达到阈值时激活编剧 Agent。
+        /// </summary>
+        public bool PushEvent(string workspaceId, IGameEvent evt)
+        {
+            if (evt == null) return false;
+            var ws = Get(workspaceId);
+            if (ws == null || ws.Status != WorkspaceStatus.Active) return false;
+
+            string now = Now();
+            if (ws.EventCache == null) ws.EventCache = new Dictionary<string, string>();
+            if (ws.PendingEventIds == null) ws.PendingEventIds = new List<string>();
+
+            string eventJson = _serializer.SerializeEvent(evt);
+            ws.EventCache[evt.EventID] = eventJson;
+            ws.PendingEventIds.Add(evt.EventID);
+            ws.PendingImportance += _driverConfig.GetSeverityWeight(evt.Severity);
+            ws.LastActivityAt = now;
+
+            SaveToStore();
+            PublishUpdated(workspaceId);
+
+            if (EvaluatePendingThreshold(ws))
+            {
+                _onScreenwriterNeeded?.Invoke(workspaceId);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Drain 工作空间的 pending 事件并清空。返回反序列化后的 IGameEvent 列表。
+        /// 编剧 Agent 调用此方法获取待处理事件。
+        /// </summary>
+        public IReadOnlyList<IGameEvent> DrainPendingEvents(string workspaceId)
+        {
+            var ws = Get(workspaceId);
+            if (ws == null) return new List<IGameEvent>();
+
+            var events = new List<IGameEvent>();
+            if (ws.PendingEventIds != null && ws.EventCache != null)
+            {
+                foreach (var eventId in ws.PendingEventIds)
+                {
+                    if (ws.EventCache.TryGetValue(eventId, out var json))
+                    {
+                        var evt = _serializer.DeserializeEvent(json);
+                        if (evt != null) events.Add(evt);
+                    }
+                }
+                ws.PendingEventIds.Clear();
+            }
+            ws.PendingImportance = 0;
+            ws.LastActivityAt = Now();
+            SaveToStore();
+            PublishUpdated(workspaceId);
+            return events;
+        }
+
+        /// <summary>
+        /// 获取工作空间待处理事件数（不 drain，供查询）。
+        /// </summary>
+        public int GetPendingCount(string workspaceId)
+        {
+            var ws = Get(workspaceId);
+            return ws?.PendingEventIds?.Count ?? 0;
+        }
+
+        private bool EvaluatePendingThreshold(WorkspaceState ws)
+        {
+            int count = ws.PendingEventIds?.Count ?? 0;
+            return count >= _driverConfig.CountThreshold
+                || ws.PendingImportance >= _driverConfig.ImportanceThreshold;
+        }
+
+        // ================================================================
         // 持久化
         // ================================================================
 
@@ -562,7 +654,7 @@ namespace RimLife.Workspace
         // 序列化
         // ================================================================
 
-        private static string SerializeWorkspace(WorkspaceState ws)
+        private string SerializeWorkspace(WorkspaceState ws)
         {
             var w = new JsonWriter(1024);
             w.Prop("id", ws.Id ?? "");
@@ -591,6 +683,17 @@ namespace RimLife.Workspace
             // ActiveSkillIds
             if (ws.ActiveSkillIds != null && ws.ActiveSkillIds.Count > 0)
                 w.Array("activeSkillIds", ws.ActiveSkillIds);
+
+            // EventCache（KV 缓存）
+            if (ws.EventCache != null && ws.EventCache.Count > 0)
+                w.PropRaw("eventCache", _serializer.SerializeEventCache(ws.EventCache));
+
+            // PendingEventIds
+            if (ws.PendingEventIds != null && ws.PendingEventIds.Count > 0)
+                w.Array("pendingEventIds", ws.PendingEventIds);
+
+            // PendingImportance
+            w.Prop("pendingImportance", ws.PendingImportance);
 
             // Rounds
             if (ws.Rounds != null && ws.Rounds.Count > 0)
@@ -643,7 +746,7 @@ namespace RimLife.Workspace
             return w.Close();
         }
 
-        private static WorkspaceState DeserializeWorkspace(Dictionary<string, string> data)
+        private WorkspaceState DeserializeWorkspace(Dictionary<string, string> data)
         {
             if (data == null || data.Count == 0) return null;
 
@@ -662,6 +765,9 @@ namespace RimLife.Workspace
                 CreatedAt = data.TryGetValue("createdAt", out v) ? v : "",
                 LastActivityAt = data.TryGetValue("lastActivityAt", out v) ? v : "",
                 ActiveSkillIds = DeserializeStringList(data.TryGetValue("activeSkillIds", out v) ? v : null),
+                EventCache = _serializer.DeserializeEventCache(data.TryGetValue("eventCache", out v) ? v : "{}"),
+                PendingEventIds = DeserializeStringList(data.TryGetValue("pendingEventIds", out v) ? v : null),
+                PendingImportance = data.TryGetValue("pendingImportance", out v) && int.TryParse(v, out var imp) ? imp : 0,
                 Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null,
                 LastSignal = DeserializeSignal(data.TryGetValue("lastSignal", out v) ? v : null)
             };

@@ -13,6 +13,15 @@ namespace RimLife.Framework.Mcp
     {
         string SerializeEvent(IGameEvent evt);
         string SerializeEventList(IReadOnlyList<IGameEvent> events);
+
+        /// <summary>反序列化事件 JSON → IGameEvent。</summary>
+        IGameEvent DeserializeEvent(string json);
+
+        /// <summary>序列化事件 KV 缓存（供 WorkspaceState 持久化）。</summary>
+        string SerializeEventCache(Dictionary<string, string> eventCache);
+
+        /// <summary>反序列化事件 KV 缓存。</summary>
+        Dictionary<string, string> DeserializeEventCache(string json);
         string SerializeCharacterCard(CharacterCard card, string view, IPawnPromptProvider promptProvider);
         string SerializeColonyContext(ColonyContext ctx);
         string SerializeObjective(ObjectiveCard obj);

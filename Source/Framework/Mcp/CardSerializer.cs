@@ -60,6 +60,51 @@ namespace RimLife.Framework.Mcp
             return SerializeObjectList(events, SerializeEvent);
         }
 
+        /// <summary>
+        /// 将序列化的事件 JSON 反序列化为 EventCardData。
+        /// 与 SerializeEvent 互为逆操作，用于从 KV 缓存恢复 IGameEvent 对象。
+        /// </summary>
+        public IGameEvent DeserializeEvent(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return null;
+            var dict = JsonParser.ParseDict(json);
+            if (dict == null || dict.Count == 0) return null;
+
+            var evt = new EventCardData
+            {
+                EventID = dict.TryGetValue("eventId", out var v) ? v : "",
+                DefName = dict.TryGetValue("defName", out v) ? v : "",
+                Tags = DeserializeTagList(dict.TryGetValue("tags", out v) ? v : "[]"),
+                Tick = dict.TryGetValue("tick", out v) && int.TryParse(v, out var tick) ? tick : 0,
+                Severity = dict.TryGetValue("severity", out v) ? v : "Minor",
+                MapHint = dict.TryGetValue("mapHint", out v) ? v : "",
+                Actors = DeserializeActors(dict.TryGetValue("actors", out v) ? v : "[]"),
+                Payload = DeserializePayload(dict.TryGetValue("payload", out v) ? v : "{}")
+            };
+            return evt;
+        }
+
+        /// <summary>
+        /// 序列化事件 KV 缓存为 JSON 对象。供 WorkspaceState 持久化。
+        /// </summary>
+        public string SerializeEventCache(Dictionary<string, string> eventCache)
+        {
+            if (eventCache == null || eventCache.Count == 0) return "{}";
+            var w = new JsonWriter(eventCache.Count * 256);
+            foreach (var kv in eventCache)
+                w.Prop(kv.Key, kv.Value ?? "");
+            return w.Close();
+        }
+
+        /// <summary>
+        /// 反序列化事件 KV 缓存。
+        /// </summary>
+        public Dictionary<string, string> DeserializeEventCache(string json)
+        {
+            if (string.IsNullOrEmpty(json) || json == "{}") return new Dictionary<string, string>();
+            return JsonParser.ParseDict(json);
+        }
+
         // ================================================================
         // ColonyContext
         // ================================================================
@@ -298,6 +343,36 @@ namespace RimLife.Framework.Mcp
         // ================================================================
         // 内部辅助
         // ================================================================
+
+        private static List<string> DeserializeTagList(string json)
+        {
+            return JsonParser.ParseStringArray(json);
+        }
+
+        private static List<EventActorRef> DeserializeActors(string json)
+        {
+            var result = new List<EventActorRef>();
+            if (string.IsNullOrEmpty(json) || json == "[]") return result;
+
+            var dicts = JsonParser.ParseObjectArray(json);
+            foreach (var dict in dicts)
+            {
+                result.Add(new EventActorRef
+                {
+                    ID = dict.TryGetValue("id", out var v) ? v : "?",
+                    Name = dict.TryGetValue("name", out v) ? v : "?",
+                    Role = dict.TryGetValue("role", out v) ? v : "Bystander",
+                    RefType = dict.TryGetValue("refType", out v) ? v : "Pawn"
+                });
+            }
+            return result;
+        }
+
+        private static Dictionary<string, string> DeserializePayload(string json)
+        {
+            if (string.IsNullOrEmpty(json) || json == "{}") return new Dictionary<string, string>();
+            return JsonParser.ParseDict(json);
+        }
 
         private static string SerializeStringList(IReadOnlyList<string> items)
         {

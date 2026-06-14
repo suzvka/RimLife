@@ -125,7 +125,14 @@ namespace RimLife.Workspace
         public List<string> ActiveSkillIds;
 
         /// <summary>工作空间内部事件池。Agent 的待处理素材。</summary>
-        public Driver.AgentEventPool EventPool;
+        /// <summary>事件 KV 缓存：eventId → 序列化事件 JSON。编剧 drain 时消费，随 workspace 持久化。</summary>
+        public Dictionary<string, string> EventCache;
+
+        /// <summary>待处理事件 ID 的 FIFO 顺序列表。</summary>
+        public List<string> PendingEventIds;
+
+        /// <summary>pending 事件的累积重要度值（避免反序列化重算）。</summary>
+        public int PendingImportance;
 
         /// <summary>结束原因描述（Completed / Abandoned 时填充）。</summary>
         public string Outcome;

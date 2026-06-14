@@ -95,6 +95,15 @@ namespace RimLife.Infrastructure
             LifecycleManager.Shutdown();
             FrameworkStatus.Clear();
             ErrorHandler.ClearHandlers();
+
+            // 清理编剧 Agent
+            lock (_screenwritersLock)
+            {
+                foreach (var kv in _screenwriters)
+                    kv.Value?.Dispose();
+                _screenwriters.Clear();
+            }
+
             _frameworkConfig = null;
             _skillRegistryInitialized = false;
             Logger?.Message("[RimLife.Core] Shutdown complete.");
@@ -116,7 +125,7 @@ namespace RimLife.Infrastructure
 
                 int count = McpSkillRegistry.RegisterFromType(typeof(Mcp.SystemMcpTools));
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
-                count += RegisterHookProvider(new Workspace.DirectionMcpProvider(() => Workspaces, Logger));
+                count += RegisterHookProvider(new Workspace.DirectionMcpProvider(() => Workspaces, () => EventLog, Logger));
                 count += RegisterHookProvider(new Workspace.WritingMcpProvider(() => Workspaces, Logger));
 
                 // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
@@ -235,6 +244,14 @@ namespace RimLife.Infrastructure
                     (_workspaces as IDisposable)?.Dispose();
                     _llmAccessor?.Dispose();
 
+                    // 清理所有编剧 Agent
+                    lock (_screenwritersLock)
+                    {
+                        foreach (var kv in _screenwriters)
+                            kv.Value?.Dispose();
+                        _screenwriters.Clear();
+                    }
+
                     _saveStore = value;
                     _eventLog = null;
                     _directorAgent = null;
@@ -335,6 +352,63 @@ namespace RimLife.Infrastructure
             }
         }
 
+        private static readonly Dictionary<string, AgentLoop> _screenwriters = new Dictionary<string, AgentLoop>();
+        private static readonly object _screenwritersLock = new object();
+
+        /// <summary>
+        /// 获取或创建指定工作空间的编剧 Agent。
+        /// 由 WorkspaceManager.PushEvent 在阈值达到时通过回调触发。
+        /// </summary>
+        public static AgentLoop GetOrCreateScreenwriter(string workspaceId)
+        {
+            if (string.IsNullOrEmpty(workspaceId)) return null;
+
+            lock (_screenwritersLock)
+            {
+                if (_screenwriters.TryGetValue(workspaceId, out var existing) && existing != null)
+                    return existing;
+
+                if (Workspaces == null || LlmAccessor == null) return null;
+                var ws = Workspaces.Get(workspaceId);
+                if (ws == null) return null;
+
+                var skillIds = new List<string> { "workspace_writing" };
+                if (ws.ActiveSkillIds != null)
+                    skillIds.AddRange(ws.ActiveSkillIds);
+
+                var agent = new AgentLoop(
+                    pool: new WorkspaceEventPoolAdapter(ws, DriverConfig, () => Workspaces, Logger, CardSerializer.Default),
+                    llm: LlmAccessor,
+                    systemPrompt: BuildScreenwriterSystemPrompt(ws),
+                    skillIds: skillIds.ToArray(),
+                    maxRounds: DriverConfig.MaxAgentRounds,
+                    logger: Logger,
+                    serializer: CardSerializer.Default);
+
+                _screenwriters[workspaceId] = agent;
+                Logger?.Message($"[RimLife.Core] ScreenwriterAgent created for workspace '{ws.Label}' ({workspaceId})");
+                return agent;
+            }
+        }
+
+        /// <summary>
+        /// 释放指定工作空间的编剧 Agent。
+        /// 工作空间关闭/废弃时由 WorkspaceManager.UpdateStatus 通过事件触发。
+        /// </summary>
+        public static void DisposeScreenwriter(string workspaceId)
+        {
+            if (string.IsNullOrEmpty(workspaceId)) return;
+            lock (_screenwritersLock)
+            {
+                if (_screenwriters.TryGetValue(workspaceId, out var agent))
+                {
+                    agent?.Dispose();
+                    _screenwriters.Remove(workspaceId);
+                    Logger?.Message($"[RimLife.Core] ScreenwriterAgent disposed for workspace {workspaceId}");
+                }
+            }
+        }
+
         private static string BuildDirectorSystemPrompt()
         {
             var sb = new System.Text.StringBuilder();
@@ -344,7 +418,8 @@ namespace RimLife.Infrastructure
             sb.AppendLine("1. 审查以下积累的事件列表");
             sb.AppendLine("2. 挑选值得发展为剧情线的事件");
             sb.AppendLine("3. 为选中的事件创建或分支工作空间（workspace）");
-            sb.AppendLine("4. 未被挑选的事件将被丢弃");
+            sb.AppendLine("4. 使用 route_event_to_workspace 将事件路由到对应工作空间");
+            sb.AppendLine("5. 未被路由的事件将被丢弃");
             sb.AppendLine();
             sb.AppendLine("决策原则：");
             sb.AppendLine("- 优先处理 Extreme 和 Major 严重度的事件");
@@ -353,6 +428,33 @@ namespace RimLife.Infrastructure
             sb.AppendLine("- 如无值得发展的内容，可以不创建任何工作空间");
             sb.AppendLine("- 可使用 get_workspace / list_workspaces 查看现有工作空间状态");
             sb.AppendLine("- 对已有工作空间可用 branch_workspace 创建分支、merge_workspaces 合并");
+            sb.AppendLine();
+            sb.AppendLine("事件路由：");
+            sb.AppendLine("- 每条事件都有 eventId，使用 route_event_to_workspace 将事件推送到对应工作空间");
+            sb.AppendLine("- 如无合适的工作空间，先 create_workspace 再用 route_event_to_workspace");
+            return sb.ToString();
+        }
+
+        private static string BuildScreenwriterSystemPrompt(Workspace.WorkspaceState ws)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("你是 RimWorld 殖民地某条剧情线的编剧 (Screenwriter Agent)。");
+            sb.AppendLine();
+            sb.AppendLine($"工作空间：{ws.Label ?? "Unnamed"}");
+            if (ws.ColonistIds != null && ws.ColonistIds.Count > 0)
+                sb.AppendLine($"关联角色：{string.Join(", ", ws.ColonistIds)}");
+            sb.AppendLine();
+            sb.AppendLine("你的职责：");
+            sb.AppendLine("1. 审查推送到本工作空间的事件");
+            sb.AppendLine("2. 根据需要调用角色查询、环境感知等工具获取上下文");
+            sb.AppendLine("3. 使用 push_round 工具撰写叙事内容（recap + narrative）");
+            sb.AppendLine("4. 剧情推进到关键节点时使用 signal_workspace_status 上报状态");
+            sb.AppendLine();
+            sb.AppendLine("工作原则：");
+            sb.AppendLine("- 每次激活只推送 1 个轮次，等待下一批事件再继续");
+            sb.AppendLine("- 前情提要 (recap) 总结当前叙事起点，台词 (narrative) 是正式的叙事输出");
+            sb.AppendLine("- 剧情完结时 signal_workspace_status 上报 StorylineComplete");
+            sb.AppendLine("- 遇到剧情瓶颈时上报 NeedsBranch 或 Stuck");
             return sb.ToString();
         }
 
@@ -465,7 +567,8 @@ namespace RimLife.Infrastructure
                         if (_workspaces == null && SaveStore != null)
                         {
                             _workspaces = new Workspace.WorkspaceManager(SaveStore, Logger,
-                                () => TimeProvider?.Invoke() ?? "");
+                                () => TimeProvider?.Invoke() ?? "", DriverConfig,
+                                onScreenwriterNeeded: wsId => GetOrCreateScreenwriter(wsId));
                         }
                     }
                 }

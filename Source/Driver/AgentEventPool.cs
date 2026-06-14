@@ -160,6 +160,18 @@ namespace RimLife.Driver
         /// <summary>获取 pending 缓冲区的只读快照（用于调试/日志）。</summary>
         public IReadOnlyList<IGameEvent> PendingEvents => _pending.AsReadOnly();
 
+        /// <summary>按事件 ID 查找事件。从 recent 缓冲区中查找。</summary>
+        public IGameEvent GetById(string eventId)
+        {
+            if (string.IsNullOrEmpty(eventId)) return null;
+            for (int i = _recent.Count - 1; i >= 0; i--)
+            {
+                if (string.Equals(_recent[i].EventID, eventId, StringComparison.Ordinal))
+                    return _recent[i];
+            }
+            return null;
+        }
+
         /// <summary>获取 recent 历史缓冲的只读快照。</summary>
         public IReadOnlyList<IGameEvent> RecentEvents => _recent.AsReadOnly();
 

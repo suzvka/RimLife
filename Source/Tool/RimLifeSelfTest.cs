@@ -1257,7 +1257,7 @@ namespace RimLife.Tool
         {
             Section("12. 工作空间 Agent 驱动");
 
-            // --- 12.1 EventPool 字段存在性 ---
+            // --- 12.1 工作空间事件缓存字段 ---
             try
             {
                 var wsManager = RimLifeCore.Workspaces;
@@ -1269,13 +1269,13 @@ namespace RimLife.Tool
                     var ws = activeWs[0];
                     Pass($"工作空间 '{ws.Label}' 存在 (Active workspace count={activeWs.Count})");
 
-                    // EventPool 可能尚未初始化（延迟）
-                    DumpObject("  EventPool", ws.EventPool == null ? "(not initialized yet)" : $"ready (pending={ws.EventPool.PendingCount})");
+                    DumpObject("  EventCache", ws.EventCache == null ? "null" : $"{ws.EventCache.Count} entries");
+                    DumpObject("  PendingEventIds", ws.PendingEventIds == null ? "null" : $"{ws.PendingEventIds.Count} pending");
+                    DumpObject("  PendingImportance", ws.PendingImportance);
                     DumpObject("  Role", ws.CreatedByRole.ToString());
                 }
                 else
                 {
-                    // 没有活跃工作空间，创建一个测试空间
                     Pass("无活跃工作空间 — 创建测试空间验证字段");
                     var testWs = new WorkspaceState
                     {
@@ -1286,100 +1286,94 @@ namespace RimLife.Tool
                         ActiveSkillIds = new List<string> { "workspace_writing" }
                     };
 
-                    if (testWs.EventPool == null)
-                        Pass("EventPool 默认为 null (预期)");
+                    if (testWs.EventCache == null && testWs.PendingEventIds == null)
+                        Pass("EventCache/PendingEventIds 默认为 null (预期)");
                     else
-                        Fail("EventPool 应默认为 null");
+                        Fail("EventCache/PendingEventIds 应默认为 null");
                 }
             }
             catch (Exception e) { Fail("字段存在性测试异常", e.Message); }
 
-            // --- 12.2 事件推入工作空间事件池 ---
+            // --- 12.2 事件推入工作空间 KV 缓存 ---
             try
             {
-                var config = RimLifeCore.DriverConfig;
-                var testWs = new WorkspaceState
-                {
-                    Id = "selftest_push",
-                    Label = "PushTest WS",
-                    Status = WorkspaceStatus.Active,
-                    CreatedByRole = WorkspaceRole.Screenwriter,
-                    ActiveSkillIds = new List<string> { "workspace_writing" },
-                    EventPool = new AgentEventPool(config)
-                };
+                var wsManager = RimLifeCore.Workspaces;
+                if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
+
+                // 通过 WorkspaceManager 创建测试空间
+                var testWs = wsManager.Create("PushTest", null, null, WorkspaceRole.Director);
 
                 var evt = MakeTestEvent("ws_test_1", new List<string> { "Test", "Combat" }, 1000, "Major");
-                testWs.EventPool.Append(evt);
-
-                if (testWs.EventPool.PendingCount == 1)
+                bool pushed = wsManager.PushEvent(testWs.Id, evt);
+                if (pushed && wsManager.GetPendingCount(testWs.Id) == 1)
                     Pass($"PushEvent 后 PendingCount=1");
                 else
-                    Fail($"PushEvent 后 PendingCount={testWs.EventPool.PendingCount} (expected 1)");
+                    Fail($"PushEvent 后 PendingCount={wsManager.GetPendingCount(testWs.Id)} (expected 1)");
 
+                // 验证重要度
+                var config = RimLifeCore.DriverConfig;
                 int weight = config.GetSeverityWeight("Major");
-                if (testWs.EventPool.TotalImportance == weight)
-                    Pass($"TotalImportance={weight} (Major权重正确)");
+                var updated = wsManager.Get(testWs.Id);
+                if (updated != null && updated.PendingImportance == weight)
+                    Pass($"PendingImportance={weight} (Major权重正确)");
                 else
-                    Fail($"TotalImportance={testWs.EventPool.TotalImportance} (expected {weight})");
+                    Fail($"PendingImportance={updated?.PendingImportance ?? -1} (expected {weight})");
 
                 // Drain
-                var drained = testWs.EventPool.DrainPending();
-                if (drained.Count == 1 && testWs.EventPool.PendingCount == 0)
-                    Pass("DrainPending 清空工作空间事件池");
+                var drained = wsManager.DrainPendingEvents(testWs.Id);
+                if (drained.Count == 1 && wsManager.GetPendingCount(testWs.Id) == 0)
+                    Pass("DrainPendingEvents 清空工作空间事件 KV 缓存");
                 else
-                    Fail($"DrainPending 异常: drained={drained.Count}, pending={testWs.EventPool.PendingCount}");
+                    Fail($"DrainPendingEvents 异常: drained={drained.Count}, pending={wsManager.GetPendingCount(testWs.Id)}");
             }
             catch (Exception e) { Fail("PushEvent 测试异常", e.Message); }
 
-            // --- 12.3 OnThresholdReached 回调（工作空间事件池） ---
+            // --- 12.3 阈值回调（通过 WorkspaceManager.PushEvent 触发） ---
             try
             {
-                var config = RimLifeCore.DriverConfig;
-                var testWs = new WorkspaceState
-                {
-                    Id = "selftest_cb",
-                    Label = "CallbackTest WS",
-                    Status = WorkspaceStatus.Active,
-                    CreatedByRole = WorkspaceRole.Screenwriter,
-                    EventPool = new AgentEventPool(config)
-                };
+                var wsManager = RimLifeCore.Workspaces;
+                if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
-                bool callbackFired = false;
-                Action handler = () => { callbackFired = true; };
-                testWs.EventPool.OnThresholdReached += handler;
+                var testWs = wsManager.Create("CallbackTest", null, null, WorkspaceRole.Director);
+                var config = RimLifeCore.DriverConfig;
 
                 // 填充事件到阈值
+                int pushed = 0;
                 for (int i = 0; i < config.CountThreshold; i++)
-                    testWs.EventPool.Append(MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, "Major"));
+                {
+                    if (wsManager.PushEvent(testWs.Id, MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, "Major")))
+                        pushed++;
+                }
 
-                if (callbackFired)
-                    Pass("工作空间 OnThresholdReached 回调触发");
+                if (pushed == config.CountThreshold)
+                    Pass($"PushEvent 达到阈值 (pushed={pushed}, threshold={config.CountThreshold})");
                 else
-                    Fail("OnThresholdReached 未触发");
+                    Fail($"PushEvent 未达到预期: pushed={pushed}, threshold={config.CountThreshold}");
 
-                testWs.EventPool.OnThresholdReached -= handler;
+                if (wsManager.GetPendingCount(testWs.Id) == config.CountThreshold)
+                    Pass("事件全部累积在 pending 中");
+                else
+                    Fail($"PendingCount={wsManager.GetPendingCount(testWs.Id)} (expected {config.CountThreshold})");
             }
             catch (Exception e) { Fail("工作空间回调测试异常", e.Message); }
 
             // --- 12.4 激活条件（纯事件驱动，无定时器） ---
             try
             {
+                var wsManager = RimLifeCore.Workspaces;
+                if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
+
                 var config = RimLifeCore.DriverConfig;
-                var testWs = new WorkspaceState
-                {
-                    Id = "selftest_activation",
-                    Label = "ActivationTest WS",
-                    Status = WorkspaceStatus.Active,
-                    CreatedByRole = WorkspaceRole.Screenwriter,
-                    ActiveSkillIds = new List<string> { "workspace_writing" },
-                    EventPool = new AgentEventPool(config)
-                };
+                var testWs = wsManager.Create("ActivationTest", null, null, WorkspaceRole.Director);
 
                 // 填充极端事件：1个Extreme即可满足重要性
-                testWs.EventPool.Append(MakeTestEvent("act_1", new List<string> { "Test" }, 1, "Extreme"));
+                wsManager.PushEvent(testWs.Id, MakeTestEvent("act_1", new List<string> { "Test" }, 1, "Extreme"));
 
-                bool countOk = testWs.EventPool.PendingCount >= config.CountThreshold;
-                bool impOk = testWs.EventPool.TotalImportance >= config.ImportanceThreshold;
+                var updated = wsManager.Get(testWs.Id);
+                int count = wsManager.GetPendingCount(testWs.Id);
+                int importance = updated?.PendingImportance ?? 0;
+                bool countOk = count >= config.CountThreshold;
+                bool impOk = importance >= config.ImportanceThreshold;
 
                 if (!countOk && impOk)
                     Pass("1个Extreme: Count不满足, Importance满足 (纯事件驱动)");
