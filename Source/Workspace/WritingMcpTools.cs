@@ -168,8 +168,8 @@ namespace RimLife.Workspace
                 w.Array("mergedFromIds", ws.MergedFromIds);
             w.Array("colonistIds", ws.ColonistIds);
             w.Array("tags", ws.Tags);
-            w.Prop("createdAtTick", ws.CreatedAtTick);
-            w.Prop("lastActivityTick", ws.LastActivityTick);
+            w.Prop("createdAt", ws.CreatedAt ?? "");
+            w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
@@ -191,7 +191,7 @@ namespace RimLife.Workspace
                 var sig = ws.LastSignal.Value;
                 var sigW = new JsonWriter(256);
                 sigW.Prop("type", sig.Type.ToString());
-                sigW.Prop("reportedAtTick", sig.ReportedAtTick);
+                sigW.Prop("reportedAt", sig.ReportedAt ?? "");
                 if (!string.IsNullOrEmpty(sig.Note))
                     sigW.Prop("note", sig.Note);
                 if (!string.IsNullOrEmpty(sig.SuggestedTargetId))
@@ -213,7 +213,7 @@ namespace RimLife.Workspace
             w.Prop("recap", r.Recap ?? "");
             if (!string.IsNullOrEmpty(r.Narrative))
                 w.Prop("narrative", r.Narrative);
-            w.Prop("createdAtTick", r.CreatedAtTick);
+            w.Prop("createdAt", r.CreatedAt ?? "");
 
             if (r.TriggerEventIds != null && r.TriggerEventIds.Count > 0)
                 w.Array("triggerEventIds", r.TriggerEventIds);

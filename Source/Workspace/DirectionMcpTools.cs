@@ -301,8 +301,8 @@ namespace RimLife.Workspace
             w.Array("colonistIds", ws.ColonistIds);
             w.Array("tags", ws.Tags);
             w.Prop("roundCount", ws.Rounds?.Count ?? 0);
-            w.Prop("createdAtTick", ws.CreatedAtTick);
-            w.Prop("lastActivityTick", ws.LastActivityTick);
+            w.Prop("createdAt", ws.CreatedAt ?? "");
+            w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
@@ -312,7 +312,7 @@ namespace RimLife.Workspace
                 var sig = ws.LastSignal.Value;
                 var sigW = new JsonWriter(256);
                 sigW.Prop("type", sig.Type.ToString());
-                sigW.Prop("reportedAtTick", sig.ReportedAtTick);
+                sigW.Prop("reportedAt", sig.ReportedAt ?? "");
                 if (!string.IsNullOrEmpty(sig.Note))
                     sigW.Prop("note", sig.Note);
                 if (!string.IsNullOrEmpty(sig.SuggestedTargetId))
@@ -355,8 +355,8 @@ namespace RimLife.Workspace
             w.Prop("colonistCount", ws.ColonistIds?.Count ?? 0);
             w.Prop("roundCount", ws.Rounds?.Count ?? 0);
             w.Array("tags", ws.Tags);
-            w.Prop("createdAtTick", ws.CreatedAtTick);
-            w.Prop("lastActivityTick", ws.LastActivityTick);
+            w.Prop("createdAt", ws.CreatedAt ?? "");
+            w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
             // 信号摘要

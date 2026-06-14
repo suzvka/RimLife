@@ -26,6 +26,10 @@ namespace RimLife.Infrastructure
         /// <summary>Pawn 语义提示词提供者。游戏侧实现，提供各维度的自然语言描述。</summary>
         public static IPawnPromptProvider PromptProvider { get; internal set; }
 
+        /// <summary>时间字符串提供者。游戏侧注入，返回当前游戏时间的格式化字符串。
+        /// 框架只原样透传，不解析语义。Agent 可通过 get_current_time 工具获取。</summary>
+        public static Func<string> TimeProvider { get; internal set; }
+
         /// <summary>当前框架配置。未配置时返回默认配置。</summary>
         public static FrameworkConfig Config => _frameworkConfig ?? FrameworkConfig.CreateDefault();
 
@@ -435,7 +439,8 @@ namespace RimLife.Infrastructure
                     {
                         if (_workspaces == null && SaveStore != null)
                         {
-                            _workspaces = new Workspace.WorkspaceManager(SaveStore, Logger);
+                            _workspaces = new Workspace.WorkspaceManager(SaveStore, Logger,
+                                () => TimeProvider?.Invoke() ?? "");
                         }
                     }
                 }

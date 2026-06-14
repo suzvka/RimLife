@@ -226,6 +226,8 @@ namespace RimLife.Framework
         public const string WorkspaceCreated = "workspace.created";
         /// <summary>工作空间已关闭/废弃。</summary>
         public const string WorkspaceClosed = "workspace.closed";
+        /// <summary>工作空间已更新（回合推送、信号上报、状态变更、分支/合并等）。</summary>
+        public const string WorkspaceUpdated = "workspace.updated";
 
         // ---- 记忆 ----
         /// <summary>记忆巩固完成。</summary>

@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 namespace RimLife.Workspace
 {
     /// <summary>
@@ -23,20 +24,32 @@ namespace RimLife.Workspace
     public class WorkspaceManager : IDisposable
     {
         private readonly List<WorkspaceState> _workspaces = new List<WorkspaceState>();
+        private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
         private readonly IPersistentStore _store;
         private readonly ILogger _logger;
-        private int _globalSeq;
+        private readonly Func<string> _timeProvider;
         private const string StoreKey = "rimlife_workspaces";
 
         /// <summary>
         /// 创建 WorkspaceManager 实例并尝试从存档加载已有工作空间。
         /// </summary>
         /// <param name="store">持久化存储（SaveStore）。</param>
-        public WorkspaceManager(IPersistentStore store, ILogger logger)
+        /// <param name="logger">日志接口。</param>
+        /// <param name="timeProvider">时间字符串提供者。框架原样透传，不解析语义。</param>
+        public WorkspaceManager(IPersistentStore store, ILogger logger, Func<string> timeProvider)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
             LoadFromStore();
+        }
+
+        private string Now() => _timeProvider() ?? "";
+
+        private void PublishUpdated(string workspaceId)
+        {
+            EventBus.Publish(FrameworkEvents.WorkspaceUpdated,
+                EventArg.WithPayload(("workspaceId", workspaceId ?? "")));
         }
 
         // ================================================================
@@ -53,7 +66,7 @@ namespace RimLife.Workspace
         /// <returns>创建的工作空间状态。</returns>
         public WorkspaceState Create(string label, List<string> colonistIds, List<string> tags, WorkspaceRole createdByRole)
         {
-            int tick = ++_globalSeq;
+            string now = Now();
 
             var ws = new WorkspaceState
             {
@@ -67,17 +80,24 @@ namespace RimLife.Workspace
                 Tags = tags ?? new List<string>(),
                 Rounds = new List<WorkspaceRound>(),
                 CurrentRecap = "",
-                CreatedAtTick = tick,
-                LastActivityTick = tick,
+                CreatedAt = now,
+                LastActivityAt = now,
                 ActiveSkillIds = new List<string>(),
                 Outcome = null,
                 LastSignal = null
             };
 
-            _workspaces.Add(ws);
-            SaveToStore();
+            _rwLock.EnterWriteLock();
+            try
+            {
+                _workspaces.Add(ws);
+                SaveToStore();
+            }
+            finally { _rwLock.ExitWriteLock(); }
 
             _logger.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id}, role={createdByRole})");
+            EventBus.Publish(FrameworkEvents.WorkspaceCreated,
+                EventArg.WithPayload(("workspaceId", ws.Id), ("label", ws.Label ?? "")));
             return ws;
         }
 
@@ -87,7 +107,9 @@ namespace RimLife.Workspace
         public WorkspaceState Get(string id)
         {
             if (string.IsNullOrEmpty(id)) return null;
-            return _workspaces.FirstOrDefault(w => w.Id == id);
+            _rwLock.EnterReadLock();
+            try { return _workspaces.FirstOrDefault(w => w.Id == id); }
+            finally { _rwLock.ExitReadLock(); }
         }
 
         /// <summary>
@@ -96,9 +118,14 @@ namespace RimLife.Workspace
         /// <param name="status">过滤状态，null 表示全部。</param>
         public IReadOnlyList<WorkspaceState> List(WorkspaceStatus? status = null)
         {
-            if (status.HasValue)
-                return _workspaces.Where(w => w.Status == status.Value).ToList();
-            return _workspaces.ToList();
+            _rwLock.EnterReadLock();
+            try
+            {
+                if (status.HasValue)
+                    return _workspaces.Where(w => w.Status == status.Value).ToList();
+                return _workspaces.ToList();
+            }
+            finally { _rwLock.ExitReadLock(); }
         }
 
         /// <summary>
@@ -128,13 +155,22 @@ namespace RimLife.Workspace
                 return false;
             }
 
+            string now = Now();
             ws.Status = newStatus;
-            ws.LastActivityTick = ++_globalSeq;
+            ws.LastActivityAt = now;
             if (outcome != null)
                 ws.Outcome = outcome;
 
             SaveToStore();
+
             _logger.Message($"[RimLife.Workspace] Workspace '{ws.Label}' status: {newStatus}");
+
+            if (newStatus == WorkspaceStatus.Completed || newStatus == WorkspaceStatus.Abandoned)
+                EventBus.Publish(FrameworkEvents.WorkspaceClosed,
+                    EventArg.WithPayload(("workspaceId", id), ("status", newStatus.ToString())));
+            else
+                PublishUpdated(id);
+
             return true;
         }
 
@@ -177,7 +213,7 @@ namespace RimLife.Workspace
                 return false;
             }
 
-            int tick = ++_globalSeq;
+            string now = Now();
             int nextSeq = (ws.Rounds?.Count) ?? 0;
 
             var round = new WorkspaceRound
@@ -186,7 +222,7 @@ namespace RimLife.Workspace
                 Type = RoundType.Normal,
                 Recap = recap ?? "",
                 Narrative = narrative ?? "",
-                CreatedAtTick = tick,
+                CreatedAt = now,
                 TriggerEventIds = triggerEventIds ?? new List<string>(),
                 AuthorRole = callerRole,
                 AuthorId = callerId
@@ -198,9 +234,11 @@ namespace RimLife.Workspace
 
             // 更新 CurrentRecap 供下一轮注入 prompt
             ws.CurrentRecap = recap ?? "";
-            ws.LastActivityTick = tick;
+            ws.LastActivityAt = now;
 
             SaveToStore();
+
+            PublishUpdated(workspaceId);
             return true;
         }
 
@@ -233,7 +271,7 @@ namespace RimLife.Workspace
                 return null;
             }
 
-            int tick = ++_globalSeq;
+            string now = Now();
 
             // 拷贝父空间的 Rounds 历史（浅拷贝，WorkspaceRound 是值类型 struct）
             var copiedRounds = new List<WorkspaceRound>(parent.Rounds ?? new List<WorkspaceRound>());
@@ -246,7 +284,7 @@ namespace RimLife.Workspace
                 Type = RoundType.Branch,
                 Recap = branchRecap ?? $"Forked from '{parent.Label}'",
                 Narrative = "",
-                CreatedAtTick = tick,
+                CreatedAt = now,
                 TriggerEventIds = new List<string>(),
                 AuthorRole = callerRole,
                 AuthorId = null
@@ -268,17 +306,24 @@ namespace RimLife.Workspace
                 Tags = new List<string>(parent.Tags ?? new List<string>()),
                 Rounds = copiedRounds,
                 CurrentRecap = branchRecap ?? "",
-                CreatedAtTick = tick,
-                LastActivityTick = tick,
+                CreatedAt = now,
+                LastActivityAt = now,
                 ActiveSkillIds = childSkillIds,
                 Outcome = null,
                 LastSignal = null
             };
 
-            _workspaces.Add(child);
-            SaveToStore();
+            _rwLock.EnterWriteLock();
+            try
+            {
+                _workspaces.Add(child);
+                SaveToStore();
+            }
+            finally { _rwLock.ExitWriteLock(); }
 
             _logger.Message($"[RimLife.Workspace] Branched workspace '{child.Label}' (id={child.Id}) from '{parent.Label}'");
+            EventBus.Publish(FrameworkEvents.WorkspaceCreated,
+                EventArg.WithPayload(("workspaceId", child.Id), ("label", child.Label ?? ""), ("parentId", parentId)));
             return child;
         }
 
@@ -338,14 +383,14 @@ namespace RimLife.Workspace
 
             // 追加一条 Merge 声明轮（由 Director 记录）
             int mergeSeq = mergedRounds.Count;
-            int tick = ++_globalSeq;
+            string now = Now();
             var mergeRound = new WorkspaceRound
             {
                 Seq = mergeSeq,
                 Type = RoundType.Merge,
                 Recap = mergeRecap ?? $"Merged from '{source.Label}' into '{target.Label}'",
                 Narrative = "",
-                CreatedAtTick = tick,
+                CreatedAt = now,
                 TriggerEventIds = new List<string>(),
                 AuthorRole = callerRole,
                 AuthorId = null
@@ -383,7 +428,7 @@ namespace RimLife.Workspace
 
             target.Rounds = mergedRounds;
             target.CurrentRecap = mergeRecap ?? "";
-            target.LastActivityTick = tick;
+            target.LastActivityAt = now;
 
             // 合并激活技能：将源空间独有的技能并入目标空间
             if (source.ActiveSkillIds != null && source.ActiveSkillIds.Count > 0)
@@ -399,11 +444,14 @@ namespace RimLife.Workspace
 
             // 废弃源空间
             source.Status = WorkspaceStatus.Abandoned;
-            source.LastActivityTick = tick;
+            source.LastActivityAt = now;
             source.Outcome = $"Merged into '{target.Label}' ({target.Id})";
 
             SaveToStore();
             _logger.Message($"[RimLife.Workspace] Merged '{source.Label}' into '{target.Label}'");
+
+            PublishUpdated(targetId);
+            PublishUpdated(sourceId);
             return true;
         }
 
@@ -439,18 +487,20 @@ namespace RimLife.Workspace
                 return false;
             }
 
-            int tick = ++_globalSeq;
+            string now = Now();
             ws.LastSignal = new StorylineSignal
             {
                 Type = signalType,
-                ReportedAtTick = tick,
+                ReportedAt = now,
                 Note = note ?? "",
                 SuggestedTargetId = suggestedTargetId
             };
-            ws.LastActivityTick = tick;
+            ws.LastActivityAt = now;
 
             SaveToStore();
             _logger.Message($"[RimLife.Workspace] Workspace '{ws.Label}' reported signal: {signalType}");
+
+            PublishUpdated(workspaceId);
             return true;
         }
 
@@ -551,8 +601,8 @@ namespace RimLife.Workspace
                 w.ArrayRaw("rounds", roundJsons);
             }
 
-            w.Prop("createdAtTick", ws.CreatedAtTick);
-            w.Prop("lastActivityTick", ws.LastActivityTick);
+            w.Prop("createdAt", ws.CreatedAt ?? "");
+            w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
@@ -562,7 +612,7 @@ namespace RimLife.Workspace
                 var sig = ws.LastSignal.Value;
                 var sigWriter = new JsonWriter(256);
                 sigWriter.Prop("type", sig.Type.ToString());
-                sigWriter.Prop("reportedAtTick", sig.ReportedAtTick);
+                sigWriter.Prop("reportedAt", sig.ReportedAt ?? "");
                 if (!string.IsNullOrEmpty(sig.Note))
                     sigWriter.Prop("note", sig.Note);
                 if (!string.IsNullOrEmpty(sig.SuggestedTargetId))
@@ -581,7 +631,7 @@ namespace RimLife.Workspace
             w.Prop("recap", r.Recap ?? "");
             if (!string.IsNullOrEmpty(r.Narrative))
                 w.Prop("narrative", r.Narrative);
-            w.Prop("createdAtTick", r.CreatedAtTick);
+            w.Prop("createdAt", r.CreatedAt ?? "");
 
             if (r.TriggerEventIds != null && r.TriggerEventIds.Count > 0)
                 w.Array("triggerEventIds", r.TriggerEventIds);
@@ -609,8 +659,8 @@ namespace RimLife.Workspace
                 Tags = DeserializeStringList(data.TryGetValue("tags", out v) ? v : null),
                 CurrentRecap = data.TryGetValue("currentRecap", out v) ? v : "",
                 Rounds = DeserializeRounds(data.TryGetValue("rounds", out v) ? v : null),
-                CreatedAtTick = data.TryGetValue("createdAtTick", out v) && int.TryParse(v, out var tick) ? tick : 0,
-                LastActivityTick = data.TryGetValue("lastActivityTick", out v) && int.TryParse(v, out var lt) ? lt : 0,
+                CreatedAt = data.TryGetValue("createdAt", out v) ? v : "",
+                LastActivityAt = data.TryGetValue("lastActivityAt", out v) ? v : "",
                 ActiveSkillIds = DeserializeStringList(data.TryGetValue("activeSkillIds", out v) ? v : null),
                 Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null,
                 LastSignal = DeserializeSignal(data.TryGetValue("lastSignal", out v) ? v : null)
@@ -633,7 +683,7 @@ namespace RimLife.Workspace
                     Type = ParseRoundType(dict.TryGetValue("type", out v) ? v : "Normal"),
                     Recap = dict.TryGetValue("recap", out v) ? v : "",
                     Narrative = dict.TryGetValue("narrative", out v) ? v : "",
-                    CreatedAtTick = dict.TryGetValue("createdAtTick", out v) && int.TryParse(v, out var t) ? t : 0,
+                    CreatedAt = dict.TryGetValue("createdAt", out v) ? v : "",
                     TriggerEventIds = DeserializeStringList(dict.TryGetValue("triggerEventIds", out v) ? v : null),
                     AuthorRole = ParseRole(dict.TryGetValue("authorRole", out v) ? v : "Screenwriter"),
                     AuthorId = dict.TryGetValue("authorId", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
@@ -682,7 +732,7 @@ namespace RimLife.Workspace
             var signal = new StorylineSignal
             {
                 Type = ParseSignalType(dict.TryGetValue("type", out var v) ? v : "Progressing"),
-                ReportedAtTick = dict.TryGetValue("reportedAtTick", out v) && int.TryParse(v, out var t) ? t : 0,
+                ReportedAt = dict.TryGetValue("reportedAt", out v) ? v : "",
                 Note = dict.TryGetValue("note", out v) ? v : "",
                 SuggestedTargetId = dict.TryGetValue("suggestedTargetId", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
             };
@@ -753,8 +803,9 @@ namespace RimLife.Workspace
                 newToolsJson = "[]"; // 已激活，无新工具
             }
 
-            ws.LastActivityTick = ++_globalSeq;
+            ws.LastActivityAt = Now();
             SaveToStore();
+            PublishUpdated(workspaceId);
             return McpSkillRegistry.MakeActivateResult(skillId, newToolsJson);
         }
 
@@ -777,8 +828,9 @@ namespace RimLife.Workspace
             if (ws.ActiveSkillIds != null)
                 ws.ActiveSkillIds.Remove(skillId);
 
-            ws.LastActivityTick = ++_globalSeq;
+            ws.LastActivityAt = Now();
             SaveToStore();
+            PublishUpdated(workspaceId);
             return McpSkillRegistry.MakeDeactivateResult(skillId);
         }
 
@@ -838,7 +890,10 @@ namespace RimLife.Workspace
         public void Dispose()
         {
             try { SaveToStore(); } catch { /* 持久化失败不应阻断释放 */ }
-            _workspaces.Clear();
+            _rwLock.EnterWriteLock();
+            try { _workspaces.Clear(); }
+            finally { _rwLock.ExitWriteLock(); }
+            _rwLock.Dispose();
         }
     }
 }

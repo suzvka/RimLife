@@ -66,8 +66,8 @@ namespace RimLife.Workspace
         /// <summary>正式台词（Branch/Merge 轮为空）。</summary>
         public string Narrative;
 
-        /// <summary>创作时刻 (游戏 tick)。</summary>
-        public int CreatedAtTick;
+        /// <summary>创作时刻 (格式化时间字符串，框架原样透传)。</summary>
+        public string CreatedAt;
 
         /// <summary>本轮触发的事件 ID 列表。仅作溯源，不注入 prompt。</summary>
         public List<string> TriggerEventIds;
@@ -115,11 +115,11 @@ namespace RimLife.Workspace
         /// <summary>最新一期前情提要。注入下一轮 prompt 的唯一上下文窗口。</summary>
         public string CurrentRecap;
 
-        /// <summary>创建时刻 (游戏 tick)。</summary>
-        public int CreatedAtTick;
+        /// <summary>创建时刻 (格式化时间字符串，框架原样透传)。</summary>
+        public string CreatedAt;
 
-        /// <summary>最后活跃时刻 (游戏 tick)。</summary>
-        public int LastActivityTick;
+        /// <summary>最后活跃时刻 (格式化时间字符串，框架原样透传)。</summary>
+        public string LastActivityAt;
 
         /// <summary>此工作空间激活的 Skill ID 列表。持久化以支持冷启动恢复。</summary>
         public List<string> ActiveSkillIds;

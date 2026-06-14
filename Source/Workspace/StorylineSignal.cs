@@ -33,8 +33,8 @@ namespace RimLife.Workspace
         /// <summary>信号类型。</summary>
         public SignalType Type;
 
-        /// <summary>上报时刻 (游戏 tick)。</summary>
-        public int ReportedAtTick;
+        /// <summary>上报时刻 (格式化时间字符串，框架原样透传)。</summary>
+        public string ReportedAt;
 
         /// <summary>编剧给导演的简短说明（≤200字，结构化摘要而非剧情细节）。</summary>
         public string Note;
