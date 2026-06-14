@@ -37,6 +37,14 @@ namespace RimLife.Core
         IReadOnlyList<KnowledgeEntry> ListByPrefix(string prefix);
 
         /// <summary>
+        /// 按语义标签筛选词条。命中任一标签即匹配。
+        /// 用于按领域（Combat / Lore / Social 等）过滤知识库内容。
+        /// </summary>
+        /// <param name="tags">标签列表。null 或空列表时返回全部。</param>
+        /// <returns>匹配的词条列表。</returns>
+        IReadOnlyList<KnowledgeEntry> ListByTags(IReadOnlyList<string> tags);
+
+        /// <summary>
         /// 列出全部词条。
         /// </summary>
         IReadOnlyList<KnowledgeEntry> ListAll();

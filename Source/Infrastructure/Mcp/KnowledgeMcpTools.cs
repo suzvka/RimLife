@@ -123,11 +123,7 @@ namespace RimLife.Infrastructure.Mcp
                 if (!string.IsNullOrEmpty(tags))
                 {
                     var tagList = ParseTagList(tags);
-                    // 使用 BuiltInKnowledgeBase 的 ListByTags
-                    if (kb is Knowledge.BuiltInKnowledgeBase builtIn)
-                        entries = builtIn.ListByTags(tagList);
-                    else
-                        entries = kb.ListAll();
+                    entries = kb.ListByTags(tagList);
                 }
                 else if (!string.IsNullOrEmpty(prefix))
                 {

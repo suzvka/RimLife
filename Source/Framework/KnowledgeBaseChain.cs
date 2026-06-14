@@ -90,6 +90,14 @@ namespace RimLife.Framework
         }
 
         /// <summary>
+        /// 从 L1 中按语义标签筛选词条。
+        /// </summary>
+        public IReadOnlyList<KnowledgeEntry> ListByTags(IReadOnlyList<string> tags)
+        {
+            return _l1?.ListByTags(tags) ?? new List<KnowledgeEntry>();
+        }
+
+        /// <summary>
         /// 从 L1 中列出全部词条。
         /// </summary>
         public IReadOnlyList<KnowledgeEntry> ListAll()

@@ -174,6 +174,8 @@ namespace RimLife.Infrastructure.Knowledge
         public void Delete(string term) { /* no-op: 只读层 */ }
         public IReadOnlyList<KnowledgeEntry> ListByPrefix(string prefix)
             => new List<KnowledgeEntry>();
+        public IReadOnlyList<KnowledgeEntry> ListByTags(IReadOnlyList<string> tags)
+            => new List<KnowledgeEntry>();
         public IReadOnlyList<KnowledgeEntry> ListAll()
             => new List<KnowledgeEntry>();
         public int Count => 0;
