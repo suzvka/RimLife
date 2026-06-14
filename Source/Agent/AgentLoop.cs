@@ -19,7 +19,7 @@ namespace RimLife.Agent
     /// 2. Drain → Prompt → LLM → 工具调用循环
     /// 3. 循环结束 → 重置状态，等待下次通知
     /// </summary>
-    public class AgentLoop
+    public class AgentLoop : IDisposable
     {
         private readonly AgentEventPool _pool;
         private readonly ILlmChatService _llm;
@@ -27,6 +27,7 @@ namespace RimLife.Agent
         private readonly string _systemPrompt;
         private readonly string[] _skillIds;
         private readonly int _maxRounds;
+        private readonly Action _unsubscribe; // 取消事件订阅的委托
 
         private bool _isProcessing;
         private int _round;
@@ -59,6 +60,7 @@ namespace RimLife.Agent
 
             // 订阅池子事件——唯一激活路径
             _pool.OnThresholdReached += OnPoolChanged;
+            _unsubscribe = () => _pool.OnThresholdReached -= OnPoolChanged;
         }
 
         // ================================================================
@@ -69,6 +71,13 @@ namespace RimLife.Agent
         {
             if (_isProcessing) return;
             if (_pool.PendingCount == 0) return;
+
+            // 开始请求链路追踪
+            ErrorHandler.BeginTrace();
+            EventBus.Publish(FrameworkEvents.AgentActivated, EventArg.WithPayload(
+                ("pendingCount", _pool.PendingCount.ToString()),
+                ("totalImportance", _pool.TotalImportance.ToString())
+            ));
 
             Activate();
         }
@@ -110,7 +119,16 @@ namespace RimLife.Agent
                 Temperature = 0.7f
             };
 
-            _llm.ChatAsync(request, OnSuccess, OnError);
+            // 管道拦截：LLM 请求前
+            var llmCtx = new LlmContext { Request = request };
+            AgentPipeline.RunBeforeLlm(llmCtx);
+
+            EventBus.Publish(FrameworkEvents.LlmRequestSent, EventArg.WithPayload(
+                ("round", _round.ToString()),
+                ("messageCount", _messages.Count.ToString())
+            ));
+
+            _llm.ChatAsync(llmCtx.Request, OnSuccess, OnError);
         }
 
         private void OnSuccess(LlmResponse response)
@@ -125,6 +143,11 @@ namespace RimLife.Agent
             if (!string.IsNullOrEmpty(response.Content))
                 _messages.Add(LlmMessage.Assistant(response.Content));
 
+            EventBus.Publish(FrameworkEvents.LlmResponseReceived, EventArg.WithPayload(
+                ("hasToolCalls", response.HasToolCalls.ToString()),
+                ("contentLength", (response.Content?.Length ?? 0).ToString())
+            ));
+
             // 工具调用？
             if (response.HasToolCalls)
             {
@@ -133,18 +156,45 @@ namespace RimLife.Agent
                 if (_round >= _maxRounds)
                 {
                     _logger.Warning($"[RimLife.Agent] Reached max rounds ({_maxRounds}). Ending loop.");
-                    Finish();
+                    Finish(false);
                     return;
                 }
 
                 var toolCallsForMessage = new List<LlmToolCall>();
+                var toolResults = new List<(string id, string result)>();
 
                 foreach (var tc in response.ToolCalls)
                 {
                     _logger.Message($"[RimLife.Agent] Tool call: {tc.Name}({tc.Arguments})");
 
-                    string result = McpSkillRegistry.InvokeTool(_skillIds, tc.Name, tc.Arguments);
+                    // 管道拦截：工具调用前
+                    var toolCtx = new ToolCallContext { ToolName = tc.Name, Arguments = tc.Arguments };
+                    AgentPipeline.RunBeforeToolCall(toolCtx);
+
+                    EventBus.Publish(FrameworkEvents.ToolInvoking, EventArg.WithPayload(
+                        ("toolName", tc.Name), ("round", _round.ToString())
+                    ));
+
+                    string result;
+                    if (toolCtx.Cancelled)
+                    {
+                        result = "{\"error\":\"cancelled by interceptor\"}";
+                    }
+                    else
+                    {
+                        result = McpSkillRegistry.InvokeTool(_skillIds, tc.Name, tc.Arguments);
+                        toolCtx.Result = result;
+                    }
+
+                    // 管道拦截：工具调用后
+                    AgentPipeline.RunAfterToolCall(toolCtx);
+
+                    EventBus.Publish(FrameworkEvents.ToolInvoked, EventArg.WithPayload(
+                        ("toolName", tc.Name), ("resultLength", (result?.Length ?? 0).ToString())
+                    ));
+
                     toolCallsForMessage.Add(tc);
+                    toolResults.Add((tc.Id, result));
 
                     _logger.Message($"[RimLife.Agent] Tool result ({tc.Name}): {TruncateResult(result)}");
                 }
@@ -159,11 +209,15 @@ namespace RimLife.Agent
                 _messages.Add(assistantMsg);
 
                 // 为每个工具调用添加 tool 结果消息
-                for (int i = 0; i < response.ToolCalls.Count; i++)
+                foreach (var (id, result) in toolResults)
                 {
-                    _messages.Add(LlmMessage.ToolResult(response.ToolCalls[i].Id,
-                        McpSkillRegistry.InvokeTool(_skillIds, response.ToolCalls[i].Name, response.ToolCalls[i].Arguments)));
+                    _messages.Add(LlmMessage.ToolResult(id, result));
                 }
+
+                EventBus.Publish(FrameworkEvents.AgentRoundComplete, EventArg.WithPayload(
+                    ("round", _round.ToString()),
+                    ("toolCallCount", response.ToolCalls.Count.ToString())
+                ));
 
                 // 继续下一轮
                 SendChat();
@@ -179,6 +233,12 @@ namespace RimLife.Agent
         private void OnError(string error)
         {
             _logger.Warning($"[RimLife.Agent] LLM error: {error}. Events remain in pool for retry.");
+            ErrorHandler.ReportError("AgentLoop", error, new System.Collections.Generic.Dictionary<string, string>
+            {
+                {"round", _round.ToString()},
+                {"drainedCount", (_drained?.Count ?? 0).ToString()}
+            });
+
             if (_drained != null)
             {
                 foreach (var evt in _drained)
@@ -187,16 +247,38 @@ namespace RimLife.Agent
             _drained = null;
             _messages = null;
             _isProcessing = false;
+
+            ErrorHandler.EndTrace();
+            EventBus.Publish(FrameworkEvents.AgentLoopFinished, EventArg.WithPayload(
+                ("rounds", _round.ToString()),
+                ("error", error ?? "unknown")
+            ));
         }
 
-        private void Finish()
+        private void Finish(bool normalCompletion = true)
         {
             int count = _drained?.Count ?? 0;
+            int rounds = _round;
             _drained = null;
             _messages = null;
             _isProcessing = false;
 
             _logger.Message($"[RimLife.Agent] Loop complete. {count} events processed.");
+
+            // 管道拦截：循环结束
+            AgentPipeline.RunLoopFinished(new LoopContext
+            {
+                Rounds = rounds,
+                EventsProcessed = count,
+                NormalCompletion = normalCompletion
+            });
+
+            ErrorHandler.EndTrace();
+            EventBus.Publish(FrameworkEvents.AgentLoopFinished, EventArg.WithPayload(
+                ("rounds", rounds.ToString()),
+                ("eventsProcessed", count.ToString()),
+                ("normalCompletion", normalCompletion.ToString())
+            ));
         }
 
         // ================================================================
@@ -229,5 +311,18 @@ namespace RimLife.Agent
 
         /// <summary>获取当前 Agent 轮数（调试用）。</summary>
         public int CurrentRound => _round;
+
+        // ================================================================
+        // IDisposable
+        // ================================================================
+
+        /// <summary>取消事件订阅、清空状态。</summary>
+        public void Dispose()
+        {
+            _unsubscribe?.Invoke();
+            _drained = null;
+            _messages = null;
+            _isProcessing = false;
+        }
     }
 }

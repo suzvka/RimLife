@@ -20,7 +20,7 @@ namespace RimLife.Workspace
     /// - Director: create / branch / merge / suspend / resume / close
     /// - Screenwriter: push_round / signal_workspace_status
     /// </summary>
-    public class WorkspaceManager
+    public class WorkspaceManager : IDisposable
     {
         private readonly List<WorkspaceState> _workspaces = new List<WorkspaceState>();
         private readonly IPersistentStore _store;
@@ -830,5 +830,15 @@ namespace RimLife.Workspace
             }
         }
 
+        // ================================================================
+        // IDisposable
+        // ================================================================
+
+        /// <summary>持久化最终状态并清空内存。</summary>
+        public void Dispose()
+        {
+            try { SaveToStore(); } catch { /* 持久化失败不应阻断释放 */ }
+            _workspaces.Clear();
+        }
     }
 }

@@ -4,6 +4,7 @@ using RimLife.Framework;
 using RimLife.Driver;
 using RimLife.Framework.Mcp;
 using RimLife.Infrastructure.Llm;
+using System;
 using System.Collections.Generic;
 using Verse;
 
@@ -17,12 +18,59 @@ namespace RimLife.Infrastructure
     {
         private static bool _skillRegistryInitialized;
         private static readonly object _skillRegistryLock = new object();
+        private static FrameworkConfig _frameworkConfig;
 
         /// <summary>日志接口。由适配层在启动时注入。</summary>
         public static ILogger Logger { get; internal set; }
 
         /// <summary>Pawn 语义提示词提供者。游戏侧实现，提供各维度的自然语言描述。</summary>
         public static IPawnPromptProvider PromptProvider { get; internal set; }
+
+        /// <summary>当前框架配置。未配置时返回默认配置。</summary>
+        public static FrameworkConfig Config => _frameworkConfig ?? FrameworkConfig.CreateDefault();
+
+        /// <summary>
+        /// 统一配置入口。设置全局配置并触发配置就绪通知。
+        /// 配置合并优先级：默认值 &lt; 配置文件 &lt; 代码覆盖。
+        /// </summary>
+        public static void Configure(FrameworkConfig config)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+
+            var errors = config.Validate();
+            if (errors.Count > 0)
+            {
+                Logger?.Warning($"[RimLife.Core] Config validation failed: {string.Join("; ", errors)}");
+                return;
+            }
+
+            _frameworkConfig = config;
+
+            // 同步到各子系统
+            _driverConfig = config.ToDriverConfig();
+            ErrorHandler.DiagnosticMode = config.Diagnostics?.EnableVerboseLogging ?? false;
+
+            config.Freeze();
+            LifecycleManager.NotifyConfigReady();
+            EventBus.Publish(FrameworkEvents.ConfigReady);
+
+            Logger?.Message("[RimLife.Core] Configuration applied and frozen.");
+        }
+
+        /// <summary>
+        /// 关闭框架。级联销毁所有组件，清空事件总线。
+        /// 应在 Mod 卸载或游戏退出时调用。
+        /// </summary>
+        public static void Shutdown()
+        {
+            Logger?.Message("[RimLife.Core] Shutting down...");
+            LifecycleManager.Shutdown();
+            FrameworkStatus.Clear();
+            ErrorHandler.ClearHandlers();
+            _frameworkConfig = null;
+            _skillRegistryInitialized = false;
+            Logger?.Message("[RimLife.Core] Shutdown complete.");
+        }
 
         /// <summary>
         /// 初始化 MCP Skill 注册表。注册所有 Skill 元数据，
@@ -54,7 +102,56 @@ namespace RimLife.Infrastructure
                 Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
 
                 _skillRegistryInitialized = true;
+
+                // 注入 Logger 到基础设施组件
+                EventBus.Logger = Logger;
+                LifecycleManager.Logger = Logger;
+                ErrorHandler.Logger = Logger;
+                AgentPipeline.Logger = Logger;
+
+                // 初始化生命周期管理器
+                LifecycleManager.Initialize();
+
+                // 注册 FrameworkStatus 报告器
+                RegisterStatusReporters();
+
+                // 注册基础能力标识
+                FrameworkStatus.RegisterCapability("mcp_tools", true);
+                FrameworkStatus.RegisterCapability("event_bus", true);
+                FrameworkStatus.RegisterCapability("agent_pipeline", true);
+                FrameworkStatus.RegisterCapability("lifecycle_hooks", true);
             }
+        }
+
+        private static void RegisterStatusReporters()
+        {
+            FrameworkStatus.RegisterReporter("Llm", () => new ComponentStatus
+            {
+                Name = "Llm",
+                IsAvailable = _llmAccessor != null && _llmAccessor.IsConfigured,
+                Detail = _llmAccessor != null ? $"{_llmAccessor.AdapterTypeName}" : "not initialized"
+            });
+
+            FrameworkStatus.RegisterReporter("EventLog", () => new ComponentStatus
+            {
+                Name = "EventLog",
+                IsAvailable = _eventLog != null,
+                Detail = _eventLog != null ? $"{_eventLog.TotalAppended} events appended" : "not initialized"
+            });
+
+            FrameworkStatus.RegisterReporter("Workspace", () => new ComponentStatus
+            {
+                Name = "Workspace",
+                IsAvailable = _workspaces != null,
+                Detail = _workspaces != null ? "active" : "not initialized"
+            });
+
+            FrameworkStatus.RegisterReporter("KnowledgeBase", () => new ComponentStatus
+            {
+                Name = "KnowledgeBase",
+                IsAvailable = _knowledgeBase != null,
+                Detail = _knowledgeBase != null ? $"{_knowledgeBase.Count} entries" : "not initialized"
+            });
         }
 
         // ----------------------------------------------------------------
@@ -97,12 +194,31 @@ namespace RimLife.Infrastructure
             {
                 if (_saveStore != value)
                 {
+                    // 存档切换：发布卸载事件 + 重置生命周期
+                    if (_saveStore != null)
+                    {
+                        EventBus.Publish(FrameworkEvents.SaveUnloaded);
+                    }
+
+                    // 级联销毁旧组件
+                    _directorAgent?.Dispose();
+                    (_eventLog as IDisposable)?.Dispose();
+                    (_interactionStore as IDisposable)?.Dispose();
+                    _workspaces?.Dispose();
+                    _llmAccessor?.Dispose();
+
                     _saveStore = value;
                     _eventLog = null;
                     _directorAgent = null;
                     _interactionStore = null;
                     _workspaces = null;
                     _knowledgeBase = null;
+
+                    if (_saveStore != null)
+                    {
+                        EventBus.Publish(FrameworkEvents.SaveLoaded);
+                        Logger?.Message("[RimLife.Core] SaveStore switched, components reset.");
+                    }
                 }
             }
         }

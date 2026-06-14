@@ -14,7 +14,7 @@ namespace RimLife.Infrastructure
     /// append-only 流水，不裁剪，持久化到存档文件。
     /// 语义层 KV 由上层按需触发计算，写入 CacheStore。
     /// </summary>
-    public class InteractionHistoryStore : IInteractionStore
+    public class InteractionHistoryStore : IInteractionStore, IDisposable
     {
         private readonly List<InteractionRecord> _records = new List<InteractionRecord>();
         private readonly IPersistentStore _store;
@@ -167,6 +167,17 @@ namespace RimLife.Infrastructure
                 InteractionDef = data.TryGetValue("interactionDef", out var idef) ? idef : "?",
                 Outcome = data.TryGetValue("outcome", out var o) ? o : ""
             };
+        }
+
+        // ================================================================
+        // IDisposable
+        // ================================================================
+
+        /// <summary>清空内存中的记录。</summary>
+        public void Dispose()
+        {
+            _records.Clear();
+            TotalAppended = 0;
         }
     }
 }

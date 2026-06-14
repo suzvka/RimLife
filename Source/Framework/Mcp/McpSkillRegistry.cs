@@ -374,37 +374,71 @@ namespace RimLife.Framework.Mcp
             if (string.IsNullOrEmpty(toolName))
                 return MakeError("toolName is required");
 
+            // 发布工具调用前事件
+            EventBus.Publish(FrameworkEvents.ToolInvoking, EventArg.WithPayload(
+                ("toolName", toolName),
+                ("source", "McpSkillRegistry")
+            ));
+
+            string result;
             lock (_lock)
             {
-                // 1. 先搜传入的业务技能
-                if (activeSkillIds != null)
+                result = InvokeToolInternal(activeSkillIds, toolName, jsonArgs);
+            }
+
+            // 发布工具调用后事件
+            EventBus.Publish(FrameworkEvents.ToolInvoked, EventArg.WithPayload(
+                ("toolName", toolName),
+                ("resultLength", (result?.Length ?? 0).ToString())
+            ));
+
+            return result;
+        }
+
+        private static string InvokeToolInternal(IEnumerable<string> activeSkillIds, string toolName, string jsonArgs)
+        {
+            // 1. 先搜传入的业务技能
+            if (activeSkillIds != null)
+            {
+                foreach (var skillId in activeSkillIds)
                 {
-                    foreach (var skillId in activeSkillIds)
+                    if (string.IsNullOrEmpty(skillId)) continue;
+                    if (_skillTools.TryGetValue(skillId, out var tools))
                     {
-                        if (string.IsNullOrEmpty(skillId)) continue;
-                        if (_skillTools.TryGetValue(skillId, out var tools))
+                        foreach (var tool in tools)
                         {
-                            foreach (var tool in tools)
+                            if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
                             {
-                                if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
+                                try { return tool.Invoker(jsonArgs ?? "{}"); }
+                                catch (Exception ex)
                                 {
-                                    try { return tool.Invoker(jsonArgs ?? "{}"); }
-                                    catch (Exception ex) { return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}"; }
+                                    ErrorHandler.ReportError("McpTool", ex, new System.Collections.Generic.Dictionary<string, string>
+                                    {
+                                        {"toolName", toolName}, {"skillId", skillId}
+                                    });
+                                    return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}";
                                 }
                             }
                         }
                     }
                 }
+            }
 
-                // 2. fallback 到 system（始终可用）
-                if (_skillTools.TryGetValue(SystemSkillId, out var sysTools))
+            // 2. fallback 到 system（始终可用）
+            if (_skillTools.TryGetValue(SystemSkillId, out var sysTools))
+            {
+                foreach (var tool in sysTools)
                 {
-                    foreach (var tool in sysTools)
+                    if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (string.Equals(tool.Definition.Name, toolName, StringComparison.OrdinalIgnoreCase))
+                        try { return tool.Invoker(jsonArgs ?? "{}"); }
+                        catch (Exception ex)
                         {
-                            try { return tool.Invoker(jsonArgs ?? "{}"); }
-                            catch (Exception ex) { return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}"; }
+                            ErrorHandler.ReportError("McpTool", ex, new System.Collections.Generic.Dictionary<string, string>
+                            {
+                                {"toolName", toolName}, {"skillId", SystemSkillId}
+                            });
+                            return "{\"error\":" + JsonHelper.Quote(ex.Message) + "}";
                         }
                     }
                 }

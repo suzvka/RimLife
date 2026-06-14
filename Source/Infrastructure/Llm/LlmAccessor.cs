@@ -20,7 +20,7 @@ namespace RimLife.Infrastructure.Llm
     /// 4. 异步连通性测试（TestConnectionAsync，供配置向导使用）
     /// 5. 异步模型列表查询（ListModelsAsync，供配置向导使用）
     /// </summary>
-    public class LlmAccessor : ILlmChatService
+    public class LlmAccessor : ILlmChatService, IDisposable
     {
         private readonly IPersistentStore _store;
         private const string ConfigKey = "rimlife_llm_config";
@@ -330,6 +330,22 @@ namespace RimLife.Infrastructure.Llm
             }
 
             return config;
+        }
+
+        // ================================================================
+        // IDisposable
+        // ================================================================
+
+        /// <summary>释放适配器资源。</summary>
+        public void Dispose()
+        {
+            lock (_lock)
+            {
+                if (_adapter is IDisposable disposable)
+                    disposable.Dispose();
+                _adapter = null;
+                _config = null;
+            }
         }
     }
 }

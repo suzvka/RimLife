@@ -17,7 +17,7 @@ namespace RimLife.Driver
     /// 触发条件（Count/Importance）仅评估 _pending。
     /// 零持久化：存档时不保留池内容，读档后从零开始。
     /// </summary>
-    public class AgentEventPool : IEventLog
+    public class AgentEventPool : IEventLog, IDisposable
     {
         private readonly DriverConfig _config;
         private readonly List<IGameEvent> _pending = new List<IGameEvent>();
@@ -183,6 +183,19 @@ namespace RimLife.Driver
         {
             _pending.Clear();
             _totalImportance = 0;
+        }
+
+        // ================================================================
+        // IDisposable
+        // ================================================================
+
+        /// <summary>清空所有缓冲区和状态。</summary>
+        public void Dispose()
+        {
+            _pending.Clear();
+            _recent.Clear();
+            _totalImportance = 0;
+            _totalAppended = 0;
         }
     }
 }
