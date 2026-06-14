@@ -57,7 +57,7 @@ namespace RimLife.Infrastructure.Mcp
                 };
 
                 var results = eventLog.Query(query);
-                return CardSerializer.SerializeEventList(results);
+                return CardSerializer.Default.SerializeEventList(results);
             }
             catch (Exception e)
             {

@@ -5,11 +5,14 @@ using System.Collections.Generic;
 namespace RimLife.Core
 {
     /// <summary>
-    /// 事件日志抽象接口。提供 append-only 写入与按条件查询能力，
-    /// 替代固定容量的 EventBuffer。
+    /// 事件日志抽象接口。提供 append-only 写入、按条件查询，以及 pending 缓冲区的阈值激活能力。
+    /// AgentLoop 依赖此接口获取待处理事件并订阅激活通知。
+    /// 实现：AgentEventPool。
     /// </summary>
     public interface IEventLog
     {
+        // --- 日志写入与查询 ---
+
         /// <summary>追加一条事件。</summary>
         void Append(IGameEvent evt);
 
@@ -24,15 +27,9 @@ namespace RimLife.Core
 
         /// <summary>累计追加的事件总数。</summary>
         int TotalAppended { get; }
-    }
 
-    /// <summary>
-    /// 事件池接口。在 IEventLog 基础上增加阈值激活和 pending 事件管理能力。
-    /// AgentLoop 依赖此接口获取待处理事件并订阅激活通知。
-    /// 实现：AgentEventPool。
-    /// </summary>
-    public interface IEventPool : IEventLog
-    {
+        // --- 池激活语义 ---
+
         /// <summary>pending 缓冲区中的事件数。</summary>
         int PendingCount { get; }
 

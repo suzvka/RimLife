@@ -25,7 +25,8 @@ namespace RimLife.Infrastructure.Mcp
                 var wm = RimLifeCore.Workspaces;
                 if (wm == null)
                     return McpSkillRegistry.MakeError("WorkspaceManager not available.");
-                return wm.GetSkillListJson(workspaceId);
+                var activeIds = wm.GetActiveSkillIds(workspaceId);
+                return McpSkillRegistry.GetSkillListJson(activeIds);
             }
             catch (Exception e)
             {

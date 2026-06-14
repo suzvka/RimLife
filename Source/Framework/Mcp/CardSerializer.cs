@@ -7,16 +7,19 @@ using System.Text;
 namespace RimLife.Framework.Mcp
 {
     /// <summary>
-    /// Card DTO → JSON 序列化器。纯静态，零 RimWorld 依赖。
+    /// Card DTO → JSON 序列化器。零 RimWorld 依赖。
     /// 供各 MCP Provider 调用，将查询结果转为 LLM 可消费的 JSON。
+    /// Infrastructure 层可通过 <see cref="Default"/> 静态实例直接使用。
     /// </summary>
-    public static class CardSerializer
+    public class CardSerializer : ICardSerializer
     {
+        /// <summary>默认单例，供 Infrastructure 层静态调用。</summary>
+        public static readonly CardSerializer Default = new CardSerializer();
         // ================================================================
         // IGameEvent
         // ================================================================
 
-        public static string SerializeEvent(IGameEvent evt)
+        public string SerializeEvent(IGameEvent evt)
         {
             var w = new JsonWriter(512);
             w.Prop("eventId", evt.EventID);
@@ -52,7 +55,7 @@ namespace RimLife.Framework.Mcp
             return w.Close();
         }
 
-        public static string SerializeEventList(IReadOnlyList<IGameEvent> events)
+        public string SerializeEventList(IReadOnlyList<IGameEvent> events)
         {
             return SerializeObjectList(events, SerializeEvent);
         }
@@ -61,7 +64,7 @@ namespace RimLife.Framework.Mcp
         // ColonyContext
         // ================================================================
 
-        public static string SerializeColonyContext(ColonyContext ctx)
+        public string SerializeColonyContext(ColonyContext ctx)
         {
             if (ctx == null) return "{}";
             var w = new JsonWriter(1024);
@@ -147,7 +150,7 @@ namespace RimLife.Framework.Mcp
         /// 序列化 CharacterCard。view 控制数据层级：
         /// "static"（默认）= 客观属性；"dynamic" = + 视角/记忆快照；"full" = + 完整记忆流水。
         /// </summary>
-        public static string SerializeCharacterCard(CharacterCard card, string view,
+        public string SerializeCharacterCard(CharacterCard card, string view,
             IPawnPromptProvider promptProvider)
         {
             if (card == null) return "{}";
@@ -179,7 +182,7 @@ namespace RimLife.Framework.Mcp
         // ObjectiveCard
         // ================================================================
 
-        public static string SerializeObjective(ObjectiveCard obj)
+        public string SerializeObjective(ObjectiveCard obj)
         {
             if (obj == null) return "{}";
             var w = new JsonWriter(256);
@@ -206,7 +209,7 @@ namespace RimLife.Framework.Mcp
             return w.Close();
         }
 
-        public static string SerializeObjectiveList(IReadOnlyList<ObjectiveCard> objectives)
+        public string SerializeObjectiveList(IReadOnlyList<ObjectiveCard> objectives)
         {
             return SerializeObjectList(objectives, SerializeObjective);
         }
@@ -215,7 +218,7 @@ namespace RimLife.Framework.Mcp
         // EnvironmentCard
         // ================================================================
 
-        public static string SerializeEnvironment(EnvironmentCard env)
+        public string SerializeEnvironment(EnvironmentCard env)
         {
             if (env == null) return "{}";
             var w = new JsonWriter(512);
@@ -267,7 +270,7 @@ namespace RimLife.Framework.Mcp
         // InteractionRecord
         // ================================================================
 
-        public static string SerializeInteraction(InteractionRecord rec)
+        public string SerializeInteraction(InteractionRecord rec)
         {
             var w = new JsonWriter(128);
             w.Prop("tick", rec.Tick);
@@ -278,7 +281,7 @@ namespace RimLife.Framework.Mcp
             return w.Close();
         }
 
-        public static string SerializeInteractionList(IReadOnlyList<InteractionRecord> records)
+        public string SerializeInteractionList(IReadOnlyList<InteractionRecord> records)
         {
             return SerializeObjectList(records, SerializeInteraction);
         }
@@ -287,7 +290,7 @@ namespace RimLife.Framework.Mcp
         // ColonistSummary (轻量列表，供 find_characters 用)
         // ================================================================
 
-        public static string SerializeColonistSummaryList(IReadOnlyList<ColonistSummary> colonists)
+        public string SerializeColonistSummaryList(IReadOnlyList<ColonistSummary> colonists)
         {
             return SerializeObjectList(colonists, SerializeColonistSummary);
         }

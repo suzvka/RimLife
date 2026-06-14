@@ -835,23 +835,12 @@ namespace RimLife.Workspace
         }
 
         /// <summary>
-        /// 获取指定工作空间的已激活工具定义 JSON（用于 LLM prompt 注入）。
+        /// 获取指定工作空间的已激活 Skill ID 列表。
         /// </summary>
-        public string GetActiveToolsJson(string workspaceId)
+        public IReadOnlyList<string> GetActiveSkillIds(string workspaceId)
         {
             var ws = Get(workspaceId);
-            var activeIds = ws?.ActiveSkillIds;
-            return McpSkillRegistry.GetActiveToolsJson(activeIds);
-        }
-
-        /// <summary>
-        /// 获取所有 Skill 的轻量列表 JSON（含激活状态），用于 list_skills 工具。
-        /// </summary>
-        public string GetSkillListJson(string workspaceId)
-        {
-            var ws = Get(workspaceId);
-            var activeIds = ws?.ActiveSkillIds;
-            return McpSkillRegistry.GetSkillListJson(activeIds);
+            return ws?.ActiveSkillIds ?? new List<string>();
         }
 
         /// <summary>

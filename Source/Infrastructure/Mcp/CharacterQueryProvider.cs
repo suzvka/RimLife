@@ -50,7 +50,7 @@ namespace RimLife.Infrastructure.Mcp
                 if (pawn == null) return "{}";
 
                 var card = PawnQueryHelper.BuildCharacterCard(pawn, view);
-                return CardSerializer.SerializeCharacterCard(card, view, RimLifeCore.PromptProvider);
+                return CardSerializer.Default.SerializeCharacterCard(card, view, RimLifeCore.PromptProvider);
             }
             catch (Exception e)
             {
@@ -131,7 +131,7 @@ namespace RimLife.Infrastructure.Mcp
                 var jsons = new List<string>();
                 var promptProvider = RimLifeCore.PromptProvider;
                 foreach (var c in results)
-                    jsons.Add(CardSerializer.SerializeCharacterCard(c, "static", promptProvider));
+                    jsons.Add(CardSerializer.Default.SerializeCharacterCard(c, "static", promptProvider));
 
                 return PawnQueryHelper.SerializeJsonArray(jsons);
             }

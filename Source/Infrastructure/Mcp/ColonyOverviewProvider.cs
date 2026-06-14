@@ -46,7 +46,7 @@ namespace RimLife.Infrastructure.Mcp
             try
             {
                 var ctx = ColonyContextMapper.Create();
-                return CardSerializer.SerializeColonyContext(ctx);
+                return CardSerializer.Default.SerializeColonyContext(ctx);
             }
             catch (Exception e)
             {
@@ -83,7 +83,7 @@ namespace RimLife.Infrastructure.Mcp
                 for (int i = count - take; i < count; i++)
                     recent.Add(all[i]);
 
-                return CardSerializer.SerializeEventList(recent);
+                return CardSerializer.Default.SerializeEventList(recent);
             }
             catch (Exception e)
             {
@@ -102,7 +102,7 @@ namespace RimLife.Infrastructure.Mcp
             try
             {
                 var objectives = ObjectiveCardMapper.GetActive();
-                return CardSerializer.SerializeObjectiveList(objectives);
+                return CardSerializer.Default.SerializeObjectiveList(objectives);
             }
             catch (Exception e)
             {

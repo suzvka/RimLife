@@ -66,7 +66,7 @@ namespace RimLife.Infrastructure.Mcp
                 if (store == null) return "[]";
 
                 var records = store.QueryByPawn(pawnId, sinceTick, limit);
-                return CardSerializer.SerializeInteractionList(records);
+                return CardSerializer.Default.SerializeInteractionList(records);
             }
             catch (Exception e)
             {

@@ -610,7 +610,7 @@ namespace RimLife.Tool
                 var ctx = ColonyContextMapper.Create();
                 if (ctx != null)
                 {
-                    var json = CardSerializer.SerializeColonyContext(ctx);
+                    var json = CardSerializer.Default.SerializeColonyContext(ctx);
                     if (json.Length > 10 && json.StartsWith("{") && json.EndsWith("}"))
                     {
                         Pass($"SerializeColonyContext 成功 ({json.Length} chars)");
@@ -631,7 +631,7 @@ namespace RimLife.Tool
                 try
                 {
                     var card = PawnQueryHelper.BuildCharacterCard(pawn, null);
-                    var json = CardSerializer.SerializeCharacterCard(card, "static", RimLifeCore.PromptProvider);
+                    var json = CardSerializer.Default.SerializeCharacterCard(card, "static", RimLifeCore.PromptProvider);
                     if (json.Length > 50 && json.Contains("\"id\""))
                     {
                         Pass($"SerializeCharacterCard 成功 ({json.Length} chars)");
@@ -650,7 +650,7 @@ namespace RimLife.Tool
             try
             {
                 var evt = MakeTestEvent("serializer_test", new List<string> { "Test" }, 10000, "Major");
-                var json = CardSerializer.SerializeEvent(evt);
+                var json = CardSerializer.Default.SerializeEvent(evt);
                 if (json.Contains("serializer_test") && json.Contains("Test"))
                 {
                     Pass("SerializeEvent 成功");
@@ -669,7 +669,7 @@ namespace RimLife.Tool
                     MakeTestEvent("list_1", new List<string>{"A"}, 1, "Minor"),
                     MakeTestEvent("list_2", new List<string>{"B"}, 2, "Major")
                 };
-                var json = CardSerializer.SerializeEventList(events);
+                var json = CardSerializer.Default.SerializeEventList(events);
                 if (json.StartsWith("[") && json.Contains("list_1") && json.Contains("list_2"))
                     Pass("SerializeEventList 成功");
                 else
@@ -681,7 +681,7 @@ namespace RimLife.Tool
             try
             {
                 var objectives = ObjectiveCardMapper.GetActive();
-                var json = CardSerializer.SerializeObjectiveList(objectives);
+                var json = CardSerializer.Default.SerializeObjectiveList(objectives);
                 if (json.StartsWith("[") && json.EndsWith("]"))
                     Pass($"SerializeObjectiveList 成功 ({objectives.Count} objectives)");
                 else
@@ -695,7 +695,7 @@ namespace RimLife.Tool
                 try
                 {
                     var env = EnvironmentCardMapper.CreateFrom(pawn);
-                    var json = CardSerializer.SerializeEnvironment(env);
+                    var json = CardSerializer.Default.SerializeEnvironment(env);
                     if (json.Contains("\"type\""))
                     {
                         Pass($"SerializeEnvironment 成功 ({env.Type})");
@@ -715,7 +715,7 @@ namespace RimLife.Tool
                 if (store != null && store.TotalAppended > 0)
                 {
                     var records = store.QueryByPawn("test", null, 3);
-                    var json = CardSerializer.SerializeInteractionList(records);
+                    var json = CardSerializer.Default.SerializeInteractionList(records);
                     if (json.StartsWith("["))
                         Pass($"SerializeInteractionList 成功 ({records.Count} records)");
                     else
@@ -732,7 +732,7 @@ namespace RimLife.Tool
                 var ctx = ColonyContextMapper.Create();
                 if (ctx?.Colonists != null && ctx.Colonists.Count > 0)
                 {
-                    var json = CardSerializer.SerializeColonistSummaryList(ctx.Colonists);
+                    var json = CardSerializer.Default.SerializeColonistSummaryList(ctx.Colonists);
                     if (json.StartsWith("[") && json.Contains(ctx.Colonists[0].Name))
                         Pass($"SerializeColonistSummaryList 成功 ({ctx.Colonists.Count} colonists)");
                     else

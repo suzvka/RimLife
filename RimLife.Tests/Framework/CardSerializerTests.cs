@@ -35,7 +35,7 @@ namespace RimLife.Tests.Framework
                 Payload = new Dictionary<string, string> { ["damage"] = "20" }
             };
 
-            var json = CardSerializer.SerializeEvent(evt);
+            var json = CardSerializer.Default.SerializeEvent(evt);
 
             Assert.Contains("\"eventId\":\"test_001\"", json);
             Assert.Contains("\"defName\":\"TestEvent\"", json);
@@ -51,7 +51,7 @@ namespace RimLife.Tests.Framework
         [Fact]
         public void SerializeEventList_Empty_ReturnsEmptyArray()
         {
-            var json = CardSerializer.SerializeEventList(new List<IGameEvent>());
+            var json = CardSerializer.Default.SerializeEventList(new List<IGameEvent>());
             Assert.Equal("[]", json);
         }
 
@@ -63,7 +63,7 @@ namespace RimLife.Tests.Framework
                 new TestGameEvent { EventID = "e1", DefName = "A", Tick = 1 },
                 new TestGameEvent { EventID = "e2", DefName = "B", Tick = 2 }
             };
-            var json = CardSerializer.SerializeEventList(events);
+            var json = CardSerializer.Default.SerializeEventList(events);
 
             Assert.StartsWith("[", json);
             Assert.Contains("e1", json);
@@ -104,7 +104,7 @@ namespace RimLife.Tests.Framework
                 }
             };
 
-            var json = CardSerializer.SerializeColonyContext(ctx);
+            var json = CardSerializer.Default.SerializeColonyContext(ctx);
 
             Assert.Contains("\"season\":\"Summer\"", json);
             Assert.Contains("\"populationAlive\":5", json);
@@ -121,7 +121,7 @@ namespace RimLife.Tests.Framework
         [Fact]
         public void SerializeColonyContext_Null_ReturnsEmptyObject()
         {
-            var json = CardSerializer.SerializeColonyContext(null);
+            var json = CardSerializer.Default.SerializeColonyContext(null);
             Assert.Equal("{}", json);
         }
 
@@ -147,7 +147,7 @@ namespace RimLife.Tests.Framework
                 IsAwake = true
             };
 
-            var json = CardSerializer.SerializeCharacterCard(card, null, EmptyProvider);
+            var json = CardSerializer.Default.SerializeCharacterCard(card, null, EmptyProvider);
 
             Assert.Contains("\"id\":\"pawn_1\"", json);
             Assert.Contains("\"name\":\"Alice\"", json);
@@ -171,7 +171,7 @@ namespace RimLife.Tests.Framework
                 ["memory"] = "心态: 警觉, 回顾: 看见Alice在附近, 最近: 发现Alice, STM: 1, LTM: 0"
             });
 
-            var json = CardSerializer.SerializeCharacterCard(card, "dynamic", provider);
+            var json = CardSerializer.Default.SerializeCharacterCard(card, "dynamic", provider);
 
             Assert.Contains("\"view\":\"dynamic\"", json);
             Assert.Contains("\"prompt\"", json);
@@ -212,7 +212,7 @@ namespace RimLife.Tests.Framework
                 ["memory_full"] = "心态: 测试, STM: 1, LTM: 1\n  [STM详情] [100] Obs: 测试\n  [LTM详情] [50] test: 测试"
             });
 
-            var json = CardSerializer.SerializeCharacterCard(card, "full", provider);
+            var json = CardSerializer.Default.SerializeCharacterCard(card, "full", provider);
 
             Assert.Contains("\"view\":\"full\"", json);
             Assert.Contains("\"prompt\"", json);
@@ -254,7 +254,7 @@ namespace RimLife.Tests.Framework
                 ["memory"] = "心态: 警觉"
             });
 
-            var json = CardSerializer.SerializeCharacterCard(card, "static", provider);
+            var json = CardSerializer.Default.SerializeCharacterCard(card, "static", provider);
 
             Assert.Contains("\"view\":\"static\"", json);
             Assert.Contains("\"prompt\"", json);
@@ -286,7 +286,7 @@ namespace RimLife.Tests.Framework
                 }
             };
 
-            var json = CardSerializer.SerializeObjective(obj);
+            var json = CardSerializer.Default.SerializeObjective(obj);
 
             Assert.Contains("\"id\":\"quest_1\"", json);
             Assert.Contains("\"title\":\"Rescue the prisoner\"", json);
@@ -298,7 +298,7 @@ namespace RimLife.Tests.Framework
         [Fact]
         public void SerializeObjectiveList_Empty_ReturnsEmptyArray()
         {
-            var json = CardSerializer.SerializeObjectiveList(new List<ObjectiveCard>());
+            var json = CardSerializer.Default.SerializeObjectiveList(new List<ObjectiveCard>());
             Assert.Equal("[]", json);
         }
 
@@ -325,7 +325,7 @@ namespace RimLife.Tests.Framework
                 }
             };
 
-            var json = CardSerializer.SerializeEnvironment(env);
+            var json = CardSerializer.Default.SerializeEnvironment(env);
 
             Assert.Contains("\"type\":\"Outdoors\"", json);
             Assert.Contains("\"temperature\":25.0", json);
@@ -356,7 +356,7 @@ namespace RimLife.Tests.Framework
                 }
             };
 
-            var json = CardSerializer.SerializeEnvironment(env);
+            var json = CardSerializer.Default.SerializeEnvironment(env);
 
             Assert.Contains("\"type\":\"Indoors\"", json);
             Assert.Contains("\"roleLabel\":\"Bedroom\"", json);
@@ -379,7 +379,7 @@ namespace RimLife.Tests.Framework
                 Outcome = "Slighted"
             };
 
-            var json = CardSerializer.SerializeInteraction(rec);
+            var json = CardSerializer.Default.SerializeInteraction(rec);
 
             Assert.Contains("\"tick\":5000", json);
             Assert.Contains("\"initiatorId\":\"pawn_a\"", json);
@@ -396,7 +396,7 @@ namespace RimLife.Tests.Framework
                 new InteractionRecord { Tick = 1, InitiatorID = "a", RecipientID = "b" },
                 new InteractionRecord { Tick = 2, InitiatorID = "b", RecipientID = "a" }
             };
-            var json = CardSerializer.SerializeInteractionList(records);
+            var json = CardSerializer.Default.SerializeInteractionList(records);
 
             Assert.StartsWith("[", json);
             Assert.Contains("\"tick\":1", json);
@@ -416,7 +416,7 @@ namespace RimLife.Tests.Framework
                 new ColonistSummary { ID = "c1", Name = "Alice", MoodTier = "Good" },
                 new ColonistSummary { ID = "c2", Name = "Bob", MoodTier = "Neutral", IsDowned = true }
             };
-            var json = CardSerializer.SerializeColonistSummaryList(colonists);
+            var json = CardSerializer.Default.SerializeColonistSummaryList(colonists);
 
             Assert.Contains("\"id\":\"c1\"", json);
             Assert.Contains("\"Alice\"", json);

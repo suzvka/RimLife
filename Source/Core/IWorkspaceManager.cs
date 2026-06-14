@@ -46,10 +46,7 @@ namespace RimLife.Core
         /// <summary>停用技能。</summary>
         string DeactivateSkill(string workspaceId, string skillId);
 
-        /// <summary>获取活跃工具的 JSON 表示。</summary>
-        string GetActiveToolsJson(string workspaceId);
-
-        /// <summary>获取技能列表的 JSON 表示。</summary>
-        string GetSkillListJson(string workspaceId);
+        /// <summary>获取指定工作空间的已激活 Skill ID 列表。</summary>
+        IReadOnlyList<string> GetActiveSkillIds(string workspaceId);
     }
 }

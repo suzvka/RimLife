@@ -38,7 +38,7 @@ namespace RimLife.Infrastructure.Mcp
                 if (pawn == null) return "{}";
 
                 var env = EnvironmentCardMapper.CreateFrom(pawn);
-                return CardSerializer.SerializeEnvironment(env);
+                return CardSerializer.Default.SerializeEnvironment(env);
             }
             catch (Exception e)
             {

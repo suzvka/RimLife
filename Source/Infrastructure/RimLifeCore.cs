@@ -43,7 +43,7 @@ namespace RimLife.Infrastructure
             ILogger logger,
             IPawnPromptProvider promptProvider = null,
             Func<string> timeProvider = null,
-            IEventPool eventLog = null)
+            IEventLog eventLog = null)
         {
             Logger = logger ?? throw new ArgumentNullException(nameof(logger));
             PromptProvider = promptProvider;
@@ -317,16 +317,16 @@ namespace RimLife.Infrastructure
                     {
                         if (_directorAgent == null && SaveStore != null && LlmAccessor != null)
                         {
-                            var pool = EventLog as IEventPool;
-                            if (pool != null)
+                            if (EventLog != null)
                             {
                                 _directorAgent = new AgentLoop(
-                                    pool: pool,
+                                    pool: EventLog,
                                     llm: LlmAccessor,
                                     systemPrompt: BuildDirectorSystemPrompt(),
                                     skillIds: new[] { "workspace_direction" },
                                     maxRounds: DriverConfig.MaxAgentRounds,
-                                    logger: Logger);
+                                    logger: Logger,
+                                    serializer: CardSerializer.Default);
                             }
                         }
                     }

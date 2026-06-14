@@ -21,12 +21,13 @@ namespace RimLife.Agent
     /// </summary>
     public class AgentLoop : IDisposable
     {
-        private readonly IEventPool _pool;
+        private readonly IEventLog _pool;
         private readonly ILlmChatService _llm;
         private readonly ILogger _logger;
         private readonly string _systemPrompt;
         private readonly string[] _skillIds;
         private readonly int _maxRounds;
+        private readonly ICardSerializer _serializer;
         private readonly Action _unsubscribe; // 取消事件订阅的委托
 
         private bool _isProcessing;
@@ -43,13 +44,15 @@ namespace RimLife.Agent
         /// <param name="skillIds">激活的 Skill ID 列表（MCP 工具集）。</param>
         /// <param name="maxRounds">最大工具调用轮数（防死循环）。</param>
         /// <param name="logger">日志接口。</param>
+        /// <param name="serializer">Card 序列化器（可选，默认使用 CardSerializer.Default）。</param>
         public AgentLoop(
-            IEventPool pool,
+            IEventLog pool,
             ILlmChatService llm,
             string systemPrompt,
             string[] skillIds,
             int maxRounds,
-            ILogger logger)
+            ILogger logger,
+            ICardSerializer serializer = null)
         {
             _pool = pool ?? throw new ArgumentNullException(nameof(pool));
             _llm = llm ?? throw new ArgumentNullException(nameof(llm));
@@ -57,6 +60,7 @@ namespace RimLife.Agent
             _skillIds = skillIds ?? Array.Empty<string>();
             _maxRounds = maxRounds;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _serializer = serializer ?? CardSerializer.Default;
 
             // 订阅池子事件——唯一激活路径
             _pool.OnThresholdReached += OnPoolChanged;
@@ -290,7 +294,7 @@ namespace RimLife.Agent
             var sb = new StringBuilder();
             sb.AppendLine("## 待处理事件");
             sb.AppendLine();
-            sb.AppendLine(CardSerializer.SerializeEventList(events));
+            sb.AppendLine(_serializer.SerializeEventList(events));
             sb.AppendLine();
             sb.AppendLine("请审查事件列表，挑选值得发展的事件，使用 create_workspace / branch_workspace 等工具创建剧情线工作空间。");
             return sb.ToString();
