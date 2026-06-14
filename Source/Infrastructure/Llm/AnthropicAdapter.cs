@@ -10,16 +10,17 @@ using System.Threading.Tasks;
 namespace RimLife.Infrastructure.Llm
 {
     /// <summary>
-    /// Anthropic Messages API 适配器。
+    /// Anthropic Messages API 适配器（internal）。
     /// 将内部统一格式转换为 Anthropic Messages 请求/响应格式。
     /// 在工作线程中同步调用，由上层 LlmAccessor 管理线程。
+    /// 仅 LlmAccessor 内部使用。对外暴露使用 ILlmService。
     ///
     /// 关键差异：
     /// - system prompt 是顶层字段而非 message
     /// - tool messages 使用特殊的 user content 块
     /// - 响应中 tool_use 在 content 数组中，而非独立的 tool_calls 字段
     /// </summary>
-    public class AnthropicAdapter : ILlmApiProvider
+    internal class AnthropicAdapter : ILlmApiProvider
     {
         private readonly LlmConfig _config;
         private readonly HttpClient _httpClient;

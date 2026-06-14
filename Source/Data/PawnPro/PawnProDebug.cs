@@ -44,34 +44,27 @@ namespace RimLife
                 sb.AppendLine($"Age={card.AgeBiologicalYears:0.0} Gender={card.Gender} Dead={card.IsDead} Downed={card.IsDowned} Awake={card.IsAwake}");
                 sb.AppendLine();
 
-                var pp = RimLifeCore.PromptProvider;
-                if (pp == null) { sb.AppendLine("(PromptProvider not available)"); Log.Message(sb.ToString()); return; }
+                var providers = RimLifeCore.ContentProviders;
+                if (providers == null || providers.Count == 0) { sb.AppendLine("(ContentProviders not available)"); Log.Message(sb.ToString()); return; }
 
-                var fullPrompt = pp.GetCharacterPrompt(pawn.ThingID, "full");
-                if (!string.IsNullOrEmpty(fullPrompt))
+                sb.AppendLine("--- Section Dump (full view) ---");
+                bool hasContent = false;
+                foreach (var provider in providers)
                 {
-                    // 按【】分隔符拆分，逐节打印
-                    var sections = fullPrompt.Split('\n');
-                    string currentSection = "";
-                    foreach (var line in sections)
+                    if (provider == null) continue;
+                    var content = provider.GetContent(pawn.ThingID, "full");
+                    if (!string.IsNullOrEmpty(content))
                     {
-                        if (line.StartsWith("【"))
-                        {
-                            // 找到下一个【时，输出上一节
-                            if (currentSection.Length > 0) sb.AppendLine(currentSection);
-                            currentSection = line;
-                        }
-                        else
-                        {
-                            currentSection += " " + line;
-                        }
+                        sb.AppendLine($"【{provider.SectionName}】");
+                        // 截取前 500 字符
+                        var display = content.Length > 500 ? content.Substring(0, 500) + "..." : content;
+                        sb.AppendLine(display);
+                        sb.AppendLine();
+                        hasContent = true;
                     }
-                    if (currentSection.Length > 0) sb.AppendLine(currentSection);
                 }
-                else
-                {
-                    sb.AppendLine("(no prompt data)");
-                }
+                if (!hasContent)
+                    sb.AppendLine("(no section data)");
 
                 Log.Message(sb.ToString());
             }

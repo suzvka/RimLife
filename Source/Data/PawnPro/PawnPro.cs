@@ -1,10 +1,7 @@
 using RimWorld;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using Verse;
-using UnityEngine;
 using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Infrastructure.Mcp;
@@ -139,37 +136,9 @@ namespace RimLife
 
         // ================================================================
         // IPawnPromptProvider implementation
+        // 注意：GetCharacterPrompt 已迁移至 ICharacterContentProvider 钩子模式。
+        //       各 section 的独立提供者见 CharacterContentProviders.cs。
         // ================================================================
-
-        public string GetCharacterPrompt(string pawnId, string view)
-        {
-            var pawn = ResolvePawn(pawnId);
-            if (pawn == null) return null;
-
-            bool isDynamic = string.Equals(view, "dynamic", StringComparison.OrdinalIgnoreCase);
-            bool isFull = string.Equals(view, "full", StringComparison.OrdinalIgnoreCase);
-
-            var pp = new PawnPro(pawn);
-            var sb = new StringBuilder(4096);
-
-            AppendIfNotNull(sb, "【健康】", pp.Health?.ToPrompt());
-            AppendIfNotNull(sb, "【心情】", pp.Mood?.ToPrompt());
-            AppendIfNotNull(sb, "【技能】", pp.Skills?.ToPrompt());
-            AppendIfNotNull(sb, "【需求】", pp.Needs?.ToPrompt());
-            AppendIfNotNull(sb, "【活动】", pp.Activity?.ToPrompt());
-            AppendIfNotNull(sb, "【装备】", pp.Gear?.ToPrompt());
-            AppendIfNotNull(sb, "【背景】", pp.Backstory?.ToPrompt());
-            AppendIfNotNull(sb, "【社交】", pp.Social?.ToPrompt());
-            AppendIfNotNull(sb, "【人格】", SerializePsychology(pawn));
-
-            if (isDynamic || isFull)
-            {
-                AppendIfNotNull(sb, "【视野】", pp.Perspective?.ToPrompt());
-                AppendIfNotNull(sb, "【记忆】", SerializeMemory(pawn, isFull));
-            }
-
-            return sb.Length > 0 ? sb.ToString().TrimEnd() : null;
-        }
 
         public string GetSocialPrompt(string pawnId)
         {
@@ -185,129 +154,8 @@ namespace RimLife
             return PawnQueryHelper.FindPawnById(pawnId);
         }
 
-        private static void AppendIfNotNull(StringBuilder sb, string header, string text)
-        {
-            if (!string.IsNullOrEmpty(text))
-            {
-                if (sb.Length > 0) sb.Append('\n');
-                sb.Append(header);
-                sb.Append(text);
-            }
-        }
-
         // ================================================================
-        // Psychology
+        // Psychology / Memory helpers are now in CharacterContentProviders.cs
         // ================================================================
-
-        private static string SerializePsychology(Pawn p)
-        {
-            if (p?.story?.traits == null) return null;
-
-            int openness = 0, conscientiousness = 0, extraversion = 0, agreeableness = 0, neuroticism = 0;
-            var storyTraits = p.story.traits.allTraits;
-            if (storyTraits != null)
-            {
-                foreach (var trait in storyTraits)
-                {
-                    if (trait?.def?.defName == null) continue;
-                    TraitDef def = DefDatabase<TraitDef>.GetNamedSilentFail(trait.def.defName);
-                    if (def == null) continue;
-                    var ext = def.GetModExtension<PersonalityExtension>();
-                    if (ext == null) continue;
-                    PersonalityEntry match = ext.GetByDegree(trait.Degree);
-                    if (match == null) continue;
-                    openness += match.openness;
-                    conscientiousness += match.conscientiousness;
-                    extraversion += match.extraversion;
-                    agreeableness += match.agreeableness;
-                    neuroticism += match.neuroticism;
-                }
-            }
-
-            return $"开放性: {MapPsychologyLevel(openness)}, 尽责性: {MapPsychologyLevel(conscientiousness)}, 外向性: {MapPsychologyLevel(extraversion)}, 宜人性: {MapPsychologyLevel(agreeableness)}, 神经质: {MapPsychologyLevel(neuroticism)}";
-        }
-
-        private static string MapPsychologyLevel(int sum)
-        {
-            if (sum <= -4) return "极低";
-            if (sum <= -1) return "低";
-            if (sum == 0) return "中";
-            if (sum <= 3) return "高";
-            return "极高";
-        }
-
-        // ================================================================
-        // Memory
-        // ================================================================
-
-        private static string SerializeMemory(Pawn p, bool includeDetails)
-        {
-            if (p?.health?.hediffSet == null) return null;
-
-            try
-            {
-                var hediffDef = DefDatabase<HediffDef>.GetNamedSilentFail("PawnProMemory");
-                if (hediffDef == null) return null;
-
-                var hediff = p.health.hediffSet.GetFirstHediffOfDef(hediffDef);
-                if (hediff == null) return null;
-
-                var comp = hediff.TryGetComp<HediffComp_PawnMemory>();
-                if (comp == null) return null;
-
-                int currentTick = Find.TickManager?.TicksGame ?? 0;
-                var snapshot = comp.CreateSnapshot(currentTick);
-                if (snapshot == null) return null;
-
-                var sb = new StringBuilder(512);
-                sb.Append("心态: ");
-                sb.Append(snapshot.CurrentMindset ?? "?");
-
-                if (!string.IsNullOrEmpty(snapshot.ShortTermReview))
-                {
-                    sb.Append("; 回顾: ");
-                    sb.Append(snapshot.ShortTermReview);
-                }
-
-                if (snapshot.RecentMemories != null && snapshot.RecentMemories.Count > 0)
-                {
-                    sb.Append("; 最近: ");
-                    sb.Append(snapshot.RecentMemories[0]);
-                }
-
-                sb.Append("; STM: ");
-                sb.Append(snapshot.ShortTermCount);
-                sb.Append(", LTM: ");
-                sb.Append(snapshot.LongTermCount);
-
-                if (includeDetails)
-                {
-                    var stmList = comp.ShortTermMemories;
-                    if (stmList != null && stmList.Count > 0)
-                    {
-                        sb.Append("\n  [STM详情] ");
-                        var stmParts = stmList.Take(10).Select(stm =>
-                            $"[{stm.Tick}] {stm.Type}: {stm.Summary}");
-                        sb.Append(string.Join(" | ", stmParts));
-                    }
-
-                    var ltmList = comp.LongTermMemories;
-                    if (ltmList != null && ltmList.Count > 0)
-                    {
-                        sb.Append("\n  [LTM详情] ");
-                        var ltmParts = ltmList.Take(10).Select(ltm =>
-                            $"[{ltm.ConsolidatedTick}] {ltm.Topic}: {ltm.Summary}");
-                        sb.Append(string.Join(" | ", ltmParts));
-                    }
-                }
-
-                return sb.ToString();
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife.PawnPro] SerializeMemory failed: {e.Message}");
-                return null;
-            }
-        }
     }
 }

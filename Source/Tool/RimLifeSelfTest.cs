@@ -426,19 +426,35 @@ namespace RimLife.Tool
             }
             catch (Exception e) { Fail("CreateBasic 异常", e.Message); }
 
-            // CharacterPrompt (static view)
+            // ContentProviders (section tests via hook pattern)
             try
             {
-                var prompt = RimLifeCore.PromptProvider?.GetCharacterPrompt(pawn.ThingID, "static");
-                if (!string.IsNullOrEmpty(prompt))
+                var providers = RimLifeCore.ContentProviders;
+                if (providers != null && providers.Count > 0)
                 {
-                    Pass("GetCharacterPrompt(static) 成功");
-                    DumpObject("  Prompt (first 200 chars)", prompt.Length > 200 ? prompt.Substring(0, 200) + "..." : prompt);
+                    int sectionsWithContent = 0;
+                    int sectionsTotal = 0;
+                    foreach (var provider in providers)
+                    {
+                        if (provider == null) continue;
+                        sectionsTotal++;
+                        var content = provider.GetContent(pawn.ThingID, "static");
+                        if (!string.IsNullOrEmpty(content))
+                            sectionsWithContent++;
+                    }
+                    if (sectionsWithContent > 0)
+                    {
+                        Pass($"ContentProviders 钩子模式正常 ({sectionsWithContent}/{sectionsTotal} sections 有数据)");
+                        DumpObject("  Total providers", sectionsTotal);
+                        DumpObject("  Sections with content", sectionsWithContent);
+                    }
+                    else
+                        Fail("ContentProviders 所有 section 均无数据");
                 }
                 else
-                    Fail("GetCharacterPrompt(static) 返回空");
+                    Fail("ContentProviders 未注册或为空");
             }
-            catch (Exception e) { Fail("GetCharacterPrompt(static) 异常", e.Message); }
+            catch (Exception e) { Fail("ContentProviders 测试异常", e.Message); }
 
             // EnvironmentCardMapper
             try
@@ -631,7 +647,7 @@ namespace RimLife.Tool
                 try
                 {
                     var card = PawnQueryHelper.BuildCharacterCard(pawn, null);
-                    var json = CardSerializer.Default.SerializeCharacterCard(card, "static", RimLifeCore.PromptProvider);
+                    var json = CardSerializer.Default.SerializeCharacterCard(card, "static", RimLifeCore.ContentProviders);
                     if (json.Length > 50 && json.Contains("\"id\""))
                     {
                         Pass($"SerializeCharacterCard 成功 ({json.Length} chars)");

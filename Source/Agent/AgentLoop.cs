@@ -7,6 +7,7 @@ using RimLife.Framework.Mcp;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace RimLife.Agent
 {
@@ -22,7 +23,7 @@ namespace RimLife.Agent
     public class AgentLoop : IDisposable
     {
         private readonly IEventLog _pool;
-        private readonly ILlmChatService _llm;
+        private readonly ILlmService _llm;
         private readonly ILogger _logger;
         private readonly string _systemPrompt;
         private readonly string[] _skillIds;
@@ -47,7 +48,7 @@ namespace RimLife.Agent
         /// <param name="serializer">Card 序列化器（可选，默认使用 CardSerializer.Default）。</param>
         public AgentLoop(
             IEventLog pool,
-            ILlmChatService llm,
+            ILlmService llm,
             string systemPrompt,
             string[] skillIds,
             int maxRounds,
@@ -113,7 +114,7 @@ namespace RimLife.Agent
             SendChat();
         }
 
-        private void SendChat()
+        private async void SendChat()
         {
             var request = new LlmRequest
             {
@@ -132,7 +133,15 @@ namespace RimLife.Agent
                 ("messageCount", _messages.Count.ToString())
             ));
 
-            _llm.ChatAsync(llmCtx.Request, OnSuccess, OnError);
+            try
+            {
+                var response = await _llm.ChatAsync(llmCtx.Request);
+                OnSuccess(response);
+            }
+            catch (Exception e)
+            {
+                OnError(e.Message);
+            }
         }
 
         private void OnSuccess(LlmResponse response)

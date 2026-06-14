@@ -194,9 +194,10 @@ namespace RimLife.Framework.Mcp
         /// <summary>
         /// 序列化 CharacterCard。view 控制数据层级：
         /// "static"（默认）= 客观属性；"dynamic" = + 视角/记忆快照；"full" = + 完整记忆流水。
+        /// 通过 ICharacterContentProvider 钩子收集各 section 内容，组装为结构化 JSON。
         /// </summary>
         public string SerializeCharacterCard(CharacterCard card, string view,
-            IPawnPromptProvider promptProvider)
+            IReadOnlyList<ICharacterContentProvider> contentProviders)
         {
             if (card == null) return "{}";
             var w = new JsonWriter(4096);
@@ -215,11 +216,27 @@ namespace RimLife.Framework.Mcp
             w.Prop("isDowned", card.IsDowned);
             w.Prop("isAwake", card.IsAwake);
 
-            // 一次调用获取全部语义文本
-            string prompt = promptProvider?.GetCharacterPrompt(card.ID, view);
-            w.Prop("prompt", prompt ?? "");
+            // 通过钩子收集各 section 内容
+            var effectiveView = string.IsNullOrEmpty(view) ? "static" : view;
+            if (contentProviders != null && contentProviders.Count > 0)
+            {
+                var sectionWriter = new JsonWriter(3072);
+                bool hasContent = false;
+                foreach (var provider in contentProviders)
+                {
+                    if (provider == null) continue;
+                    var content = provider.GetContent(card.ID, effectiveView);
+                    if (!string.IsNullOrEmpty(content))
+                    {
+                        sectionWriter.Prop(provider.SectionName, content);
+                        hasContent = true;
+                    }
+                }
+                if (hasContent)
+                    w.PropRaw("sections", sectionWriter.Close());
+            }
 
-            w.Prop("view", string.IsNullOrEmpty(view) ? "static" : view);
+            w.Prop("view", effectiveView);
             return w.Close();
         }
 

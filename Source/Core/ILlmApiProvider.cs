@@ -4,11 +4,12 @@ using System;
 namespace RimLife.Core
 {
     /// <summary>
-    /// LLM API 提供者统一接口。
+    /// [internal] LLM API 提供者统一接口。
     /// 每种 API 格式（OpenAI / Anthropic / 本地兼容）实现此接口。
     /// 所有方法在工作线程中同步调用，不阻塞主线程。
+    /// 仅 LlmAccessor 内部使用。对外暴露使用 <see cref="ILlmService"/>。
     /// </summary>
-    public interface ILlmApiProvider
+    internal interface ILlmApiProvider
     {
         /// <summary>
         /// 发送对话请求并返回 LLM 响应。
@@ -31,17 +32,5 @@ namespace RimLife.Core
         /// 部分 API 不支持此功能（如 Anthropic），返回空数组。
         /// </summary>
         string[] ListModels();
-    }
-
-    /// <summary>
-    /// LLM 异步对话接口。AgentLoop 通过此接口发送请求，
-    /// 结果在后台线程完成后通过回调返回到调用方。
-    /// </summary>
-    public interface ILlmChatService
-    {
-        /// <summary>
-        /// 异步发送对话请求。在工作线程中执行，完成后回调到主线程。
-        /// </summary>
-        void ChatAsync(LlmRequest request, Action<LlmResponse> onSuccess, Action<string> onError);
     }
 }

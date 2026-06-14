@@ -2,6 +2,7 @@ using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Llm;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace RimLife.Infrastructure.Llm
@@ -20,7 +21,7 @@ namespace RimLife.Infrastructure.Llm
     /// 4. 异步连通性测试（TestConnectionAsync，供配置向导使用）
     /// 5. 异步模型列表查询（ListModelsAsync，供配置向导使用）
     /// </summary>
-    public class LlmAccessor : ILlmChatService, IDisposable
+    public class LlmAccessor : ILlmService, IDisposable
     {
         private readonly ICacheStore _store;
         private const string ConfigKey = "rimlife_llm_config";
@@ -112,17 +113,17 @@ namespace RimLife.Infrastructure.Llm
 
         /// <summary>
         /// 异步发送对话请求。
-        /// 在后台工作线程中执行 HTTP 调用，结果通过 MainThreadDispatcher 回调到主线程。
+        /// 在后台工作线程中执行 HTTP 调用，Task 完成时已通过 MainThreadDispatcher 回主线程。
         /// </summary>
         /// <param name="request">对话请求。</param>
-        /// <param name="onSuccess">成功回调（主线程）。</param>
-        /// <param name="onError">失败回调（主线程）。</param>
-        public void ChatAsync(LlmRequest request, Action<LlmResponse> onSuccess, Action<string> onError = null)
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>LLM 响应 Task。</returns>
+        public Task<LlmResponse> ChatAsync(LlmRequest request, CancellationToken ct = default)
         {
             if (request == null)
             {
-                MainThreadDispatcher.Enqueue(() => onError?.Invoke("request is null"));
-                return;
+                return Task.FromException<LlmResponse>(
+                    new ArgumentNullException(nameof(request)));
             }
 
             ILlmApiProvider adapter;
@@ -130,93 +131,142 @@ namespace RimLife.Infrastructure.Llm
             {
                 if (_adapter == null)
                 {
-                    MainThreadDispatcher.Enqueue(() => onError?.Invoke("LLM not configured. Please set baseUrl, apiKey, and modelName first."));
-                    return;
+                    return Task.FromException<LlmResponse>(
+                        new InvalidOperationException("LLM not configured."));
                 }
                 adapter = _adapter;
             }
+
+            var tcs = new TaskCompletionSource<LlmResponse>();
 
             Task.Run(() =>
             {
                 try
                 {
+                    ct.ThrowIfCancellationRequested();
                     var response = adapter.Chat(request);
-                    MainThreadDispatcher.Enqueue(() => onSuccess?.Invoke(response));
+                    // 通过 MainThreadDispatcher 回主线程完成 Task
+                    MainThreadDispatcher.Enqueue(() =>
+                    {
+                        if (ct.IsCancellationRequested)
+                            tcs.TrySetCanceled(ct);
+                        else
+                            tcs.TrySetResult(response);
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    MainThreadDispatcher.Enqueue(() => tcs.TrySetCanceled(ct));
                 }
                 catch (Exception e)
                 {
-                    MainThreadDispatcher.Enqueue(() => onError?.Invoke(e.Message));
+                    MainThreadDispatcher.Enqueue(() => tcs.TrySetException(e));
                 }
             });
+
+            return tcs.Task;
         }
 
         /// <summary>
         /// 异步测试连通性（供配置向导使用）。
-        /// 在后台工作线程中执行，结果回调到主线程。
+        /// 在后台工作线程中执行，Task 完成时已通过 MainThreadDispatcher 回主线程。
         /// </summary>
         /// <param name="config">要测试的配置。</param>
-        /// <param name="onResult">结果回调（主线程）：success=true 表示连通，errorMessage 为空。</param>
-        public void TestConnectionAsync(LlmConfig config, Action<bool, string> onResult)
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>true 表示连通成功。</returns>
+        public Task<bool> TestConnectionAsync(LlmConfig config, CancellationToken ct = default)
         {
             if (config == null)
             {
-                MainThreadDispatcher.Enqueue(() => onResult?.Invoke(false, "config is null"));
-                return;
+                return Task.FromException<bool>(
+                    new ArgumentNullException(nameof(config)));
             }
 
             if (!config.IsValid())
             {
-                MainThreadDispatcher.Enqueue(() => onResult?.Invoke(false, "incomplete config: baseUrl, apiKey and modelName are required"));
-                return;
+                return Task.FromException<bool>(
+                    new ArgumentException("incomplete config: baseUrl, apiKey and modelName are required"));
             }
+
+            var tcs = new TaskCompletionSource<bool>();
 
             Task.Run(() =>
             {
                 try
                 {
+                    ct.ThrowIfCancellationRequested();
                     var adapter = CreateAdapter(config);
                     bool ok = adapter.TestConnection(out string error);
-                    MainThreadDispatcher.Enqueue(() => onResult?.Invoke(ok, error));
+                    MainThreadDispatcher.Enqueue(() =>
+                    {
+                        if (ct.IsCancellationRequested)
+                            tcs.TrySetCanceled(ct);
+                        else if (!ok)
+                            tcs.TrySetException(new Exception(error ?? "connection test failed"));
+                        else
+                            tcs.TrySetResult(true);
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    MainThreadDispatcher.Enqueue(() => tcs.TrySetCanceled(ct));
                 }
                 catch (Exception e)
                 {
-                    MainThreadDispatcher.Enqueue(() => onResult?.Invoke(false, e.Message));
+                    MainThreadDispatcher.Enqueue(() => tcs.TrySetException(e));
                 }
             });
+
+            return tcs.Task;
         }
 
         /// <summary>
         /// 异步列出可用模型（供配置向导使用）。
-        /// 在后台工作线程中执行，结果回调到主线程。
+        /// 在后台工作线程中执行，Task 完成时已通过 MainThreadDispatcher 回主线程。
         /// 部分 API 不支持此功能（如 Anthropic），返回空数组。
         /// </summary>
-        /// <param name="onSuccess">成功回调（主线程），返回模型 ID 列表。</param>
-        /// <param name="onError">失败回调（主线程），返回错误描述。</param>
-        public void ListModelsAsync(Action<string[]> onSuccess, Action<string> onError = null)
+        /// <param name="ct">取消令牌。</param>
+        /// <returns>模型 ID 列表。</returns>
+        public Task<string[]> ListModelsAsync(CancellationToken ct = default)
         {
             ILlmApiProvider adapter;
             lock (_lock)
             {
                 if (_adapter == null)
                 {
-                    MainThreadDispatcher.Enqueue(() => onError?.Invoke("LLM not configured."));
-                    return;
+                    return Task.FromException<string[]>(
+                        new InvalidOperationException("LLM not configured."));
                 }
                 adapter = _adapter;
             }
+
+            var tcs = new TaskCompletionSource<string[]>();
 
             Task.Run(() =>
             {
                 try
                 {
+                    ct.ThrowIfCancellationRequested();
                     var models = adapter.ListModels();
-                    MainThreadDispatcher.Enqueue(() => onSuccess?.Invoke(models));
+                    MainThreadDispatcher.Enqueue(() =>
+                    {
+                        if (ct.IsCancellationRequested)
+                            tcs.TrySetCanceled(ct);
+                        else
+                            tcs.TrySetResult(models);
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    MainThreadDispatcher.Enqueue(() => tcs.TrySetCanceled(ct));
                 }
                 catch (Exception e)
                 {
-                    MainThreadDispatcher.Enqueue(() => onError?.Invoke(e.Message));
+                    MainThreadDispatcher.Enqueue(() => tcs.TrySetException(e));
                 }
             });
+
+            return tcs.Task;
         }
 
         // ================================================================

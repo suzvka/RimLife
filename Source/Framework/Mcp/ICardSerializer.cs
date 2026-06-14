@@ -22,7 +22,7 @@ namespace RimLife.Framework.Mcp
 
         /// <summary>反序列化事件 KV 缓存。</summary>
         Dictionary<string, string> DeserializeEventCache(string json);
-        string SerializeCharacterCard(CharacterCard card, string view, IPawnPromptProvider promptProvider);
+        string SerializeCharacterCard(CharacterCard card, string view, IReadOnlyList<ICharacterContentProvider> contentProviders);
         string SerializeColonyContext(ColonyContext ctx);
         string SerializeObjective(ObjectiveCard obj);
         string SerializeObjectiveList(IReadOnlyList<ObjectiveCard> objectives);

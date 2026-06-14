@@ -50,7 +50,7 @@ namespace RimLife.Infrastructure.Mcp
                 if (pawn == null) return "{}";
 
                 var card = PawnQueryHelper.BuildCharacterCard(pawn, view);
-                return CardSerializer.Default.SerializeCharacterCard(card, view, RimLifeCore.PromptProvider);
+                return CardSerializer.Default.SerializeCharacterCard(card, view, RimLifeCore.ContentProviders);
             }
             catch (Exception e)
             {
@@ -129,9 +129,8 @@ namespace RimLife.Infrastructure.Mcp
 
                 // 序列化为列表（find_characters 始终使用 static view）
                 var jsons = new List<string>();
-                var promptProvider = RimLifeCore.PromptProvider;
                 foreach (var c in results)
-                    jsons.Add(CardSerializer.Default.SerializeCharacterCard(c, "static", promptProvider));
+                    jsons.Add(CardSerializer.Default.SerializeCharacterCard(c, "static", RimLifeCore.ContentProviders));
 
                 return PawnQueryHelper.SerializeJsonArray(jsons);
             }

@@ -8,9 +8,7 @@ using System.Text;
 namespace RimLife.Infrastructure.Mcp
 {
     /// <summary>
-    /// 内置知识库的 MCP 工具集。提供词条查询、学习、列举和删除能力。
-    /// 同时保留旧版 set_kv_cache / get_kv_cache / list_kv_cache / delete_kv_cache
-    /// 作为兼容包装（内部转换为 KnowledgeEntry）。
+    /// 内置知识库的 MCP 工具集。提供词条查询、学习、列举、删除和元数据统计能力。
     /// </summary>
     [McpSkill("knowledge_management")]
     public static class KnowledgeMcpTools
@@ -209,95 +207,6 @@ namespace RimLife.Infrastructure.Mcp
         }
 
         // ================================================================
-        // 兼容包装：旧版 CacheMcpTools 工具（内部转为 KnowledgeEntry）
-        // ================================================================
-
-        /// <summary>
-        /// [兼容] 写入字符串键值对到知识库。
-        /// </summary>
-        [McpTool(Name = "set_kv_cache",
-                 Description = "[兼容] 写入字符串键值对到知识库。覆盖同名 key。建议用 learn_term 代替。")]
-        public static string SetKvCache(
-            [McpParam(Description = "缓存键。建议命名空间:值，如 lookup:心灵冲击")] string key,
-            [McpParam(Description = "缓存值（字符串）")] string value)
-        {
-            return LearnTerm(key, value, 1.0f, "LegacyCache", null);
-        }
-
-        /// <summary>
-        /// [兼容] 从知识库读取值。先精确匹配 key，未命中则降级分词匹配。
-        /// </summary>
-        [McpTool(Name = "get_kv_cache",
-                 Description = "[兼容] 从知识库读取值。先精确匹配，未命中则分词匹配。建议用 lookup_term 代替。")]
-        public static string GetKvCache(
-            [McpParam(Description = "查询内容。先精确匹配，未命中则分词后查找包含所有 token 的 key")] string query)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(query))
-                    return "{\"hit\":false,\"error\":\"query is required\"}";
-
-                var kb = RimLifeCore.KnowledgeBase;
-                if (kb == null)
-                    return "{\"hit\":false,\"error\":\"KnowledgeBase unavailable\"}";
-
-                // 1. 精确匹配
-                if (kb.TryLookup(query, out var entry))
-                    return MakeHit(query, entry.Definition ?? "");
-
-                // 2. 降级：分词匹配
-                return TryGetToken(kb, query);
-            }
-            catch (Exception e)
-            {
-                RimLifeCore.Logger?.Warning($"[RimLife.KnowledgeMcp] get_kv_cache({query}) failed: {e.Message}");
-                return "{\"hit\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
-            }
-        }
-
-        private static string TryGetToken(IKnowledgeBase kb, string query)
-        {
-            var tokens = query.Split(new char[] { ' ', ',', '，' })
-                .Select(t => t.Trim())
-                .Where(t => t.Length > 0)
-                .ToList();
-
-            if (tokens.Count == 0) return MakeMiss(query);
-
-            foreach (var entry in kb.ListAll())
-            {
-                if (tokens.All(t => entry.Term.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0))
-                {
-                    return MakeHit(entry.Term, entry.Definition ?? "");
-                }
-            }
-            return MakeMiss(query);
-        }
-
-        /// <summary>
-        /// [兼容] 列出所有缓存 key 及值摘要。
-        /// </summary>
-        [McpTool(Name = "list_kv_cache",
-                 Description = "[兼容] 列出所有缓存 key 及值摘要。建议用 list_known_terms 代替。")]
-        public static string ListKvCache(
-            [McpParam(Description = "key 前缀过滤，如 'lookup:'。留空=全部",
-                      Required = McpRequired.False)] string prefix = null)
-        {
-            return ListKnownTerms(prefix, null, 50);
-        }
-
-        /// <summary>
-        /// [兼容] 删除指定 key 的缓存项。
-        /// </summary>
-        [McpTool(Name = "delete_kv_cache",
-                 Description = "[兼容] 删除指定 key 的缓存项。建议用 forget_term 代替。")]
-        public static string DeleteKvCache(
-            [McpParam(Description = "要删除的缓存 key")] string key)
-        {
-            return ForgetTerm(key);
-        }
-
-        // ================================================================
         // 序列化
         // ================================================================
 
@@ -354,15 +263,6 @@ namespace RimLife.Infrastructure.Mcp
             w.Prop("accessCount", entry.AccessCount);
             if (entry.ContextTags != null && entry.ContextTags.Count > 0)
                 w.Array("contextTags", entry.ContextTags);
-            return w.Close();
-        }
-
-        private static string MakeHit(string key, string value)
-        {
-            var w = new JsonWriter(1024);
-            w.Prop("hit", true);
-            w.Prop("key", key);
-            w.Prop("value", value ?? "");
             return w.Close();
         }
 

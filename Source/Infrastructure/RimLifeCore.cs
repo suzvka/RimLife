@@ -23,8 +23,27 @@ namespace RimLife.Infrastructure
         /// <summary>日志接口。由适配层在启动时注入。</summary>
         public static ILogger Logger { get; internal set; }
 
-        /// <summary>Pawn 语义提示词提供者。游戏侧实现，提供各维度的自然语言描述。</summary>
+        /// <summary>Pawn 语义提示词提供者。游戏侧实现，提供各维度的自然语言描述。
+        /// 人物卡维度数据已迁移至 <see cref="ContentProviders"/> 钩子模式。
+        /// 保留此属性供 RelationshipQueryProvider 使用 GetSocialPrompt。</summary>
         public static IPawnPromptProvider PromptProvider { get; internal set; }
+
+        /// <summary>
+        /// 人物卡内容提供者注册表（钩子模式）。
+        /// 游戏侧注册各维度的 ICharacterContentProvider 实现，
+        /// 框架在序列化 CharacterCard 时收集所有 provider 的产出。
+        /// </summary>
+        public static List<ICharacterContentProvider> ContentProviders { get; } = new List<ICharacterContentProvider>();
+
+        /// <summary>
+        /// 注册一个人物卡内容提供者。
+        /// 应在 EnsureSkillRegistryInitialized() 之前调用，确保工具注册前提供者已就绪。
+        /// </summary>
+        public static void RegisterContentProvider(ICharacterContentProvider provider)
+        {
+            if (provider == null) throw new ArgumentNullException(nameof(provider));
+            ContentProviders.Add(provider);
+        }
 
         /// <summary>时间字符串提供者。游戏侧注入，返回当前游戏时间的格式化字符串。
         /// 框架只原样透传，不解析语义。Agent 可通过 get_current_time 工具获取。</summary>

@@ -10,11 +10,12 @@ using System.Threading.Tasks;
 namespace RimLife.Infrastructure.Llm
 {
     /// <summary>
-    /// OpenAI 及兼容 API（Ollama / vLLM / 中转代理）适配器。
+    /// OpenAI 及兼容 API（Ollama / vLLM / 中转代理）适配器（internal）。
     /// 将内部统一格式转换为 OpenAI Chat Completions 请求/响应格式。
     /// 在工作线程中同步调用，由上层 LlmAccessor 管理线程。
+    /// 仅 LlmAccessor 内部使用。对外暴露使用 ILlmService。
     /// </summary>
-    public class OpenAiAdapter : ILlmApiProvider
+    internal class OpenAiAdapter : ILlmApiProvider
     {
         private readonly LlmConfig _config;
         private readonly HttpClient _httpClient;
