@@ -22,7 +22,7 @@ namespace RimLife.Infrastructure.Llm
     /// </summary>
     public class LlmAccessor : ILlmChatService, IDisposable
     {
-        private readonly IPersistentStore _store;
+        private readonly ICacheStore _store;
         private const string ConfigKey = "rimlife_llm_config";
 
         private LlmConfig _config;
@@ -33,7 +33,7 @@ namespace RimLife.Infrastructure.Llm
         /// 创建 LlmAccessor 实例，从 CacheStore 加载配置。
         /// </summary>
         /// <param name="store">缓存存储（CacheStore）。</param>
-        public LlmAccessor(IPersistentStore store)
+        public LlmAccessor(ICacheStore store)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             LoadConfig();

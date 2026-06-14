@@ -30,6 +30,30 @@ namespace RimLife.Infrastructure
         /// 框架只原样透传，不解析语义。Agent 可通过 get_current_time 工具获取。</summary>
         public static Func<string> TimeProvider { get; internal set; }
 
+        /// <summary>
+        /// 统一适配器注入入口。
+        /// 游戏侧在初始化时调用此方法一次性注入所有必需的适配器，
+        /// 替代逐属性赋值的分散注册方式。
+        /// </summary>
+        /// <param name="logger">日志接口（必需）。</param>
+        /// <param name="promptProvider">Pawn 语义提示词提供者（可选）。</param>
+        /// <param name="timeProvider">时间字符串提供者（可选）。</param>
+        /// <param name="eventLog">事件池实例（可选，默认使用内置 AgentEventPool）。</param>
+        public static void InitializeAdapter(
+            ILogger logger,
+            IPawnPromptProvider promptProvider = null,
+            Func<string> timeProvider = null,
+            IEventPool eventLog = null)
+        {
+            Logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            PromptProvider = promptProvider;
+            TimeProvider = timeProvider;
+            if (eventLog != null)
+            {
+                EventLog = eventLog;
+            }
+        }
+
         /// <summary>当前框架配置。未配置时返回默认配置。</summary>
         public static FrameworkConfig Config => _frameworkConfig ?? FrameworkConfig.CreateDefault();
 
@@ -51,7 +75,7 @@ namespace RimLife.Infrastructure
             _frameworkConfig = config;
 
             // 同步到各子系统
-            _driverConfig = config.ToDriverConfig();
+            _driverConfig = config.Driver;
             ErrorHandler.DiagnosticMode = config.Diagnostics?.EnableVerboseLogging ?? false;
 
             config.Freeze();
@@ -185,13 +209,13 @@ namespace RimLife.Infrastructure
             }
         }
 
-        private static IPersistentStore _saveStore;
+        private static IAuthorityStore _saveStore;
 
         /// <summary>
         /// 权威存储（存档文件）。由 RimWorldSaveStore 在初始化时注册。
         /// 设为新值时自动重置 EventLog、AgentDriver 和 InteractionStore，避免跨存档引用失效。
         /// </summary>
-        public static IPersistentStore SaveStore
+        public static IAuthorityStore SaveStore
         {
             get => _saveStore;
             internal set
@@ -208,7 +232,7 @@ namespace RimLife.Infrastructure
                     _directorAgent?.Dispose();
                     (_eventLog as IDisposable)?.Dispose();
                     (_interactionStore as IDisposable)?.Dispose();
-                    _workspaces?.Dispose();
+                    (_workspaces as IDisposable)?.Dispose();
                     _llmAccessor?.Dispose();
 
                     _saveStore = value;
@@ -228,7 +252,7 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>缓存存储（本地文件）。</summary>
-        public static IPersistentStore CacheStore { get; } = new LocalFileStore();
+        public static ICacheStore CacheStore { get; } = new LocalFileStore();
 
         private static IEventLog _eventLog;
         private static readonly object _eventLogLock = new object();
@@ -254,6 +278,7 @@ namespace RimLife.Infrastructure
                 }
                 return _eventLog;
             }
+            internal set { _eventLog = value; }
         }
 
         private static DriverConfig _driverConfig;
@@ -292,7 +317,7 @@ namespace RimLife.Infrastructure
                     {
                         if (_directorAgent == null && SaveStore != null && LlmAccessor != null)
                         {
-                            var pool = EventLog as AgentEventPool;
+                            var pool = EventLog as IEventPool;
                             if (pool != null)
                             {
                                 _directorAgent = new AgentLoop(
@@ -422,14 +447,14 @@ namespace RimLife.Infrastructure
             }
         }
 
-        private static Workspace.WorkspaceManager _workspaces;
+        private static IWorkspaceManager _workspaces;
         private static readonly object _workspacesLock = new object();
 
         /// <summary>
         /// 工作空间管理器实例。首次访问时从 SaveStore 延迟创建。
         /// 存档未加载时返回 null。
         /// </summary>
-        public static Workspace.WorkspaceManager Workspaces
+        public static IWorkspaceManager Workspaces
         {
             get
             {

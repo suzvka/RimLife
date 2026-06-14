@@ -21,7 +21,7 @@ namespace RimLife.Agent
     /// </summary>
     public class AgentLoop : IDisposable
     {
-        private readonly AgentEventPool _pool;
+        private readonly IEventPool _pool;
         private readonly ILlmChatService _llm;
         private readonly ILogger _logger;
         private readonly string _systemPrompt;
@@ -44,7 +44,7 @@ namespace RimLife.Agent
         /// <param name="maxRounds">最大工具调用轮数（防死循环）。</param>
         /// <param name="logger">日志接口。</param>
         public AgentLoop(
-            AgentEventPool pool,
+            IEventPool pool,
             ILlmChatService llm,
             string systemPrompt,
             string[] skillIds,

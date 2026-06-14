@@ -17,14 +17,14 @@ namespace RimLife.Infrastructure
     public class InteractionHistoryStore : IInteractionStore, IDisposable
     {
         private readonly List<InteractionRecord> _records = new List<InteractionRecord>();
-        private readonly IPersistentStore _store;
+        private readonly IAuthorityStore _store;
         private const string StoreKey = "rimlife_interactions";
 
         /// <summary>
         /// 创建交互历史存储实例。
         /// </summary>
         /// <param name="store">持久化存储（用于存档文件读写）。</param>
-        public InteractionHistoryStore(IPersistentStore store)
+        public InteractionHistoryStore(IAuthorityStore store)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             LoadFromStore();

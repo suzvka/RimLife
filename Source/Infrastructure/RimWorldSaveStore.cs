@@ -8,12 +8,10 @@ using Verse;
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// IPersistentStore 的存档文件实现。
+    /// IAuthorityStore 的存档文件实现。
     /// 通过 WorldComponent 将数据嵌入 RimWorld 存档文件。
-    /// 仅实现 Store/Retrieve/Contains/Remove（权威存储）；
-    /// Cache 系列方法抛出 NotSupportedException。
     /// </summary>
-    public class RimWorldSaveStore : WorldComponent, IPersistentStore
+    public class RimWorldSaveStore : WorldComponent, IAuthorityStore
     {
         private Dictionary<string, string> _data = new Dictionary<string, string>();
         private const string SaveIdKey = "__rimlife_save_guid";
@@ -23,7 +21,7 @@ namespace RimLife.Infrastructure
         }
 
         // ================================================================
-        // IPersistentStore - 权威存储
+        // IAuthorityStore
         // ================================================================
 
         public void Store<T>(string key, T value)
@@ -60,28 +58,6 @@ namespace RimLife.Infrastructure
             if (!string.IsNullOrEmpty(key))
                 _data.Remove(key);
         }
-
-        // ================================================================
-        // IPersistentStore - 缓存（不支持）
-        // ================================================================
-
-        public void Cache<T>(string key, T value) =>
-            throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
-
-        public T FetchCache<T>(string key, T fallback = default) =>
-            throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
-
-        public bool TryFetchCache<T>(string key, out T value) =>
-            throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
-
-        public T FetchOrRebuild<T>(string key, Func<T> factory) =>
-            throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
-
-        public void ClearCache(string key) =>
-            throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
-
-        public IEnumerable<string> ListCacheKeys() =>
-            throw new NotSupportedException("RimWorldSaveStore does not support cache operations. Use LocalFileStore.");
 
         // ================================================================
         // WorldComponent 序列化

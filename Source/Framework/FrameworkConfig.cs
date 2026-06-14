@@ -1,3 +1,4 @@
+using RimLife.Driver;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -20,7 +21,7 @@ namespace RimLife.Framework
         // ---- 子配置区域 ----
 
         /// <summary>Agent 驱动配置区。</summary>
-        public DriverSection Driver { get; set; }
+        public DriverConfig Driver { get; set; }
 
         /// <summary>诊断配置区。</summary>
         public DiagnosticSection Diagnostics { get; set; }
@@ -83,11 +84,19 @@ namespace RimLife.Framework
             var w = new JsonWriter(512);
 
             // Driver
-            var dw = new JsonWriter(128);
-            dw.Prop("countThreshold", Driver?.CountThreshold ?? 5);
-            dw.Prop("importanceThreshold", Driver?.ImportanceThreshold ?? 15);
-            dw.Prop("recentHistoryCapacity", Driver?.RecentHistoryCapacity ?? 200);
-            dw.Prop("maxAgentRounds", Driver?.MaxAgentRounds ?? 10);
+            var dw = new JsonWriter(256);
+            var d = Driver ?? DriverConfig.CreateDefault();
+            dw.Prop("countThreshold", d.CountThreshold);
+            dw.Prop("importanceThreshold", d.ImportanceThreshold);
+            dw.Prop("recentHistoryCapacity", d.RecentHistoryCapacity);
+            dw.Prop("maxAgentRounds", d.MaxAgentRounds);
+            if (d.SeverityWeights != null && d.SeverityWeights.Count > 0)
+            {
+                var sw = new JsonWriter(64);
+                foreach (var kv in d.SeverityWeights)
+                    sw.Prop(kv.Key, kv.Value);
+                dw.PropRaw("severityWeights", sw.Close());
+            }
             w.PropRaw("driver", dw.Close());
 
             // Diagnostics
@@ -123,14 +132,29 @@ namespace RimLife.Framework
                 if (dict.TryGetValue("driver", out string driverJson))
                 {
                     var dd = JsonParser.ParseDict(driverJson);
+                    var dc = DriverConfig.CreateDefault();
                     if (dd.TryGetValue("countThreshold", out string ct) && int.TryParse(ct, out int ctv))
-                        config.Driver.CountThreshold = ctv;
+                        dc.CountThreshold = ctv;
                     if (dd.TryGetValue("importanceThreshold", out string it) && int.TryParse(it, out int itv))
-                        config.Driver.ImportanceThreshold = itv;
+                        dc.ImportanceThreshold = itv;
                     if (dd.TryGetValue("recentHistoryCapacity", out string rhc) && int.TryParse(rhc, out int rhcv))
-                        config.Driver.RecentHistoryCapacity = rhcv;
+                        dc.RecentHistoryCapacity = rhcv;
                     if (dd.TryGetValue("maxAgentRounds", out string mar) && int.TryParse(mar, out int marv))
-                        config.Driver.MaxAgentRounds = marv;
+                        dc.MaxAgentRounds = marv;
+                    if (dd.TryGetValue("severityWeights", out string swJson))
+                    {
+                        var swDict = JsonParser.ParseDict(swJson);
+                        if (swDict.Count > 0)
+                        {
+                            dc.SeverityWeights = new System.Collections.Generic.Dictionary<string, int>();
+                            foreach (var kv in swDict)
+                            {
+                                if (int.TryParse(kv.Value, out int w))
+                                    dc.SeverityWeights[kv.Key] = w;
+                            }
+                        }
+                    }
+                    config.Driver = dc;
                 }
 
                 if (dict.TryGetValue("diagnostics", out string diagJson))
@@ -170,7 +194,7 @@ namespace RimLife.Framework
         {
             return new FrameworkConfig
             {
-                Driver = new DriverSection(),
+                Driver = DriverConfig.CreateDefault(),
                 Diagnostics = new DiagnosticSection(),
                 Features = new FeatureToggleSection()
             };
@@ -179,54 +203,16 @@ namespace RimLife.Framework
         /// <summary>
         /// 从现有 DriverConfig 迁移配置（向后兼容）。
         /// </summary>
-        public static FrameworkConfig FromDriverConfig(Driver.DriverConfig driverConfig)
+        public static FrameworkConfig FromDriverConfig(DriverConfig driverConfig)
         {
             if (driverConfig == null) return CreateDefault();
             return new FrameworkConfig
             {
-                Driver = new DriverSection
-                {
-                    CountThreshold = driverConfig.CountThreshold,
-                    ImportanceThreshold = driverConfig.ImportanceThreshold,
-                    RecentHistoryCapacity = driverConfig.RecentHistoryCapacity,
-                    MaxAgentRounds = driverConfig.MaxAgentRounds
-                },
+                Driver = driverConfig,
                 Diagnostics = new DiagnosticSection(),
                 Features = new FeatureToggleSection()
             };
         }
-
-        /// <summary>
-        /// 转换为 DriverConfig（向后兼容）。
-        /// </summary>
-        public Driver.DriverConfig ToDriverConfig()
-        {
-            return new Driver.DriverConfig
-            {
-                CountThreshold = Driver?.CountThreshold ?? 5,
-                ImportanceThreshold = Driver?.ImportanceThreshold ?? 15,
-                RecentHistoryCapacity = Driver?.RecentHistoryCapacity ?? 200,
-                MaxAgentRounds = Driver?.MaxAgentRounds ?? 10
-            };
-        }
-    }
-
-    /// <summary>
-    /// Agent 驱动配置区。控制事件池触发阈值、历史容量和 Agent 轮数限制。
-    /// </summary>
-    public class DriverSection
-    {
-        /// <summary>事件数量阈值：pending 事件数达到此值时触发激活。</summary>
-        public int CountThreshold = 5;
-
-        /// <summary>重要度阈值：pending 事件总重要度达到此值时触发激活。</summary>
-        public int ImportanceThreshold = 15;
-
-        /// <summary>历史环形缓冲区容量。超出时裁剪最旧事件。</summary>
-        public int RecentHistoryCapacity = 200;
-
-        /// <summary>Agent 多轮工具调用最大轮数（防死循环）。</summary>
-        public int MaxAgentRounds = 10;
     }
 
     /// <summary>

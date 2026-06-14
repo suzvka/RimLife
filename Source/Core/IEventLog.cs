@@ -1,4 +1,5 @@
 using RimLife.Cards;
+using System;
 using System.Collections.Generic;
 
 namespace RimLife.Core
@@ -23,5 +24,28 @@ namespace RimLife.Core
 
         /// <summary>累计追加的事件总数。</summary>
         int TotalAppended { get; }
+    }
+
+    /// <summary>
+    /// 事件池接口。在 IEventLog 基础上增加阈值激活和 pending 事件管理能力。
+    /// AgentLoop 依赖此接口获取待处理事件并订阅激活通知。
+    /// 实现：AgentEventPool。
+    /// </summary>
+    public interface IEventPool : IEventLog
+    {
+        /// <summary>pending 缓冲区中的事件数。</summary>
+        int PendingCount { get; }
+
+        /// <summary>pending 缓冲区中所有事件的重要度总和。</summary>
+        int TotalImportance { get; }
+
+        /// <summary>
+        /// 取出所有 pending 事件并清空缓冲区。
+        /// 调用者获得事件所有权，池重置计数器和重要度。
+        /// </summary>
+        IReadOnlyList<IGameEvent> DrainPending();
+
+        /// <summary>当池状态变化且满足任一阈值时触发。订阅者（AgentLoop）被动激活。</summary>
+        event Action OnThresholdReached;
     }
 }

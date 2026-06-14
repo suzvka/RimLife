@@ -1,3 +1,4 @@
+using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
 using System;
@@ -13,10 +14,10 @@ namespace RimLife.Workspace
     /// </summary>
     public class DirectionMcpProvider : IMcpHookProvider
     {
-        private readonly Func<WorkspaceManager> _getWorkspaceManager;
+        private readonly Func<IWorkspaceManager> _getWorkspaceManager;
         private readonly ILogger _logger;
 
-        public DirectionMcpProvider(Func<WorkspaceManager> getWorkspaceManager, ILogger logger)
+        public DirectionMcpProvider(Func<IWorkspaceManager> getWorkspaceManager, ILogger logger)
         {
             _getWorkspaceManager = getWorkspaceManager ?? throw new ArgumentNullException(nameof(getWorkspaceManager));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

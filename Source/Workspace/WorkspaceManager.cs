@@ -21,11 +21,11 @@ namespace RimLife.Workspace
     /// - Director: create / branch / merge / suspend / resume / close
     /// - Screenwriter: push_round / signal_workspace_status
     /// </summary>
-    public class WorkspaceManager : IDisposable
+    public class WorkspaceManager : IDisposable, IWorkspaceManager
     {
         private readonly List<WorkspaceState> _workspaces = new List<WorkspaceState>();
         private readonly ReaderWriterLockSlim _rwLock = new ReaderWriterLockSlim();
-        private readonly IPersistentStore _store;
+        private readonly IAuthorityStore _store;
         private readonly ILogger _logger;
         private readonly Func<string> _timeProvider;
         private const string StoreKey = "rimlife_workspaces";
@@ -33,10 +33,10 @@ namespace RimLife.Workspace
         /// <summary>
         /// 创建 WorkspaceManager 实例并尝试从存档加载已有工作空间。
         /// </summary>
-        /// <param name="store">持久化存储（SaveStore）。</param>
+        /// <param name="store">权威存储（SaveStore）。</param>
         /// <param name="logger">日志接口。</param>
         /// <param name="timeProvider">时间字符串提供者。框架原样透传，不解析语义。</param>
-        public WorkspaceManager(IPersistentStore store, ILogger logger, Func<string> timeProvider)
+        public WorkspaceManager(IAuthorityStore store, ILogger logger, Func<string> timeProvider)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

@@ -8,12 +8,10 @@ using Verse;
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// IPersistentStore 的本地文件实现。
+    /// ICacheStore 的本地文件实现。
     /// 将缓存数据写入 mod 配置目录下的独立 JSON 文件，按存档 GUID 命名。
-    /// 仅实现 Cache/FetchCache/TryFetchCache/FetchOrRebuild/ClearCache（缓存）；
-    /// Store 系列方法抛出 NotSupportedException。
     /// </summary>
-    public class LocalFileStore : IPersistentStore
+    public class LocalFileStore : ICacheStore
     {
         private Dictionary<string, string> _cache = new Dictionary<string, string>();
         private string _filePath;
@@ -28,7 +26,7 @@ namespace RimLife.Infrastructure
         }
 
         // ================================================================
-        // IPersistentStore - 缓存
+        // ICacheStore
         // ================================================================
 
         public void Cache<T>(string key, T value)
@@ -88,22 +86,6 @@ namespace RimLife.Infrastructure
             EnsureLoaded();
             return _cache.Keys;
         }
-
-        // ================================================================
-        // IPersistentStore - 权威存储（不支持）
-        // ================================================================
-
-        public void Store<T>(string key, T value) =>
-            throw new NotSupportedException("LocalFileStore does not support authoritative storage. Use RimWorldSaveStore.");
-
-        public T Retrieve<T>(string key, T fallback = default) =>
-            throw new NotSupportedException("LocalFileStore does not support authoritative storage. Use RimWorldSaveStore.");
-
-        public bool Contains(string key) =>
-            throw new NotSupportedException("LocalFileStore does not support authoritative storage. Use RimWorldSaveStore.");
-
-        public void Remove(string key) =>
-            throw new NotSupportedException("LocalFileStore does not support authoritative storage. Use RimWorldSaveStore.");
 
         // ================================================================
         // 文件 I/O

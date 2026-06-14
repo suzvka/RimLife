@@ -20,7 +20,7 @@ namespace RimLife.Infrastructure.Knowledge
         private readonly Dictionary<string, KnowledgeEntry> _entries
             = new Dictionary<string, KnowledgeEntry>(StringComparer.OrdinalIgnoreCase);
 
-        private readonly IPersistentStore _store;
+        private readonly ICacheStore _store;
         private readonly int _maxCapacity;
         private bool _dirty;
 
@@ -33,7 +33,7 @@ namespace RimLife.Infrastructure.Knowledge
         /// <param name="store">缓存存储（通常为 RimLifeCore.CacheStore）。</param>
         /// <param name="logger">日志接口。</param>
         /// <param name="maxCapacity">最大条目数，超出时触发 LRU 淘汰。默认 500。</param>
-        public BuiltInKnowledgeBase(IPersistentStore store, ILogger logger, int maxCapacity = DefaultMaxCapacity)
+        public BuiltInKnowledgeBase(ICacheStore store, ILogger logger, int maxCapacity = DefaultMaxCapacity)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

@@ -17,7 +17,7 @@ namespace RimLife.Driver
     /// 触发条件（Count/Importance）仅评估 _pending。
     /// 零持久化：存档时不保留池内容，读档后从零开始。
     /// </summary>
-    public class AgentEventPool : IEventLog, IDisposable
+    public class AgentEventPool : IEventPool, IDisposable
     {
         private readonly DriverConfig _config;
         private readonly List<IGameEvent> _pending = new List<IGameEvent>();
