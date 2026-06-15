@@ -112,6 +112,7 @@ namespace RimLife.Framework
             feat.Prop("enableDirectorAgent", Features?.EnableDirectorAgent ?? true);
             feat.Prop("enableMemoryConsolidation", Features?.EnableMemoryConsolidation ?? true);
             feat.Prop("enableKnowledgeBase", Features?.EnableKnowledgeBase ?? true);
+            feat.Prop("enableFreelancerAgent", Features?.EnableFreelancerAgent ?? true);
             w.PropRaw("features", feat.Close());
 
             return w.Close();
@@ -179,6 +180,8 @@ namespace RimLife.Framework
                         config.Features.EnableMemoryConsolidation = mcv;
                     if (fd.TryGetValue("enableKnowledgeBase", out string kb) && bool.TryParse(kb, out bool kbv))
                         config.Features.EnableKnowledgeBase = kbv;
+                    if (fd.TryGetValue("enableFreelancerAgent", out string fa) && bool.TryParse(fa, out bool fav))
+                        config.Features.EnableFreelancerAgent = fav;
                 }
             }
             catch
@@ -246,5 +249,8 @@ namespace RimLife.Framework
 
         /// <summary>是否启用知识库。</summary>
         public bool EnableKnowledgeBase = true;
+
+        /// <summary>是否启用 Freelancer Agent（临时任务代理）。</summary>
+        public bool EnableFreelancerAgent = true;
     }
 }

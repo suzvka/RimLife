@@ -11,7 +11,11 @@ namespace RimLife.Workspace
         Director,
 
         /// <summary>编剧：创作叙事内容（push_round），无分支/合并权。</summary>
-        Screenwriter
+        Screenwriter,
+
+        /// <summary>临时任务代理：处理日常对话、突发独立事件。与编剧同构（push_round），
+        /// 但无剧情上下文/前情提要，无 signal 上报。由预注册定时器事件驱动快速响应。</summary>
+        Freelancer
     }
 
     /// <summary>

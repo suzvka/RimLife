@@ -82,9 +82,9 @@ namespace RimLife.Workspace
         {
             if (string.IsNullOrEmpty(recap) && string.IsNullOrEmpty(narrative)) return false;
 
-            if (callerRole != WorkspaceRole.Screenwriter)
+            if (callerRole != WorkspaceRole.Screenwriter && callerRole != WorkspaceRole.Freelancer)
             {
-                _logger?.Warning($"[RimLife.Workspace] PushRound rejected: caller is {callerRole}, only Screenwriter can push rounds.");
+                _logger?.Warning($"[RimLife.Workspace] PushRound rejected: caller is {callerRole}, only Screenwriter/Freelancer can push rounds.");
                 return false;
             }
 

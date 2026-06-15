@@ -112,6 +112,10 @@ namespace RimLife.Infrastructure
             _directorAgent?.Dispose();
             _directorAgent = null;
 
+            // 清理 Freelancer Agent
+            _freelancerAgent?.Dispose();
+            _freelancerAgent = null;
+
             _frameworkConfig = null;
             _skillRegistryInitialized = false;
             Logger?.Message("[RimLife.Core] Shutdown complete.");
@@ -135,6 +139,7 @@ namespace RimLife.Infrastructure
                 count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
                 count += RegisterHookProvider(new Workspace.DirectionMcpProvider(() => Workspaces, Logger));
                 count += RegisterHookProvider(new Workspace.WritingMcpProvider(() => Workspaces, Logger));
+                count += RegisterHookProvider(new Workspace.FreelancerMcpProvider(() => Workspaces, Logger));
 
                 // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
                 count += RegisterHookProvider(new Mcp.ColonyOverviewProvider());
@@ -305,6 +310,8 @@ namespace RimLife.Infrastructure
 
         private static AgentLoop _directorAgent;
         private static readonly object _directorAgentLock = new object();
+        private static AgentLoop _freelancerAgent;
+        private static readonly object _freelancerAgentLock = new object();
         private static readonly Dictionary<string, AgentLoop> _screenwriters = new Dictionary<string, AgentLoop>();
         private static readonly object _screenwritersLock = new object();
 
@@ -324,6 +331,55 @@ namespace RimLife.Infrastructure
             }
 
             return Workspaces.Create("Director", null, null, Workspace.WorkspaceRole.Director);
+        }
+
+        /// <summary>
+        /// 获取 Freelancer 所在工作空间。
+        /// 按 CreatedByRole == Freelancer &amp;&amp; Status == Active 查找，不存在时自动创建。
+        /// </summary>
+        public static Workspace.IWorkspace GetFreelancerWorkspace()
+        {
+            if (Workspaces == null) return null;
+
+            var actives = Workspaces.GetActive();
+            foreach (var ws in actives)
+            {
+                if (ws.CreatedByRole == Workspace.WorkspaceRole.Freelancer)
+                    return ws;
+            }
+
+            return Workspaces.Create("Freelancer", null, null, Workspace.WorkspaceRole.Freelancer);
+        }
+
+        /// <summary>
+        /// 获取 Freelancer AgentLoop 实例。绑定 Freelancer 工作空间的 EventPool。
+        /// 存档未加载或 LLM 未配置时返回 null。
+        /// </summary>
+        public static AgentLoop GetFreelancerAgent()
+        {
+            if (_freelancerAgent == null)
+            {
+                lock (_freelancerAgentLock)
+                {
+                    if (_freelancerAgent == null && SaveStore != null && LlmAccessor != null)
+                    {
+                        var freelancerWs = GetFreelancerWorkspace();
+                        if (freelancerWs != null)
+                        {
+                            _freelancerAgent = new AgentLoop(
+                                pool: freelancerWs.EventPool,
+                                llm: LlmAccessor,
+                                systemPrompt: BuildFreelancerSystemPrompt(freelancerWs),
+                                skillIds: new[] { "workspace_freelancer" },
+                                maxRounds: DriverConfig.MaxAgentRounds,
+                                logger: Logger,
+                                serializer: CardSerializer.Default,
+                                knowledgeBase: KnowledgeBase);
+                        }
+                    }
+                }
+            }
+            return _freelancerAgent;
         }
 
         /// <summary>
@@ -485,6 +541,34 @@ namespace RimLife.Infrastructure
             sb.AppendLine("- 剧情完结时 signal_workspace_status 上报 StorylineComplete");
             sb.AppendLine("- 遇到剧情瓶颈时上报 NeedsBranch 或 Stuck");
             sb.AppendLine("- 如事件不适合本剧情线，可用 route_events 推回导演工作空间");
+            return sb.ToString();
+        }
+
+        private static string BuildFreelancerSystemPrompt(Workspace.IWorkspace ws)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("你是 RimWorld 殖民地的临时任务代理 (Freelancer Agent)。");
+            sb.AppendLine();
+            sb.AppendLine($"工作空间 ID：{ws.Id}");
+            sb.AppendLine($"工作空间：{ws.Label ?? "Freelancer"}");
+            var directorWs = GetDirectorWorkspace();
+            if (directorWs != null)
+                sb.AppendLine($"导演工作空间 ID：{directorWs.Id}");
+            sb.AppendLine();
+            sb.AppendLine("你的职责：");
+            sb.AppendLine("1. 处理突发性、独立性的事件（日常对话、随机遭遇、环境变化等）");
+            sb.AppendLine("2. 这些事件不属于任何正在进行的剧情线，你不需要维护跨轮次的剧情上下文");
+            sb.AppendLine("3. 调用角色查询、环境感知等工具获取当前状态");
+            sb.AppendLine("4. 使用 push_round 工具输出叙事内容");
+            sb.AppendLine();
+            sb.AppendLine("工作原则：");
+            sb.AppendLine("- 每次激活都是独立任务，不维护剧情延续性");
+            sb.AppendLine("- 叙事风格保持轻快、即兴，快速响应");
+            sb.AppendLine("- 每次激活只处理当前批次事件，输出 1 个轮次");
+            sb.AppendLine("- 前情提要 (recap) 只总结本次事件批次，不需要回顾历史");
+            sb.AppendLine("- 台词 (narrative) 是正式的叙事输出");
+            sb.AppendLine("- 如事件更适合某条剧情线，用 route_events 推回导演工作空间");
+            sb.AppendLine("- 你不负责上报剧情线推进状态（那是编剧的职责）");
             return sb.ToString();
         }
 
