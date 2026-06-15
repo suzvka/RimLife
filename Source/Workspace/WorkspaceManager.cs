@@ -114,6 +114,13 @@ namespace RimLife.Workspace
 
             var impl = Wrap(ws);
 
+            // 根据角色自动激活默认技能集
+            var defaultSkills = RoleSkillProfile.GetDefaultSkillIds(createdByRole);
+            foreach (var skillId in defaultSkills)
+            {
+                impl.SkillSlot.Activate(skillId);
+            }
+
             _rwLock.EnterWriteLock();
             try
             {
@@ -121,7 +128,7 @@ namespace RimLife.Workspace
             }
             finally { _rwLock.ExitWriteLock(); }
 
-            _logger.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id}, role={createdByRole})");
+            _logger.Message($"[RimLife.Workspace] Created workspace '{ws.Label}' (id={ws.Id}, role={createdByRole}, skills={string.Join(",", defaultSkills)})");
             EventBus.Publish(FrameworkEvents.WorkspaceCreated,
                 EventArg.WithPayload(("workspaceId", ws.Id), ("label", ws.Label ?? "")));
             _onWorkspaceReady?.Invoke(ws.Id);

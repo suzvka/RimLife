@@ -37,9 +37,40 @@ namespace RimLife.Workspace
         {
             return new McpTool[]
             {
+                McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(GetWorkspace)), this),
                 McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(PushRound)), this),
                 McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(RouteEvents)), this),
             };
+        }
+
+        // ================================================================
+        // 查询
+        // ================================================================
+
+        /// <summary>
+        /// 获取工作空间轻量信息。Freelancer 不维护剧情上下文，因此只返回元数据和事件摘要，
+        /// 不包含叙事轮次历史。
+        /// </summary>
+        [McpTool(Name = "fre_get_workspace",
+                 Description = "获取工作空间轻量信息：元数据、关联角色、标签、待处理事件摘要和轮次统计。不含叙事历史内容。")]
+        public string GetWorkspace(
+            [McpParam(Description = "工作空间唯一 ID")] string workspaceId)
+        {
+            try
+            {
+                var manager = _getWorkspaceManager();
+                if (manager == null) return "{}";
+
+                var ws = manager.Get(workspaceId);
+                if (ws == null) return "{}";
+
+                return SerializeResult(ws);
+            }
+            catch (Exception e)
+            {
+                _logger.Warning($"[RimLife.FreelancerMcp] fre_get_workspace({workspaceId}) failed: {e.Message}");
+                return "{}";
+            }
         }
 
         // ================================================================
@@ -165,7 +196,7 @@ namespace RimLife.Workspace
         // ================================================================
 
         /// <summary>
-        /// Freelancer 视图：元数据 + 当前摘要，不含完整轮次列表。
+        /// Freelancer 视图：元数据 + 关联角色 + 标签 + 事件池摘要，不含完整轮次列表。
         /// Freelancer 不维护剧情上下文，因此无需返回历史叙事。
         /// </summary>
         private string SerializeResult(IWorkspace ws)
@@ -176,7 +207,12 @@ namespace RimLife.Workspace
             w.Prop("id", ws.Id ?? "");
             w.Prop("label", ws.Label ?? "");
             w.Prop("status", ws.Status.ToString());
+            if (ws.ColonistIds != null && ws.ColonistIds.Count > 0)
+                w.Array("colonistIds", ws.ColonistIds);
+            if (ws.Tags != null && ws.Tags.Count > 0)
+                w.Array("tags", ws.Tags);
             w.Prop("roundCount", ws.Rounds?.Count ?? 0);
+            w.Prop("pendingEventCount", ws.EventPool?.PendingCount ?? 0);
             w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             return w.Close();
         }
