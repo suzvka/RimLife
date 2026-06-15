@@ -113,6 +113,7 @@ namespace RimLife.Framework
             feat.Prop("enableMemoryConsolidation", Features?.EnableMemoryConsolidation ?? true);
             feat.Prop("enableKnowledgeBase", Features?.EnableKnowledgeBase ?? true);
             feat.Prop("enableFreelancerAgent", Features?.EnableFreelancerAgent ?? true);
+            feat.Prop("enableRuntimeMetrics", Features?.EnableRuntimeMetrics ?? true);
             w.PropRaw("features", feat.Close());
 
             return w.Close();
@@ -182,6 +183,8 @@ namespace RimLife.Framework
                         config.Features.EnableKnowledgeBase = kbv;
                     if (fd.TryGetValue("enableFreelancerAgent", out string fa) && bool.TryParse(fa, out bool fav))
                         config.Features.EnableFreelancerAgent = fav;
+                    if (fd.TryGetValue("enableRuntimeMetrics", out string rm) && bool.TryParse(rm, out bool rmv))
+                        config.Features.EnableRuntimeMetrics = rmv;
                 }
             }
             catch
@@ -252,5 +255,9 @@ namespace RimLife.Framework
 
         /// <summary>是否启用 Freelancer Agent（临时任务代理）。</summary>
         public bool EnableFreelancerAgent = true;
+
+        /// <summary>是否启用运行时度量采集（工具频率、Token 消耗、知识库命中率等）。
+        /// 关闭时 MetricsInterceptor 不注册，零开销。</summary>
+        public bool EnableRuntimeMetrics = true;
     }
 }

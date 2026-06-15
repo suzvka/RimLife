@@ -85,13 +85,11 @@ namespace RimLife.Tests.Framework
                 TimeOfDay = "Day",
                 Year = 2,
                 PopulationAlive = 5,
-                WealthTotal = 15000f,
                 FoodStatus = "Abundant",
                 PowerStatus = "Stable",
                 MoraleAverage = 0.65f,
                 MoraleTier = "Good",
                 TechLevel = "Industrial",
-                StorytellerName = "Cassandra Classic",
                 Difficulty = "Strive to Survive",
                 ActiveThreats = new List<string> { "ActiveHostiles:3" },
                 Colonists = new List<ColonistSummary>
@@ -108,11 +106,9 @@ namespace RimLife.Tests.Framework
 
             Assert.Contains("\"season\":\"Summer\"", json);
             Assert.Contains("\"populationAlive\":5", json);
-            Assert.Contains("\"wealthTotal\":15000", json);
             Assert.Contains("\"foodStatus\":\"Abundant\"", json);
             Assert.Contains("\"moraleTier\":\"Good\"", json);
             Assert.Contains("\"techLevel\":\"Industrial\"", json);
-            Assert.Contains("\"storytellerName\":\"Cassandra Classic\"", json);
             Assert.Contains("\"ActiveHostiles:3\"", json);
             Assert.Contains("\"Alice\"", json);
             Assert.Contains("\"Pirates\"", json);
@@ -138,12 +134,10 @@ namespace RimLife.Tests.Framework
                 Name = "Alice",
                 FullName = "Alice Smith",
                 DefName = "Human",
-                AgeBiologicalYears = 28.5f,
                 Gender = "Female",
                 PawnType = "Character",
                 PawnRelation = "OurParty",
                 IsDead = false,
-                IsDowned = false,
                 IsAwake = true
             };
 
@@ -152,7 +146,6 @@ namespace RimLife.Tests.Framework
             Assert.Contains("\"id\":\"pawn_1\"", json);
             Assert.Contains("\"name\":\"Alice\"", json);
             Assert.Contains("\"view\":\"static\"", json);
-            Assert.Contains("\"prompt\":\"\"", json); // no sections populated
         }
 
         [Fact]
@@ -174,7 +167,6 @@ namespace RimLife.Tests.Framework
             var json = CardSerializer.Default.SerializeCharacterCard(card, "dynamic", provider);
 
             Assert.Contains("\"view\":\"dynamic\"", json);
-            Assert.Contains("\"prompt\"", json);
             Assert.Contains("射击", json);
             Assert.Contains("心态: 警觉", json);
             Assert.Contains("看见Alice在附近", json);
@@ -193,8 +185,7 @@ namespace RimLife.Tests.Framework
                 DefName = "Human",
                 Gender = "Male",
                 PawnType = "Character",
-                PawnRelation = "OurParty",
-                AgeBiologicalYears = 30f
+                PawnRelation = "OurParty"
             };
 
             var provider = MakeProviders(new Dictionary<string, string>
@@ -215,7 +206,6 @@ namespace RimLife.Tests.Framework
             var json = CardSerializer.Default.SerializeCharacterCard(card, "full", provider);
 
             Assert.Contains("\"view\":\"full\"", json);
-            Assert.Contains("\"prompt\"", json);
             Assert.Contains("疼痛", json);
             Assert.Contains("心情", json);
             Assert.Contains("射击", json);
@@ -257,7 +247,6 @@ namespace RimLife.Tests.Framework
             var json = CardSerializer.Default.SerializeCharacterCard(card, "static", provider);
 
             Assert.Contains("\"view\":\"static\"", json);
-            Assert.Contains("\"prompt\"", json);
             Assert.Contains("疼痛", json);
             Assert.Contains("开放性", json);
             // dynamic/full 专属不应出现
@@ -334,33 +323,22 @@ namespace RimLife.Tests.Framework
         }
 
         [Fact]
-        public void SerializeEnvironment_Indoors_IncludesRoom()
+        public void SerializeEnvironment_Indoors_NoRoomField()
         {
             var env = new EnvironmentCard
             {
                 Type = "Indoors",
                 Temperature = 21f,
                 LightLevel = 0.5f,
-                Room = new RoomInfo
-                {
-                    RoleLabel = "Bedroom",
-                    BaseStats = new RoomStats
-                    {
-                        Impressiveness = 65f,
-                        Beauty = 3f,
-                        Space = 25f,
-                        Cleanliness = 0.5f,
-                        Wealth = 200f
-                    },
-                    Tags = new List<string> { " cramped" }
-                }
+                ThermalComfort = "Comfortable",
+                LightLabel = "Dim"
             };
 
             var json = CardSerializer.Default.SerializeEnvironment(env);
 
             Assert.Contains("\"type\":\"Indoors\"", json);
-            Assert.Contains("\"roleLabel\":\"Bedroom\"", json);
-            Assert.Contains("\"impressiveness\":65", json);
+            Assert.Contains("\"temperature\":21.0", json);
+            Assert.DoesNotContain("\"room\"", json);
         }
 
         // ================================================================
@@ -414,13 +392,12 @@ namespace RimLife.Tests.Framework
             var colonists = new List<ColonistSummary>
             {
                 new ColonistSummary { ID = "c1", Name = "Alice", MoodTier = "Good" },
-                new ColonistSummary { ID = "c2", Name = "Bob", MoodTier = "Neutral", IsDowned = true }
+                new ColonistSummary { ID = "c2", Name = "Bob", MoodTier = "Neutral" }
             };
             var json = CardSerializer.Default.SerializeColonistSummaryList(colonists);
 
             Assert.Contains("\"id\":\"c1\"", json);
             Assert.Contains("\"Alice\"", json);
-            Assert.Contains("\"isDowned\":true", json);
         }
 
         // ================================================================

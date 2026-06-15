@@ -41,7 +41,7 @@ namespace RimLife
                 var card = Infrastructure.Mcp.PawnQueryHelper.BuildCharacterCard(pawn, null);
                 var sb = new StringBuilder(2048);
                 sb.AppendLine($"[CharacterCard Dump] {card.FullName} ({card.ID}) | Type={card.PawnType} Faction={card.FactionLabel}");
-                sb.AppendLine($"Age={card.AgeBiologicalYears:0.0} Gender={card.Gender} Dead={card.IsDead} Downed={card.IsDowned} Awake={card.IsAwake}");
+                sb.AppendLine($"Gender={card.Gender} Dead={card.IsDead} Awake={card.IsAwake}");
                 sb.AppendLine();
 
                 var providers = RimLifeCore.ContentProviders;

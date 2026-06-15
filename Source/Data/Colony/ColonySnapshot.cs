@@ -104,12 +104,11 @@ namespace RimLife
                 {
                     if (p == null) continue;
 
-                    bool isDowned = p.Downed;
                     bool isDead = p.Dead;
                     bool inMentalBreak = p.InMentalState;
 
                     if (!isDead) alive++;
-                    if (isDowned) downed++;
+                    if (p.Downed) downed++;
                     if (inMentalBreak) mentalBreak++;
 
                     string moodTier = "Content";
@@ -142,7 +141,6 @@ namespace RimLife
                     {
                         ID = p.ThingID ?? "?",
                         Name = p.Name?.ToStringShort ?? p.LabelShortCap ?? "?",
-                        IsDowned = isDowned,
                         IsDead = isDead,
                         CurrentJob = currentJob,
                         MoodTier = moodTier,
@@ -294,7 +292,6 @@ namespace RimLife
     {
         public string ID;
         public string Name;
-        public bool IsDowned;
         public bool IsDead;
         public string CurrentJob;
         public string MoodTier;

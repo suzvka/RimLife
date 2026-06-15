@@ -22,6 +22,16 @@ namespace RimLife.Framework.Llm
         /// <summary>消耗的 token 总数（含 input + output）。</summary>
         public int? UsageTotalTokens { get; set; }
 
+        /// <summary>输入 token 数（prompt_tokens / input_tokens）。</summary>
+        public int? UsageInputTokens { get; set; }
+
+        /// <summary>输出 token 数（completion_tokens / output_tokens）。</summary>
+        public int? UsageOutputTokens { get; set; }
+
+        /// <summary>缓存命中读取的 token 数（cached_tokens / cache_read_input_tokens）。
+        /// 各厂商语义不同，适配器负责统一映射到此字段。</summary>
+        public int? UsageCacheReadTokens { get; set; }
+
         /// <summary>实际使用的模型名称（可能与请求不同）。</summary>
         public string Model { get; set; } = "";
 

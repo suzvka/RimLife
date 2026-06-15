@@ -89,13 +89,11 @@ namespace RimLife.Tests.Cards
         {
             var card = new CharacterCard();
 
-            // 默认值应为 null / false / 0
+            // 默认值应为 null / false
             Assert.Null(card.ID);
             Assert.Null(card.Name);
             Assert.False(card.IsDead);
-            Assert.False(card.IsDowned);
             Assert.False(card.IsAwake);
-            Assert.Equal(0f, card.AgeBiologicalYears);
         }
 
         [Fact]
@@ -108,19 +106,16 @@ namespace RimLife.Tests.Cards
                 FullName = "Alice Cooper",
                 DefName = "Human",
                 FactionLabel = "Colony",
-                AgeBiologicalYears = 25.5f,
                 Gender = "Female",
                 PawnType = "Character",
                 PawnRelation = "OurParty",
                 IsDead = false,
-                IsDowned = false,
                 IsAwake = true
             };
 
             Assert.Equal("pawn_001", card.ID);
             Assert.Equal("Alice", card.Name);
             Assert.Equal("Alice Cooper", card.FullName);
-            Assert.Equal(25.5f, card.AgeBiologicalYears);
             Assert.Equal("Female", card.Gender);
             Assert.True(card.IsAwake);
             Assert.False(card.IsDead);
@@ -138,7 +133,6 @@ namespace RimLife.Tests.Cards
             Assert.Equal(0, ctx.CurrentTick);
             Assert.Equal(0, ctx.Year);
             Assert.Equal(0, ctx.PopulationAlive);
-            Assert.Equal(0f, ctx.WealthTotal);
             Assert.Null(ctx.Season);
             Assert.Null(ctx.TimeOfDay);
             Assert.Null(ctx.Colonists);
@@ -156,8 +150,6 @@ namespace RimLife.Tests.Cards
             var card = new EnvironmentCard();
 
             Assert.Null(card.Type);
-            Assert.Null(card.Room);
-            // WeatherSection is a struct (value type), cannot be null
             Assert.Null(card.ThingSummary);
         }
 
@@ -171,7 +163,7 @@ namespace RimLife.Tests.Cards
             var card = new ObjectiveCard();
 
             Assert.Null(card.ID);
-            Assert.Null(card.DeadlineTick);
+            Assert.Null(card.Deadline);
             Assert.Null(card.Steps);
         }
 

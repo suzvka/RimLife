@@ -419,7 +419,6 @@ namespace RimLife.Tool
                     DumpObject("  PawnType", card.PawnType);
                     DumpObject("  PawnRelation", card.PawnRelation);
                     DumpObject("  IsDead", card.IsDead);
-                    DumpObject("  IsDowned", card.IsDowned);
                     DumpObject("  IsAwake", card.IsAwake);
                 }
                 else
@@ -468,11 +467,6 @@ namespace RimLife.Tool
                     DumpObject("  Temperature", env.Temperature);
                     DumpObject("  ThermalComfort", env.ThermalComfort);
                     DumpObject("  LightLabel", env.LightLabel);
-                    if (env.Room != null)
-                    {
-                        DumpObject("  RoomRole", env.Room.RoleLabel);
-                        DumpObject("  RoomImpressiveness", env.Room.BaseStats.Impressiveness);
-                    }
                     if (!string.IsNullOrEmpty(env.Weather.Label))
                         DumpObject("  Weather", env.Weather.Label);
                     if (env.ThingSummary != null)

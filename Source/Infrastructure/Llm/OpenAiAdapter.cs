@@ -307,6 +307,21 @@ namespace RimLife.Infrastructure.Llm
                     if (usageDict.TryGetValue("total_tokens", out string totalStr)
                         && int.TryParse(totalStr, out int total))
                         result.UsageTotalTokens = total;
+                    if (usageDict.TryGetValue("prompt_tokens", out string ptStr)
+                        && int.TryParse(ptStr, out int pt))
+                        result.UsageInputTokens = pt;
+                    if (usageDict.TryGetValue("completion_tokens", out string ctStr)
+                        && int.TryParse(ctStr, out int ct))
+                        result.UsageOutputTokens = ct;
+
+                    // cached_tokens: prompt_tokens_details.cached_tokens
+                    if (usageDict.TryGetValue("prompt_tokens_details", out string ptdJson))
+                    {
+                        var ptdDict = JsonParser.ParseDict(ptdJson);
+                        if (ptdDict.TryGetValue("cached_tokens", out string cachedStr)
+                            && int.TryParse(cachedStr, out int cached))
+                            result.UsageCacheReadTokens = cached;
+                    }
                 }
 
                 // model

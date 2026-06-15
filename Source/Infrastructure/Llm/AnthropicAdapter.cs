@@ -396,7 +396,14 @@ namespace RimLife.Infrastructure.Llm
                         int.TryParse(otStr, out int ot))
                     {
                         result.UsageTotalTokens = it + ot;
+                        result.UsageInputTokens = it;
+                        result.UsageOutputTokens = ot;
                     }
+
+                    // cache_read_input_tokens: Anthropic prompt caching
+                    if (usageDict.TryGetValue("cache_read_input_tokens", out string crStr)
+                        && int.TryParse(crStr, out int cr))
+                        result.UsageCacheReadTokens = cr;
                 }
 
                 // model

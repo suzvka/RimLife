@@ -29,7 +29,7 @@ namespace RimLife.Framework.Mcp
                 w.PropRaw("keywords", SerializeStringList(evt.Keywords));
             w.Prop("tick", evt.Tick);
             w.Prop("severity", evt.Severity);
-            w.Prop("mapHint", evt.MapHint ?? "");
+            w.Prop("mapHint", evt.MapHint);
 
             if (evt.Actors != null && evt.Actors.Count > 0)
             {
@@ -50,10 +50,11 @@ namespace RimLife.Framework.Mcp
             {
                 var pw = new JsonWriter(256);
                 foreach (var kv in evt.Payload)
-                    pw.Prop(kv.Key, kv.Value ?? "");
+                    pw.Prop(kv.Key, kv.Value);
                 w.PropRaw("payload", pw.Close());
             }
 
+            SerializeExtensions(w, evt as IExtensibleCard);
             return w.Close();
         }
 
@@ -119,19 +120,15 @@ namespace RimLife.Framework.Mcp
 
             // 时间
             w.Prop("currentTick", ctx.CurrentTick);
-            w.Prop("season", ctx.Season ?? "");
-            w.Prop("timeOfDay", ctx.TimeOfDay ?? "");
-            w.Prop("quadrum", ctx.Quadrum ?? "");
+            w.Prop("season", ctx.Season);
+            w.Prop("timeOfDay", ctx.TimeOfDay);
             w.Prop("year", ctx.Year);
-            w.Prop("dayOfQuadrum", ctx.DayOfQuadrum);
             w.Prop("hour", ctx.Hour);
 
             // 人口
             w.Prop("populationAlive", ctx.PopulationAlive);
-            w.Prop("populationDowned", ctx.PopulationDowned);
-            w.Prop("populationMentalBreak", ctx.PopulationMentalBreak);
 
-            // 殖民者摘要
+            // 角色摘要
             if (ctx.Colonists != null && ctx.Colonists.Count > 0)
             {
                 var summaries = new List<string>();
@@ -147,46 +144,44 @@ namespace RimLife.Framework.Mcp
                 foreach (var f in ctx.FactionRelations)
                 {
                     var fw = new JsonWriter(128);
-                    fw.Prop("factionName", f.FactionName ?? "");
+                    fw.Prop("factionName", f.FactionName);
                     fw.Prop("goodwill", f.Goodwill, "F0");
-                    fw.Prop("relationLabel", f.RelationLabel ?? "");
+                    fw.Prop("relationLabel", f.RelationLabel);
                     factions.Add(fw.Close());
                 }
                 w.ArrayRaw("factionRelations", factions);
             }
 
             // 资源
-            w.Prop("wealthTotal", ctx.WealthTotal, "F0");
-            w.Prop("foodStatus", ctx.FoodStatus ?? "");
-            w.Prop("powerStatus", ctx.PowerStatus ?? "");
+            w.Prop("foodStatus", ctx.FoodStatus);
+            w.Prop("powerStatus", ctx.PowerStatus);
 
             // 士气
             w.Prop("moraleAverage", ctx.MoraleAverage, "F2");
-            w.Prop("moraleTier", ctx.MoraleTier ?? "");
+            w.Prop("moraleTier", ctx.MoraleTier);
 
             // 威胁
             w.Array("activeThreats", ctx.ActiveThreats);
 
-            // 叙事者
-            w.Prop("storytellerName", ctx.StorytellerName ?? "");
-            w.Prop("difficulty", ctx.Difficulty ?? "");
-            w.Prop("techLevel", ctx.TechLevel ?? "");
+            // 难度
+            w.Prop("difficulty", ctx.Difficulty);
+            w.Prop("techLevel", ctx.TechLevel);
             w.Prop("colonyStartTick", ctx.ColonyStartTick);
 
+            SerializeExtensions(w, ctx);
             return w.Close();
         }
 
         private static string SerializeColonistSummary(ColonistSummary c)
         {
             var w = new JsonWriter(128);
-            w.Prop("id", c.ID ?? "");
-            w.Prop("name", c.Name ?? "");
-            w.Prop("isDowned", c.IsDowned);
+            w.Prop("id", c.ID);
+            w.Prop("name", c.Name);
             w.Prop("isDead", c.IsDead);
-            w.Prop("currentJob", c.CurrentJob ?? "");
-            w.Prop("moodTier", c.MoodTier ?? "");
-            w.Prop("painTier", c.PainTier ?? "");
-            w.Prop("pawnRelation", c.PawnRelation ?? "");
+            w.Prop("currentJob", c.CurrentJob);
+            w.Prop("moodTier", c.MoodTier);
+            w.Prop("painTier", c.PainTier);
+            w.Prop("pawnRelation", c.PawnRelation);
             return w.Close();
         }
 
@@ -206,17 +201,15 @@ namespace RimLife.Framework.Mcp
             var w = new JsonWriter(4096);
 
             // 基本元数据（始终包含）
-            w.Prop("id", card.ID ?? "");
-            w.Prop("name", card.Name ?? "");
-            w.Prop("fullName", card.FullName ?? "");
-            w.Prop("defName", card.DefName ?? "");
-            w.Prop("factionLabel", card.FactionLabel ?? "");
-            w.Prop("ageBiologicalYears", card.AgeBiologicalYears, "F1");
-            w.Prop("gender", card.Gender ?? "");
-            w.Prop("pawnType", card.PawnType ?? "");
-            w.Prop("pawnRelation", card.PawnRelation ?? "");
+            w.Prop("id", card.ID);
+            w.Prop("name", card.Name);
+            w.Prop("fullName", card.FullName);
+            w.Prop("defName", card.DefName);
+            w.Prop("factionLabel", card.FactionLabel);
+            w.Prop("gender", card.Gender);
+            w.Prop("pawnType", card.PawnType);
+            w.Prop("pawnRelation", card.PawnRelation);
             w.Prop("isDead", card.IsDead);
-            w.Prop("isDowned", card.IsDowned);
             w.Prop("isAwake", card.IsAwake);
 
             // 通过钩子收集各 section 内容
@@ -240,6 +233,7 @@ namespace RimLife.Framework.Mcp
             }
 
             w.Prop("view", effectiveView);
+            SerializeExtensions(w, card);
             return w.Close();
         }
 
@@ -251,13 +245,12 @@ namespace RimLife.Framework.Mcp
         {
             if (obj == null) return "{}";
             var w = new JsonWriter(256);
-            w.Prop("id", obj.ID ?? "");
-            w.Prop("title", obj.Title ?? "");
-            w.Prop("description", obj.Description ?? "");
-            w.Prop("status", obj.Status ?? "");
-            w.Prop("source", obj.Source ?? "");
-            if (obj.DeadlineTick.HasValue)
-                w.Prop("deadlineTick", obj.DeadlineTick.Value);
+            w.Prop("id", obj.ID);
+            w.Prop("title", obj.Title);
+            w.Prop("description", obj.Description);
+            w.Prop("status", obj.Status);
+            w.Prop("source", obj.Source);
+            w.Prop("deadline", obj.Deadline);
 
             if (obj.Steps != null && obj.Steps.Count > 0)
             {
@@ -265,12 +258,14 @@ namespace RimLife.Framework.Mcp
                 foreach (var s in obj.Steps)
                 {
                     var sw = new JsonWriter(64);
-                    sw.Prop("label", s.Label ?? "");
+                    sw.Prop("label", s.Label);
                     sw.Prop("isCompleted", s.IsCompleted);
                     steps.Add(sw.Close());
                 }
                 w.ArrayRaw("steps", steps);
             }
+
+            SerializeExtensions(w, obj);
             return w.Close();
         }
 
@@ -287,32 +282,18 @@ namespace RimLife.Framework.Mcp
         {
             if (env == null) return "{}";
             var w = new JsonWriter(512);
-            w.Prop("type", env.Type ?? "");
+            w.Prop("type", env.Type);
             w.Prop("temperature", env.Temperature, "F1");
             w.Prop("lightLevel", env.LightLevel, "F2");
-            w.Prop("thermalComfort", env.ThermalComfort ?? "");
-            w.Prop("lightLabel", env.LightLabel ?? "");
-
-            if (env.Room != null)
-            {
-                var rw = new JsonWriter(256);
-                rw.Prop("roleLabel", env.Room.RoleLabel ?? "");
-                rw.Prop("impressiveness", env.Room.BaseStats.Impressiveness, "F1");
-                rw.Prop("beauty", env.Room.BaseStats.Beauty, "F1");
-                rw.Prop("wealth", env.Room.BaseStats.Wealth, "F1");
-                rw.Prop("space", env.Room.BaseStats.Space, "F1");
-                rw.Prop("cleanliness", env.Room.BaseStats.Cleanliness, "F1");
-                if (env.Room.Tags != null && env.Room.Tags.Count > 0)
-                    rw.Array("tags", env.Room.Tags);
-                w.PropRaw("room", rw.Close());
-            }
+            w.Prop("thermalComfort", env.ThermalComfort);
+            w.Prop("lightLabel", env.LightLabel);
 
             if (!string.IsNullOrEmpty(env.Weather.Label))
             {
                 var ww = new JsonWriter(128);
                 var we = env.Weather;
-                ww.Prop("label", we.Label ?? "");
-                ww.Prop("description", we.Description ?? "");
+                ww.Prop("label", we.Label);
+                ww.Prop("description", we.Description);
                 ww.Prop("isRain", we.IsRain);
                 ww.Prop("isSnow", we.IsSnow);
                 ww.Prop("windSpeed", we.WindSpeed, "F1");
@@ -328,6 +309,7 @@ namespace RimLife.Framework.Mcp
                 w.PropRaw("thingSummary", tw.Close());
             }
 
+            SerializeExtensions(w, env);
             return w.Close();
         }
 
@@ -339,10 +321,10 @@ namespace RimLife.Framework.Mcp
         {
             var w = new JsonWriter(128);
             w.Prop("tick", rec.Tick);
-            w.Prop("initiatorId", rec.InitiatorID ?? "");
-            w.Prop("recipientId", rec.RecipientID ?? "");
-            w.Prop("interactionDef", rec.InteractionDef ?? "");
-            w.Prop("outcome", rec.Outcome ?? "");
+            w.Prop("initiatorId", rec.InitiatorID);
+            w.Prop("recipientId", rec.RecipientID);
+            w.Prop("interactionDef", rec.InteractionDef);
+            w.Prop("outcome", rec.Outcome);
             return w.Close();
         }
 
@@ -422,6 +404,17 @@ namespace RimLife.Framework.Mcp
             }
             sb.Append(']');
             return sb.ToString();
+        }
+
+        /// <summary>
+        /// 序列化卡片上的扩展字段。若卡片实现了 IExtensibleCard，
+        /// 则将其所有非空扩展字段平铺到顶层 JSON 中。
+        /// </summary>
+        private static void SerializeExtensions(JsonWriter w, IExtensibleCard card)
+        {
+            if (card?.ExtensionFields == null || card.ExtensionFields.Count == 0) return;
+            foreach (var kv in card.ExtensionFields)
+                w.Prop(kv.Key, kv.Value);
         }
     }
 }

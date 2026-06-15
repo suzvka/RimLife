@@ -128,7 +128,6 @@ namespace RimLife.Mappers
                 Description = description,
                 Status = status,
                 Source = "QuestSystem",
-                DeadlineTick = null,
                 Steps = steps
             };
         }

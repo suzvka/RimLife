@@ -50,16 +50,22 @@ namespace RimLife.Framework
         public bool TryLookup(string term, out KnowledgeEntry entry)
         {
             entry = null;
-            if (string.IsNullOrEmpty(term)) return false;
+            if (string.IsNullOrEmpty(term))
+            {
+                OnLookupResult?.Invoke(term ?? "", -1, false);
+                return false;
+            }
 
             for (int i = 0; i < _chain.Count; i++)
             {
                 if (_chain[i].TryLookup(term, out entry))
                 {
+                    OnLookupResult?.Invoke(term, i, true);
                     return true;
                 }
             }
 
+            OnLookupResult?.Invoke(term, -1, false);
             return false;
         }
 
@@ -114,6 +120,13 @@ namespace RimLife.Framework
         /// 返回链中的层数。
         /// </summary>
         public int LayerCount => _chain.Count;
+
+        /// <summary>
+        /// 查询结果回调。参数：(term, hitLayer, isHit)。
+        /// hitLayer: 0=L1, 1=L2, ..., -1=miss。
+        /// 用于运行时度量采集（知识库命中率统计），不影响查询结果。
+        /// </summary>
+        public Action<string, int, bool> OnLookupResult;
 
         /// <summary>
         /// 按索引获取链中的知识库层。

@@ -39,15 +39,6 @@ namespace RimLife
                 sb.AppendLine($"[EnvironmentCard Dump] Pawn={pawn.LabelShortCap} ID={pawn.ThingID}");
                 sb.AppendLine($"Type={ec.Type} Temp={ec.Temperature:0.0} Light={ec.LightLevel:0.00}");
 
-                // Room
-                if (ec.Room != null)
-                {
-                    sb.AppendLine("== Room ==");
-                    sb.AppendLine($"Role={ec.Room.RoleLabel}");
-                    var rs = ec.Room.BaseStats;
-                    sb.AppendLine($"Impressiveness={rs.Impressiveness:0.00} Beauty={rs.Beauty:0.00} Wealth={rs.Wealth:0.00} Space={rs.Space:0.00} Cleanliness={rs.Cleanliness:0.00}");
-                }
-
                 // Weather
                 if (ec.Weather.Label != null || ec.Weather.Description != null)
                 {

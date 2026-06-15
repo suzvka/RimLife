@@ -7,7 +7,7 @@ namespace RimLife.Cards
     /// RimWorld 的 Quest 系统仅为其中一个数据来源（Source = "QuestSystem"）。
     /// 纯 DTO，零 RimWorld 依赖。
     /// </summary>
-    public class ObjectiveCard
+    public class ObjectiveCard : IExtensibleCard
     {
         /// <summary>目标唯一标识。</summary>
         public string ID;
@@ -24,11 +24,14 @@ namespace RimLife.Cards
         /// <summary>数据来源: "QuestSystem" / "ColonyNeed" / "AgentInferred"</summary>
         public string Source;
 
-        /// <summary>截止时间（游戏 tick），null 表示无时限。</summary>
-        public int? DeadlineTick;
+        /// <summary>截止时间，null 表示无时限。</summary>
+        public string Deadline;
 
         /// <summary>子步骤进展。</summary>
         public IReadOnlyList<ObjectiveStepEntry> Steps;
+
+        /// <summary>扩展字段。</summary>
+        public Dictionary<string, string> ExtensionFields { get; set; }
     }
 
     public struct ObjectiveStepEntry

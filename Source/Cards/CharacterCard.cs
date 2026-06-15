@@ -4,9 +4,9 @@ namespace RimLife.Cards
 {
     /// <summary>
     /// 人物卡：聚合单个角色的身份元数据。
-    /// 纯 DTO，零 RimWorld 依赖。各维度的语义描述由 ICharacterContentProvider 动态生成。
+    /// 纯 DTO，零游戏依赖。各维度的语义描述由 ICharacterContentProvider 动态生成。
     /// </summary>
-    public class CharacterCard
+    public class CharacterCard : IExtensibleCard
     {
         // --- 基本元数据 ---
         public string ID;
@@ -14,13 +14,14 @@ namespace RimLife.Cards
         public string FullName;
         public string DefName;
         public string FactionLabel;
-        public float AgeBiologicalYears;
         public string Gender;
         public string PawnType;     // "Character" / "Animal" / "Mechanoid" / "Insect" / "Other"
         public string PawnRelation; // "OurParty" / "Ally" / "Neutral" / "Enemy" / "Other"
         public bool IsDead;
-        public bool IsDowned;
         public bool IsAwake;
+
+        /// <summary>扩展字段。</summary>
+        public Dictionary<string, string> ExtensionFields { get; set; }
     }
 
     /// <summary>

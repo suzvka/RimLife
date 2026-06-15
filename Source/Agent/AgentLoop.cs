@@ -166,7 +166,11 @@ namespace RimLife.Agent
 
             EventBus.Publish(FrameworkEvents.LlmResponseReceived, EventArg.WithPayload(
                 ("hasToolCalls", response.HasToolCalls.ToString()),
-                ("contentLength", (response.Content?.Length ?? 0).ToString())
+                ("contentLength", (response.Content?.Length ?? 0).ToString()),
+                ("inputTokens", (response.UsageInputTokens?.ToString() ?? "")),
+                ("outputTokens", (response.UsageOutputTokens?.ToString() ?? "")),
+                ("cacheReadTokens", (response.UsageCacheReadTokens?.ToString() ?? "")),
+                ("model", response.Model ?? "")
             ));
 
             // 工具调用？

@@ -169,6 +169,67 @@ namespace RimLife.Infrastructure
                 FrameworkStatus.RegisterCapability("event_bus", true);
                 FrameworkStatus.RegisterCapability("agent_pipeline", true);
                 FrameworkStatus.RegisterCapability("lifecycle_hooks", true);
+
+                // ---- 运行时度量系统 ----
+                if (Config.Features?.EnableRuntimeMetrics ?? true)
+                {
+                    // 注册度量查询 MCP 工具
+                    McpSkillRegistry.RegisterFromType(typeof(Framework.Mcp.MetricsMcpTools));
+
+                    // 为三种 Agent 角色分别注册 MetricsInterceptor
+                    AgentPipeline.AddInterceptor(
+                        new Framework.MetricsInterceptor(Framework.AgentRole.Director), priority: 100);
+                    AgentPipeline.AddInterceptor(
+                        new Framework.MetricsInterceptor(Framework.AgentRole.Screenwriter), priority: 100);
+                    AgentPipeline.AddInterceptor(
+                        new Framework.MetricsInterceptor(Framework.AgentRole.Freelancer), priority: 100);
+
+                    // 订阅 LLM 响应事件，采集 Token 消耗
+                    EventBus.Subscribe(FrameworkEvents.LlmResponseReceived, args =>
+                    {
+                        if (args?.Payload == null) return;
+                        var sessionId = Framework.MetricsInterceptor.CurrentSessionId;
+                        if (sessionId == null) return;
+
+                        args.Payload.TryGetValue("inputTokens", out var itStr);
+                        args.Payload.TryGetValue("outputTokens", out var otStr);
+                        args.Payload.TryGetValue("cacheReadTokens", out var crStr);
+                        args.Payload.TryGetValue("model", out var model);
+
+                        int.TryParse(itStr, out int it);
+                        int.TryParse(otStr, out int ot);
+                        int.TryParse(crStr, out int cr);
+
+                        RuntimeMetrics.RecordTokenUsage(sessionId, it, ot, cr, model ?? "");
+                    });
+
+                    // 订阅工作空间事件，采集操作计数
+                    EventBus.Subscribe(FrameworkEvents.WorkspaceCreated, args =>
+                        RuntimeMetrics.RecordWorkspaceOperation("created"));
+                    EventBus.Subscribe(FrameworkEvents.WorkspaceClosed, args =>
+                        RuntimeMetrics.RecordWorkspaceOperation("closed"));
+                    EventBus.Subscribe(FrameworkEvents.WorkspaceUpdated, args =>
+                        RuntimeMetrics.RecordWorkspaceOperation("updated"));
+
+                    // 注册度量状态报告器
+                    FrameworkStatus.RegisterReporter("RuntimeMetrics", () =>
+                    {
+                        var snap = RuntimeMetrics.GetSnapshot();
+                        return new ComponentStatus
+                        {
+                            Name = "RuntimeMetrics",
+                            IsAvailable = true,
+                            Detail = $"sessions={snap.TotalSessions}, tokens_in={snap.Tokens?.TotalInput ?? 0}, " +
+                                      $"tools={snap.Tools?.Count ?? 0} types, kb_batches={snap.Knowledge?.TotalBatches ?? 0}"
+                        };
+                    });
+
+                    Logger?.Message("[RimLife.Core] RuntimeMetrics enabled.");
+                }
+                else
+                {
+                    Logger?.Message("[RimLife.Core] RuntimeMetrics disabled (FeatureToggle.EnableRuntimeMetrics=false).");
+                }
             }
         }
 
@@ -631,7 +692,17 @@ namespace RimLife.Infrastructure
                         {
                             var builtIn = new Knowledge.BuiltInKnowledgeBase(CacheStore, Logger);
                             var gameDef = new Knowledge.GameDefKnowledgeBase();
-                            _knowledgeBase = new Framework.KnowledgeBaseChain(builtIn, gameDef);
+                            var chain = new Framework.KnowledgeBaseChain(builtIn, gameDef);
+
+                            // 连接知识库查询回调到运行时度量
+                            chain.OnLookupResult = (term, hitLayer, isHit) =>
+                            {
+                                RuntimeMetrics.RecordKnowledgeLookup(
+                                    term, hitLayer,
+                                    Framework.MetricsInterceptor.CurrentSessionId);
+                            };
+
+                            _knowledgeBase = chain;
                         }
                     }
                 }

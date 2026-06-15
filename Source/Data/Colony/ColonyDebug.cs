@@ -95,9 +95,9 @@ namespace RimLife
 
                 var sb = new StringBuilder(2048);
                 sb.AppendLine("[ColonyContext Dump]");
-                sb.AppendLine($"Time: tick={ctx.CurrentTick} {ctx.Season} {ctx.TimeOfDay} {ctx.Quadrum} Y{ctx.Year} D{ctx.DayOfQuadrum} H{ctx.Hour}");
-                sb.AppendLine($"Pop: alive={ctx.PopulationAlive} downed={ctx.PopulationDowned} mental={ctx.PopulationMentalBreak}");
-                sb.AppendLine($"Wealth={ctx.WealthTotal:F0} Food={ctx.FoodStatus} Power={ctx.PowerStatus}");
+                sb.AppendLine($"Time: tick={ctx.CurrentTick} {ctx.Season} {ctx.TimeOfDay} Y{ctx.Year} H{ctx.Hour}");
+                sb.AppendLine($"Pop: alive={ctx.PopulationAlive}");
+                sb.AppendLine($"Food={ctx.FoodStatus} Power={ctx.PowerStatus}");
                 sb.AppendLine($"Morale: avg={ctx.MoraleAverage:F2} tier={ctx.MoraleTier}");
 
                 if (ctx.Colonists != null && ctx.Colonists.Count > 0)
@@ -106,7 +106,6 @@ namespace RimLife
                     foreach (var c in ctx.Colonists)
                     {
                         string flags = "";
-                        if (c.IsDowned) flags += " [DOWNED]";
                         if (c.IsDead) flags += " [DEAD]";
                         sb.AppendLine($"  {c.Name} ({c.ID}): job={c.CurrentJob} mood={c.MoodTier} pain={c.PainTier}{flags}");
                     }
@@ -194,8 +193,6 @@ namespace RimLife
                     sb.AppendLine($"  [{o.Status}] {o.Title} (ID={o.ID}) source={o.Source}");
                     if (!string.IsNullOrEmpty(o.Description))
                         sb.AppendLine($"    desc: {o.Description}");
-                    if (o.DeadlineTick.HasValue)
-                        sb.AppendLine($"    timeLimit: {o.DeadlineTick.Value} ticks remaining");
                     if (o.Steps != null && o.Steps.Count > 0)
                     {
                         foreach (var s in o.Steps)

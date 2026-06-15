@@ -28,7 +28,7 @@ namespace RimLife.Framework
 
         public JsonWriter Prop(string name, string value)
         {
-            if (value == null) return this;
+            if (string.IsNullOrEmpty(value)) return this;
             CommaIfNeeded();
             _sb.Append('"').Append(JsonHelper.Escape(name)).Append("\":\"").Append(JsonHelper.Escape(value)).Append('"');
             return this;

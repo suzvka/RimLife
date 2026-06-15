@@ -42,7 +42,7 @@ namespace RimLife.Cards
     /// IGameEvent 的具体可序列化实现。供事件缓存（KV 存储）和反序列化使用。
     /// 与 EventCardMapper.EventCardImpl 等价，但为 public 可在框架各处复用。
     /// </summary>
-    public class EventCardData : IGameEvent
+    public class EventCardData : IGameEvent, IExtensibleCard
     {
         public string EventID { get; set; }
         public string DefName { get; set; }
@@ -53,6 +53,7 @@ namespace RimLife.Cards
         public List<EventActorRef> Actors { get; set; }
         public string MapHint { get; set; }
         public Dictionary<string, string> Payload { get; set; }
+        public Dictionary<string, string> ExtensionFields { get; set; }
 
         IReadOnlyList<string> IGameEvent.Tags => Tags;
         IReadOnlyList<string> IGameEvent.Keywords => Keywords;

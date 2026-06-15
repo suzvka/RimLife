@@ -40,7 +40,7 @@ namespace RimLife.Mappers
                 MapMapStats(ctx, map);
 
                 // === 叙事者 / 科技 / 生命周期 ===
-                MapStoryteller(ctx);
+                MapDifficulty(ctx);
                 MapTech(ctx);
                 MapColonyStartTick(ctx);
 
@@ -93,9 +93,7 @@ namespace RimLife.Mappers
                 float longitude = longLat.x;
 
                 try { ctx.Season = GenDate.Season(absTick, longLat).ToString(); } catch { ctx.Season = "Unknown"; }
-                try { ctx.Quadrum = GenDate.Quadrum(absTick, longitude).ToString(); } catch { ctx.Quadrum = "Unknown"; }
                 try { ctx.Year = GenDate.Year(absTick, longitude); } catch { ctx.Year = 0; }
-                try { ctx.DayOfQuadrum = GenDate.DayOfQuadrum(absTick, longitude) + 1; } catch { ctx.DayOfQuadrum = 0; }
                 try { ctx.Hour = GenDate.HourInteger(absTick, longitude); } catch { ctx.Hour = -1; }
 
                 ctx.TimeOfDay = ctx.Hour >= 0 ? MapTimeOfDay(ctx.Hour) : "Unknown";
@@ -110,7 +108,7 @@ namespace RimLife.Mappers
         {
             var allColonists = PawnsFinder.AllMaps_FreeColonistsSpawned ?? new List<Pawn>();
             var colonists = new List<ColonistSummary>();
-            int alive = 0, downed = 0, mentalBreak = 0;
+            int alive = 0;
             float totalMood = 0f;
             int moodCount = 0;
 
@@ -118,8 +116,6 @@ namespace RimLife.Mappers
             {
                 if (p == null) continue;
                 if (!p.Dead) alive++;
-                if (p.Downed) downed++;
-                if (p.InMentalState) mentalBreak++;
 
                 string moodTier = "Content";
                 string painTier = "None";
@@ -146,7 +142,6 @@ namespace RimLife.Mappers
                 {
                     ID = p.ThingID ?? "?",
                     Name = p.Name?.ToStringShort ?? p.LabelShortCap ?? "?",
-                    IsDowned = p.Downed,
                     IsDead = p.Dead,
                     CurrentJob = currentJob,
                     MoodTier = moodTier,
@@ -156,8 +151,6 @@ namespace RimLife.Mappers
             }
 
             ctx.PopulationAlive = alive;
-            ctx.PopulationDowned = downed;
-            ctx.PopulationMentalBreak = mentalBreak;
             ctx.Colonists = colonists;
             ctx.MoraleAverage = moodCount > 0 ? totalMood / moodCount : 0.5f;
             ctx.MoraleTier = Framework.SemanticLabels.MapMoodTier(ctx.MoraleAverage);
@@ -192,12 +185,6 @@ namespace RimLife.Mappers
         private static void MapMapStats(ColonyContext ctx, Map map)
         {
             int alive = ctx.PopulationAlive;
-
-            // 财富
-            float wealth = 0f;
-            try { if (map?.wealthWatcher != null) wealth = map.wealthWatcher.WealthTotal; }
-                catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] wealth: {e.Message}"); }
-            ctx.WealthTotal = wealth;
 
             // 食物
             string foodStatus = "Adequate";
@@ -261,8 +248,6 @@ namespace RimLife.Mappers
                     }
                     if (hostileCount > 0) threats.Add($"ActiveHostiles:{hostileCount}");
                 }
-                if (ctx.PopulationMentalBreak > 0) threats.Add($"MentalBreaks:{ctx.PopulationMentalBreak}");
-                if (ctx.PopulationDowned > 0) threats.Add($"DownedColonists:{ctx.PopulationDowned}");
             }
             catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] threats: {e.Message}"); }
             ctx.ActiveThreats = threats;
@@ -280,15 +265,14 @@ namespace RimLife.Mappers
         // Phase 2 新增映射
         // ================================================================
 
-        private static void MapStoryteller(ColonyContext ctx)
+        private static void MapDifficulty(ColonyContext ctx)
         {
             try
             {
                 var storyteller = Find.Storyteller;
-                ctx.StorytellerName = storyteller?.def?.label ?? storyteller?.def?.defName ?? "Unknown";
                 ctx.Difficulty = storyteller?.difficultyDef?.label ?? storyteller?.difficultyDef?.defName ?? "Unknown";
             }
-            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] storyteller: {e.Message}"); }
+            catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] difficulty: {e.Message}"); }
         }
 
         private static void MapTech(ColonyContext ctx)

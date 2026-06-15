@@ -86,12 +86,10 @@ namespace RimLife.Infrastructure.Mcp
                 FullName = p.FullName,
                 DefName = p.DefName,
                 FactionLabel = p.FactionLabel,
-                AgeBiologicalYears = p.AgeBiologicalYears,
                 Gender = p.Gender,
                 PawnType = p.PawnType.ToString(),
                 PawnRelation = p.PawnRelation.ToString(),
                 IsDead = p.IsDead,
-                IsDowned = p.IsDowned,
                 IsAwake = p.IsAwake
             };
         }

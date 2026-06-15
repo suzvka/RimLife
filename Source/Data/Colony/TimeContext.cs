@@ -74,11 +74,9 @@ namespace RimLife
                 Vector2 longLat = Find.WorldGrid.LongLatOf(tile);
                 float longitude = longLat.x;
 
-                // 季节和季度
+                // 季节
                 try { ctx.Season = GenDate.Season(absTick, longLat).ToString(); } catch { ctx.Season = "Unknown"; }
-                try { ctx.Quadrum = GenDate.Quadrum(absTick, longitude).ToString(); } catch { ctx.Quadrum = "Unknown"; }
                 try { ctx.Year = GenDate.Year(absTick, longitude); } catch { ctx.Year = 0; }
-                try { ctx.DayOfQuadrum = GenDate.DayOfQuadrum(absTick, longitude) + 1; } catch { ctx.DayOfQuadrum = 0; }
 
                 // 本地时间（依赖经度）
                 try { ctx.Hour = GenDate.HourInteger(absTick, longitude); } catch { ctx.Hour = -1; }

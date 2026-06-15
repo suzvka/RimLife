@@ -52,7 +52,6 @@ namespace RimLife.Mappers
             else
             {
                 // 室内
-                var roomSection = MapRoom(room);
                 card = new EnvironmentCard
                 {
                     Type = "Indoors",
@@ -60,10 +59,7 @@ namespace RimLife.Mappers
                     LightLevel = lightLevel,
                     ThermalComfort = thermalComfort,
                     LightLabel = lightLabel,
-                    Room = roomSection,
-                    ThingSummary = roomSection.ThingSummary != null
-                        ? new Dictionary<string, int>(roomSection.ThingSummary)
-                        : new Dictionary<string, int>()
+                    ThingSummary = SummarizeThings(room.ContainedAndAdjacentThings)
                 };
             }
 
@@ -92,23 +88,6 @@ namespace RimLife.Mappers
                 IsRain = map.weatherManager.RainRate > 0.1f,
                 IsSnow = map.weatherManager.SnowRate > 0.1f,
                 WindSpeed = map.windManager.WindSpeed
-            };
-        }
-
-        private static RoomInfo MapRoom(Room room)
-        {
-            return new RoomInfo
-            {
-                RoleLabel = room.Role?.label ?? "Unknown",
-                BaseStats = new RoomStats
-                {
-                    Impressiveness = room.GetStat(RoomStatDefOf.Impressiveness),
-                    Beauty = room.GetStat(RoomStatDefOf.Beauty),
-                    Wealth = room.GetStat(RoomStatDefOf.Wealth),
-                    Space = room.GetStat(RoomStatDefOf.Space),
-                    Cleanliness = room.GetStat(RoomStatDefOf.Cleanliness)
-                },
-                ThingSummary = SummarizeThings(room.ContainedAndAdjacentThings)
             };
         }
 
