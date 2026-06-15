@@ -460,6 +460,7 @@ namespace RimLife.Tests.Framework
             public string EventID { get; set; }
             public string DefName { get; set; }
             public IReadOnlyList<string> Tags { get; set; } = new List<string>();
+            public IReadOnlyList<string> Keywords { get; set; } = new List<string>();
             public int Tick { get; set; }
             public string Severity { get; set; } = "Minor";
             public IReadOnlyList<EventActorRef> Actors { get; set; } = new List<EventActorRef>();

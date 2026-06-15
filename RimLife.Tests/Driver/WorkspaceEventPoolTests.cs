@@ -59,7 +59,7 @@ namespace RimLife.Tests.Driver
         private static WorkspaceEventPool CreatePool(string wsId = "ws-001")
         {
             var ws = CreateWorkspaceState(wsId);
-            return new WorkspaceEventPool(ws, CreateConfig(), CardSerializer.Default, () => { });
+            return new WorkspaceEventPool(ws, CreateConfig(), CardSerializer.Default);
         }
 
         // ================================================================
@@ -336,6 +336,7 @@ namespace RimLife.Tests.Driver
             public string EventID { get; set; }
             public string DefName { get; set; }
             public IReadOnlyList<string> Tags { get; set; }
+            public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
             public string Severity { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }

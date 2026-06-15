@@ -163,13 +163,15 @@ namespace RimLife.Workspace
         /// 将事件从源工作空间推送到目标工作空间。编剧可用此工具将不适合本线的事件推回导演。
         /// </summary>
         [McpTool(Name = "route_events",
-                 Description = "将事件从源工作空间的事件池推送到目标工作空间。可附加留言。编剧可将不适合本剧情线的事件推回导演工作空间。")]
+                 Description = "将事件从源工作空间的事件池推送到目标工作空间。可附加留言和知识库查询关键词。编剧可将不适合本剧情线的事件推回导演工作空间。")]
         public string RouteEvents(
             [McpParam(Description = "源工作空间 ID（事件从这里取）")] string sourceWorkspaceId,
             [McpParam(Description = "目标工作空间 ID（事件推送到这里）")] string targetWorkspaceId,
             [McpParam(Description = "要路由的事件 ID，多个用逗号分隔")] string eventIds,
             [McpParam(Description = "可选留言：附带给目标工作空间的备注",
-                      Required = McpRequired.False)] string message = null)
+                      Required = McpRequired.False)] string message = null,
+            [McpParam(Description = "可选知识库查询关键词，逗号分隔。Agent 激活时自动收集所有事件的关键词去重后查询知识库，命中结果注入提示词。",
+                      Required = McpRequired.False)] string keywords = null)
         {
             try
             {
@@ -185,12 +187,30 @@ namespace RimLife.Workspace
                 if (sourceWs == null)
                     return "{\"success\":false,\"error\":\"source workspace not found\"}";
 
+                var keywordList = ParseStringList(keywords);
+
                 var events = new List<IGameEvent>();
                 foreach (var id in ids)
                 {
                     var evt = sourceWs.EventPool?.GetById(id);
                     if (evt != null)
-                        events.Add(evt);
+                    {
+                        if (keywordList.Count > 0)
+                        {
+                            // 深拷贝事件并附加关键词
+                            var copy = EventCardData.From(evt);
+                            foreach (var kw in keywordList)
+                            {
+                                if (!copy.Keywords.Contains(kw))
+                                    copy.Keywords.Add(kw);
+                            }
+                            events.Add(copy);
+                        }
+                        else
+                        {
+                            events.Add(evt);
+                        }
+                    }
                 }
 
                 int routed = 0;

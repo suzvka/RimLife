@@ -18,7 +18,6 @@ namespace RimLife.Workspace
         private readonly WorkspaceEventPool _eventPool;
         private readonly SkillSlot _skillSlot;
         private readonly Func<string> _timeProvider;
-        private readonly Action _saveCallback;
         private readonly Action<string> _publishUpdated;
         private readonly ILogger _logger;
 
@@ -27,23 +26,20 @@ namespace RimLife.Workspace
             DriverConfig config,
             ICardSerializer serializer,
             Func<string> timeProvider,
-            Action saveCallback,
             Action<string> publishUpdated,
             ILogger logger)
         {
             _state = state ?? throw new ArgumentNullException(nameof(state));
             _timeProvider = timeProvider ?? (() => "");
-            _saveCallback = saveCallback;
             _publishUpdated = publishUpdated;
             _logger = logger;
 
-            _eventPool = new WorkspaceEventPool(state, config, serializer, saveCallback);
+            _eventPool = new WorkspaceEventPool(state, config, serializer);
             _skillSlot = new SkillSlot(
                 state.ActiveSkillIds ?? new List<string>(),
                 () =>
                 {
                     state.ActiveSkillIds = _skillSlot.ActiveSkillIds is List<string> list ? list : new List<string>(_skillSlot.ActiveSkillIds);
-                    saveCallback?.Invoke();
                     publishUpdated?.Invoke(state.Id);
                 });
         }
@@ -120,7 +116,6 @@ namespace RimLife.Workspace
             _state.CurrentRecap = recap ?? "";
             _state.LastActivityAt = now;
 
-            _saveCallback?.Invoke();
             _publishUpdated?.Invoke(_state.Id);
             return true;
         }
@@ -144,7 +139,6 @@ namespace RimLife.Workspace
             };
             _state.LastActivityAt = now;
 
-            _saveCallback?.Invoke();
             _publishUpdated?.Invoke(_state.Id);
             return true;
         }

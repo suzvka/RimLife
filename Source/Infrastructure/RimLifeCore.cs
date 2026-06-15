@@ -265,6 +265,25 @@ namespace RimLife.Infrastructure
         /// <summary>缓存存储（本地文件）。</summary>
         public static ICacheStore CacheStore { get; } = new LocalFileStore();
 
+        /// <summary>
+        /// 将当前内存中的工作空间和交互历史数据刷入 IAuthorityStore。
+        /// 应在 RimWorld 存档钩子（ExposeData Saving 分支）中调用。
+        /// </summary>
+        internal static void FlushToAuthorityStore()
+        {
+            if (_saveStore == null) return;
+
+            try
+            {
+                (_workspaces as Workspace.WorkspaceManager)?.SaveToStore();
+                (_interactionStore as InteractionHistoryStore)?.SaveToStore();
+            }
+            catch (Exception e)
+            {
+                Logger?.Warning($"[RimLife.Core] FlushToAuthorityStore failed: {e.Message}");
+            }
+        }
+
         private static DriverConfig _driverConfig;
         private static readonly object _driverConfigLock = new object();
 
@@ -330,7 +349,8 @@ namespace RimLife.Infrastructure
                                 maxRounds: DriverConfig.MaxAgentRounds,
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
-                                contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces));
+                                contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
+                                knowledgeBase: KnowledgeBase);
                         }
                     }
                 }
@@ -366,7 +386,8 @@ namespace RimLife.Infrastructure
                     skillIds: skillIds.ToArray(),
                     maxRounds: DriverConfig.MaxAgentRounds,
                     logger: Logger,
-                    serializer: CardSerializer.Default);
+                    serializer: CardSerializer.Default,
+                    knowledgeBase: KnowledgeBase);
 
                 _screenwriters[workspaceId] = agent;
                 Logger?.Message($"[RimLife.Core] ScreenwriterAgent created for workspace '{ws.Label}' ({workspaceId})");

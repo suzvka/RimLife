@@ -47,7 +47,7 @@ namespace RimLife.Workspace
                 EventArg.WithPayload(("workspaceId", workspaceId ?? "")));
         }
 
-        private void SaveToStore()
+        internal void SaveToStore()
         {
             try
             {
@@ -78,7 +78,6 @@ namespace RimLife.Workspace
                 _driverConfig,
                 _serializer,
                 _timeProvider,
-                saveCallback: SaveToStore,
                 publishUpdated: PublishUpdated,
                 logger: _logger);
         }
@@ -119,7 +118,6 @@ namespace RimLife.Workspace
             try
             {
                 _workspaces.Add(impl);
-                SaveToStore();
             }
             finally { _rwLock.ExitWriteLock(); }
 
@@ -167,7 +165,6 @@ namespace RimLife.Workspace
             }
 
             impl.SetStatus(newStatus, outcome);
-            SaveToStore();
 
             _logger.Message($"[RimLife.Workspace] Workspace '{impl.Label}' status: {newStatus}");
 
@@ -247,7 +244,6 @@ namespace RimLife.Workspace
             try
             {
                 _workspaces.Add(childImpl);
-                SaveToStore();
             }
             finally { _rwLock.ExitWriteLock(); }
 
@@ -363,7 +359,6 @@ namespace RimLife.Workspace
             source.LastActivityAt = now;
             source.Outcome = $"Merged into '{target.Label}' ({target.Id})";
 
-            SaveToStore();
             _logger.Message($"[RimLife.Workspace] Merged '{source.Label}' into '{target.Label}'");
 
             PublishUpdated(targetId);

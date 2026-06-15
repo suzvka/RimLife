@@ -41,7 +41,6 @@ namespace RimLife.Infrastructure
 
             _records.Add(record);
             TotalAppended++;
-            SaveToStore();
         }
 
         public IReadOnlyList<InteractionRecord> Query(string pawnIdA, string pawnIdB, int? sinceTick = null, int? limit = null)
@@ -93,7 +92,7 @@ namespace RimLife.Infrastructure
         // 持久化
         // ================================================================
 
-        private void SaveToStore()
+        internal void SaveToStore()
         {
             try
             {

@@ -31,6 +31,7 @@ namespace RimLife.Agent
         private readonly ICardSerializer _serializer;
         private readonly Action _unsubscribe; // 取消事件订阅的委托
         private readonly Func<string> _contextProvider;
+        private readonly IKnowledgeBase _knowledgeBase;
 
         private bool _isProcessing;
         private int _round;
@@ -48,6 +49,7 @@ namespace RimLife.Agent
         /// <param name="logger">日志接口。</param>
         /// <param name="serializer">Card 序列化器（可选，默认使用 CardSerializer.Default）。</param>
         /// <param name="contextProvider">动态上下文提供者（可选）。每次激活时调用，返回值追加到用户消息末尾。</param>
+        /// <param name="knowledgeBase">知识库（可选）。Agent 激活时收集事件关键词去重后批量查询，命中结果注入提示词。</param>
         public AgentLoop(
             IEventLog pool,
             ILlmService llm,
@@ -56,7 +58,8 @@ namespace RimLife.Agent
             int maxRounds,
             ILogger logger,
             ICardSerializer serializer = null,
-            Func<string> contextProvider = null)
+            Func<string> contextProvider = null,
+            IKnowledgeBase knowledgeBase = null)
         {
             _pool = pool ?? throw new ArgumentNullException(nameof(pool));
             _llm = llm ?? throw new ArgumentNullException(nameof(llm));
@@ -66,6 +69,7 @@ namespace RimLife.Agent
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _serializer = serializer ?? CardSerializer.Default;
             _contextProvider = contextProvider;
+            _knowledgeBase = knowledgeBase;
 
             // 订阅池子事件——唯一激活路径
             _pool.OnThresholdReached += OnPoolChanged;
@@ -308,6 +312,48 @@ namespace RimLife.Agent
             sb.AppendLine("## 待处理事件");
             sb.AppendLine();
             sb.AppendLine(_serializer.SerializeEventList(events));
+
+            // 收集所有事件的关键词，去重后批量查询知识库
+            if (_knowledgeBase != null)
+            {
+                var allKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var evt in events)
+                {
+                    if (evt.Keywords != null)
+                    {
+                        foreach (var kw in evt.Keywords)
+                        {
+                            if (!string.IsNullOrEmpty(kw))
+                                allKeywords.Add(kw);
+                        }
+                    }
+                }
+
+                if (allKeywords.Count > 0)
+                {
+                    var hits = new List<KnowledgeEntry>();
+                    foreach (var kw in allKeywords)
+                    {
+                        if (_knowledgeBase.TryLookup(kw, out var entry))
+                            hits.Add(entry);
+                    }
+
+                    if (hits.Count > 0)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("## 相关知识");
+                        sb.AppendLine();
+                        foreach (var entry in hits)
+                        {
+                            sb.Append("- **");
+                            sb.Append(entry.Term ?? "");
+                            sb.Append("**: ");
+                            sb.AppendLine(entry.Definition ?? "");
+                        }
+                    }
+                }
+            }
+
             sb.AppendLine();
             sb.AppendLine("请审查事件列表，挑选值得发展的事件，使用 create_workspace / branch_workspace 等工具创建剧情线工作空间。");
 

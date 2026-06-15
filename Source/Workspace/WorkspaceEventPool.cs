@@ -23,7 +23,6 @@ namespace RimLife.Workspace
         private readonly WorkspaceState _ws;
         private readonly DriverConfig _config;
         private readonly ICardSerializer _serializer;
-        private readonly Action _onModified;
 
         private readonly List<IGameEvent> _recent = new List<IGameEvent>();
         private int _totalAppended;
@@ -33,13 +32,11 @@ namespace RimLife.Workspace
         public WorkspaceEventPool(
             WorkspaceState ws,
             DriverConfig config,
-            ICardSerializer serializer,
-            Action onModified)
+            ICardSerializer serializer)
         {
             _ws = ws ?? throw new ArgumentNullException(nameof(ws));
             _config = config ?? DriverConfig.CreateDefault();
             _serializer = serializer ?? CardSerializer.Default;
-            _onModified = onModified;
 
             if (_ws.EventCache == null) _ws.EventCache = new Dictionary<string, string>();
             if (_ws.PendingEventIds == null) _ws.PendingEventIds = new List<string>();
@@ -77,7 +74,6 @@ namespace RimLife.Workspace
             }
 
             _totalAppended++;
-            _onModified?.Invoke();
 
             CheckThreshold();
         }
@@ -181,7 +177,6 @@ namespace RimLife.Workspace
                 _ws.PendingEventIds.Clear();
             }
             _ws.PendingImportance = 0;
-            _onModified?.Invoke();
             return events;
         }
     }

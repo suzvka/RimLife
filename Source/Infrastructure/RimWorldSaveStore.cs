@@ -79,6 +79,7 @@ namespace RimLife.Infrastructure
             string serialized = null;
             if (Scribe.mode == LoadSaveMode.Saving)
             {
+                RimLifeCore.FlushToAuthorityStore();
                 serialized = JsonParser.SerializeDict(_data);
             }
             Scribe_Values.Look(ref serialized, "rimLifeData", null);

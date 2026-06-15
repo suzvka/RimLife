@@ -19,6 +19,9 @@ namespace RimLife.Cards
         /// <summary>语义标签列表。LLM 消费者直接读字符串，无需枚举解析。</summary>
         IReadOnlyList<string> Tags { get; }
 
+        /// <summary>知识库查询关键词。Agent 激活时收集所有事件的关键词去重后批量查询知识库，命中结果注入提示词。</summary>
+        IReadOnlyList<string> Keywords { get; }
+
         /// <summary>发生时刻 (游戏 tick)。</summary>
         int Tick { get; }
 
@@ -44,6 +47,7 @@ namespace RimLife.Cards
         public string EventID { get; set; }
         public string DefName { get; set; }
         public List<string> Tags { get; set; }
+        public List<string> Keywords { get; set; }
         public int Tick { get; set; }
         public string Severity { get; set; }
         public List<EventActorRef> Actors { get; set; }
@@ -51,6 +55,7 @@ namespace RimLife.Cards
         public Dictionary<string, string> Payload { get; set; }
 
         IReadOnlyList<string> IGameEvent.Tags => Tags;
+        IReadOnlyList<string> IGameEvent.Keywords => Keywords;
         IReadOnlyList<EventActorRef> IGameEvent.Actors => Actors;
         IDictionary<string, string> IGameEvent.Payload => Payload;
 
@@ -63,6 +68,7 @@ namespace RimLife.Cards
                 EventID = source.EventID,
                 DefName = source.DefName,
                 Tags = source.Tags != null ? new List<string>(source.Tags) : new List<string>(),
+                Keywords = source.Keywords != null ? new List<string>(source.Keywords) : new List<string>(),
                 Tick = source.Tick,
                 Severity = source.Severity,
                 Actors = source.Actors != null

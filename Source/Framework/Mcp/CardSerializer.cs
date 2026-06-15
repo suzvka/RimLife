@@ -25,6 +25,8 @@ namespace RimLife.Framework.Mcp
             w.Prop("eventId", evt.EventID);
             w.Prop("defName", evt.DefName);
             w.PropRaw("tags", SerializeStringList(evt.Tags));
+            if (evt.Keywords != null && evt.Keywords.Count > 0)
+                w.PropRaw("keywords", SerializeStringList(evt.Keywords));
             w.Prop("tick", evt.Tick);
             w.Prop("severity", evt.Severity);
             w.Prop("mapHint", evt.MapHint ?? "");
@@ -75,6 +77,7 @@ namespace RimLife.Framework.Mcp
                 EventID = dict.TryGetValue("eventId", out var v) ? v : "",
                 DefName = dict.TryGetValue("defName", out v) ? v : "",
                 Tags = DeserializeTagList(dict.TryGetValue("tags", out v) ? v : "[]"),
+                Keywords = DeserializeTagList(dict.TryGetValue("keywords", out v) ? v : "[]"),
                 Tick = dict.TryGetValue("tick", out v) && int.TryParse(v, out var tick) ? tick : 0,
                 Severity = dict.TryGetValue("severity", out v) ? v : "Minor",
                 MapHint = dict.TryGetValue("mapHint", out v) ? v : "",
