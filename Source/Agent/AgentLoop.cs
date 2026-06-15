@@ -30,6 +30,7 @@ namespace RimLife.Agent
         private readonly int _maxRounds;
         private readonly ICardSerializer _serializer;
         private readonly Action _unsubscribe; // 取消事件订阅的委托
+        private readonly Func<string> _contextProvider;
 
         private bool _isProcessing;
         private int _round;
@@ -46,6 +47,7 @@ namespace RimLife.Agent
         /// <param name="maxRounds">最大工具调用轮数（防死循环）。</param>
         /// <param name="logger">日志接口。</param>
         /// <param name="serializer">Card 序列化器（可选，默认使用 CardSerializer.Default）。</param>
+        /// <param name="contextProvider">动态上下文提供者（可选）。每次激活时调用，返回值追加到用户消息末尾。</param>
         public AgentLoop(
             IEventLog pool,
             ILlmService llm,
@@ -53,7 +55,8 @@ namespace RimLife.Agent
             string[] skillIds,
             int maxRounds,
             ILogger logger,
-            ICardSerializer serializer = null)
+            ICardSerializer serializer = null,
+            Func<string> contextProvider = null)
         {
             _pool = pool ?? throw new ArgumentNullException(nameof(pool));
             _llm = llm ?? throw new ArgumentNullException(nameof(llm));
@@ -62,6 +65,7 @@ namespace RimLife.Agent
             _maxRounds = maxRounds;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _serializer = serializer ?? CardSerializer.Default;
+            _contextProvider = contextProvider;
 
             // 订阅池子事件——唯一激活路径
             _pool.OnThresholdReached += OnPoolChanged;
@@ -306,6 +310,13 @@ namespace RimLife.Agent
             sb.AppendLine(_serializer.SerializeEventList(events));
             sb.AppendLine();
             sb.AppendLine("请审查事件列表，挑选值得发展的事件，使用 create_workspace / branch_workspace 等工具创建剧情线工作空间。");
+
+            if (_contextProvider != null)
+            {
+                sb.AppendLine();
+                sb.AppendLine(_contextProvider());
+            }
+
             return sb.ToString();
         }
 

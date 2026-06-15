@@ -2,7 +2,6 @@ using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
-using RimLife.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -41,7 +40,7 @@ namespace RimLife.Workspace
                 McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(CloseWorkspace)), this),
                 McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(BranchWorkspace)), this),
                 McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(MergeWorkspaces)), this),
-                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(RouteEventToWorkspace)), this),
+                McpTool.FromMethod(typeof(DirectionMcpProvider).GetMethod(nameof(RouteEvents)), this),
             };
         }
         // ================================================================
@@ -283,18 +282,20 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 事件路由（导演 → 工作空间）
+        // 事件路由（通用：源工作空间 → 目标工作空间）
         // ================================================================
 
         /// <summary>
-        /// 将全局事件路由到指定工作空间的事件缓存。
-        /// 多次路由可累积事件，触发编剧。事件 ID 见待处理事件列表中的 eventId。
+        /// 将事件从源工作空间推送到目标工作空间。可附加留言。
         /// </summary>
-        [McpTool(Name = "route_event_to_workspace",
-                 Description = "将指定全局事件路由到目标工作空间的内部事件缓存。多次路由累积事件触发编剧。事件 ID 见待处理事件列表的 eventId 字段。")]
-        public string RouteEventToWorkspace(
-            [McpParam(Description = "目标工作空间 ID")] string workspaceId,
-            [McpParam(Description = "要路由的事件 ID，多个用逗号分隔，如 'letter_Raid_12345,death_pawn_001_67890'")] string eventIds)
+        [McpTool(Name = "route_events",
+                 Description = "将事件从源工作空间的事件池推送到目标工作空间。可附加留言。源和目标都必须是已存在的工作空间 ID。")]
+        public string RouteEvents(
+            [McpParam(Description = "源工作空间 ID（事件从这里取）")] string sourceWorkspaceId,
+            [McpParam(Description = "目标工作空间 ID（事件推送到这里）")] string targetWorkspaceId,
+            [McpParam(Description = "要路由的事件 ID，多个用逗号分隔")] string eventIds,
+            [McpParam(Description = "可选留言：附带给目标工作空间的备注",
+                      Required = McpRequired.False)] string message = null)
         {
             try
             {
@@ -302,34 +303,39 @@ namespace RimLife.Workspace
                 if (manager == null)
                     return "{\"success\":false,\"error\":\"WorkspaceManager unavailable\"}";
 
-                var directorWs = RimLifeCore.GetDirectorWorkspace();
                 var ids = ParseStringList(eventIds);
                 if (ids.Count == 0)
                     return "{\"success\":false,\"error\":\"no eventIds provided\"}";
 
-                int routed = 0;
+                var sourceWs = manager.Get(sourceWorkspaceId);
+                if (sourceWs == null)
+                    return "{\"success\":false,\"error\":\"source workspace not found\"}";
+
                 var events = new List<IGameEvent>();
                 foreach (var id in ids)
                 {
-                    var evt = directorWs?.EventPool?.GetById(id);
+                    var evt = sourceWs.EventPool?.GetById(id);
                     if (evt != null)
                         events.Add(evt);
                 }
 
-                if (events.Count > 0 && manager.RouteEvents(workspaceId, events))
+                int routed = 0;
+                if (events.Count > 0 && manager.RouteEvents(targetWorkspaceId, events))
                     routed = events.Count;
 
                 var w = new JsonWriter(128);
                 w.Prop("success", routed > 0);
                 w.Prop("routed", routed);
                 w.Prop("total", ids.Count);
+                if (!string.IsNullOrEmpty(message))
+                    w.Prop("message", message);
                 if (routed < ids.Count)
-                    w.Prop("warning", $"{ids.Count - routed} event(s) not found or workspace inactive");
+                    w.Prop("warning", $"{ids.Count - routed} event(s) not found or target workspace inactive");
                 return w.Close();
             }
             catch (Exception e)
             {
-                _logger.Warning($"[RimLife.DirectionMcp] route_event_to_workspace failed: {e.Message}");
+                _logger.Warning($"[RimLife.DirectionMcp] route_events failed: {e.Message}");
                 return "{\"success\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }

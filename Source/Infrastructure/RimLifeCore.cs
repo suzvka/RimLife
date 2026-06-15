@@ -329,7 +329,8 @@ namespace RimLife.Infrastructure
                                 skillIds: new[] { "workspace_direction" },
                                 maxRounds: DriverConfig.MaxAgentRounds,
                                 logger: Logger,
-                                serializer: CardSerializer.Default);
+                                serializer: CardSerializer.Default,
+                                contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces));
                         }
                     }
                 }
@@ -399,7 +400,7 @@ namespace RimLife.Infrastructure
             sb.AppendLine("1. 审查以下积累的事件列表");
             sb.AppendLine("2. 挑选值得发展为剧情线的事件");
             sb.AppendLine("3. 为选中的事件创建或分支工作空间（workspace）");
-            sb.AppendLine("4. 使用 route_event_to_workspace 将事件路由到对应工作空间");
+            sb.AppendLine("4. 使用 route_events 将事件路由到对应工作空间");
             sb.AppendLine("5. 未被路由的事件将被丢弃");
             sb.AppendLine();
             sb.AppendLine("决策原则：");
@@ -407,12 +408,33 @@ namespace RimLife.Infrastructure
             sb.AppendLine("- 相关事件可合并到同一个工作空间（如同一场袭击中的多个角色受伤）");
             sb.AppendLine("- 互不相关的事件应创建独立工作空间");
             sb.AppendLine("- 如无值得发展的内容，可以不创建任何工作空间");
-            sb.AppendLine("- 可使用 get_workspace / list_workspaces 查看现有工作空间状态");
             sb.AppendLine("- 对已有工作空间可用 branch_workspace 创建分支、merge_workspaces 合并");
             sb.AppendLine();
             sb.AppendLine("事件路由：");
-            sb.AppendLine("- 每条事件都有 eventId，使用 route_event_to_workspace 将事件推送到对应工作空间");
-            sb.AppendLine("- 如无合适的工作空间，先 create_workspace 再用 route_event_to_workspace");
+            sb.AppendLine("- 每条事件都有 eventId，使用 route_events 将事件推送到对应工作空间");
+            sb.AppendLine("- 如无合适的工作空间，先 create_workspace 再用 route_events");
+            return sb.ToString();
+        }
+
+        private static string BuildDirectorWorkspaceSummary(IWorkspaceManager manager)
+        {
+            if (manager == null) return "## 当前活跃工作空间\n（无）";
+
+            var workspaces = manager.GetActive();
+            if (workspaces == null || workspaces.Count == 0)
+                return "## 当前活跃工作空间\n（无）";
+
+            var sb = new System.Text.StringBuilder("## 当前活跃工作空间");
+            foreach (var ws in workspaces)
+            {
+                sb.AppendLine();
+                sb.Append($"- {ws.Label} (id={ws.Id})");
+                if (ws.Tags != null && ws.Tags.Count > 0)
+                    sb.Append($" tags=[{string.Join(",", ws.Tags)}]");
+                sb.Append($" rounds={ws.Rounds?.Count ?? 0}");
+                if (ws.LastSignal.HasValue)
+                    sb.Append($" signal={ws.LastSignal.Value.Type}");
+            }
             return sb.ToString();
         }
 
@@ -421,7 +443,11 @@ namespace RimLife.Infrastructure
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("你是 RimWorld 殖民地某条剧情线的编剧 (Screenwriter Agent)。");
             sb.AppendLine();
+            sb.AppendLine($"工作空间 ID：{ws.Id}");
             sb.AppendLine($"工作空间：{ws.Label ?? "Unnamed"}");
+            var directorWs = GetDirectorWorkspace();
+            if (directorWs != null)
+                sb.AppendLine($"导演工作空间 ID：{directorWs.Id}");
             if (ws.ColonistIds != null && ws.ColonistIds.Count > 0)
                 sb.AppendLine($"关联角色：{string.Join(", ", ws.ColonistIds)}");
             sb.AppendLine();
@@ -429,13 +455,15 @@ namespace RimLife.Infrastructure
             sb.AppendLine("1. 审查推送到本工作空间的事件");
             sb.AppendLine("2. 根据需要调用角色查询、环境感知等工具获取上下文");
             sb.AppendLine("3. 使用 push_round 工具撰写叙事内容（recap + narrative）");
-            sb.AppendLine("4. 剧情推进到关键节点时使用 signal_workspace_status 上报状态");
+            sb.AppendLine("4. 在同一响应中调用 signal_workspace_status 上报推进状态");
             sb.AppendLine();
             sb.AppendLine("工作原则：");
-            sb.AppendLine("- 每次激活只推送 1 个轮次，等待下一批事件再继续");
+            sb.AppendLine("- push_round 和 signal_workspace_status 应在同一次响应中调用");
+            sb.AppendLine("- 每次激活只推送 1 个轮次");
             sb.AppendLine("- 前情提要 (recap) 总结当前叙事起点，台词 (narrative) 是正式的叙事输出");
             sb.AppendLine("- 剧情完结时 signal_workspace_status 上报 StorylineComplete");
             sb.AppendLine("- 遇到剧情瓶颈时上报 NeedsBranch 或 Stuck");
+            sb.AppendLine("- 如事件不适合本剧情线，可用 route_events 推回导演工作空间");
             return sb.ToString();
         }
 

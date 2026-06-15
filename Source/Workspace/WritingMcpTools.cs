@@ -1,3 +1,4 @@
+using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
@@ -34,6 +35,7 @@ namespace RimLife.Workspace
                 McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(GetWorkspace)), this),
                 McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(PushRound)), this),
                 McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(SignalWorkspaceStatus)), this),
+                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(RouteEvents)), this),
             };
         }
         // ================================================================
@@ -150,6 +152,65 @@ namespace RimLife.Workspace
             {
                 _logger.Warning($"[RimLife.WritingMcp] signal_workspace_status failed: {e.Message}");
                 return "{}";
+            }
+        }
+
+        // ================================================================
+        // 事件路由（通用：源工作空间 → 目标工作空间）
+        // ================================================================
+
+        /// <summary>
+        /// 将事件从源工作空间推送到目标工作空间。编剧可用此工具将不适合本线的事件推回导演。
+        /// </summary>
+        [McpTool(Name = "route_events",
+                 Description = "将事件从源工作空间的事件池推送到目标工作空间。可附加留言。编剧可将不适合本剧情线的事件推回导演工作空间。")]
+        public string RouteEvents(
+            [McpParam(Description = "源工作空间 ID（事件从这里取）")] string sourceWorkspaceId,
+            [McpParam(Description = "目标工作空间 ID（事件推送到这里）")] string targetWorkspaceId,
+            [McpParam(Description = "要路由的事件 ID，多个用逗号分隔")] string eventIds,
+            [McpParam(Description = "可选留言：附带给目标工作空间的备注",
+                      Required = McpRequired.False)] string message = null)
+        {
+            try
+            {
+                var manager = _getWorkspaceManager();
+                if (manager == null)
+                    return "{\"success\":false,\"error\":\"WorkspaceManager unavailable\"}";
+
+                var ids = ParseStringList(eventIds);
+                if (ids.Count == 0)
+                    return "{\"success\":false,\"error\":\"no eventIds provided\"}";
+
+                var sourceWs = manager.Get(sourceWorkspaceId);
+                if (sourceWs == null)
+                    return "{\"success\":false,\"error\":\"source workspace not found\"}";
+
+                var events = new List<IGameEvent>();
+                foreach (var id in ids)
+                {
+                    var evt = sourceWs.EventPool?.GetById(id);
+                    if (evt != null)
+                        events.Add(evt);
+                }
+
+                int routed = 0;
+                if (events.Count > 0 && manager.RouteEvents(targetWorkspaceId, events))
+                    routed = events.Count;
+
+                var w = new JsonWriter(128);
+                w.Prop("success", routed > 0);
+                w.Prop("routed", routed);
+                w.Prop("total", ids.Count);
+                if (!string.IsNullOrEmpty(message))
+                    w.Prop("message", message);
+                if (routed < ids.Count)
+                    w.Prop("warning", $"{ids.Count - routed} event(s) not found or target workspace inactive");
+                return w.Close();
+            }
+            catch (Exception e)
+            {
+                _logger.Warning($"[RimLife.WritingMcp] route_events failed: {e.Message}");
+                return "{\"success\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
         }
 
