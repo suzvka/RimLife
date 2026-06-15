@@ -1,3 +1,4 @@
+using RimLife.Framework.Script;
 using System.Collections.Generic;
 
 namespace RimLife.Workspace
@@ -81,6 +82,9 @@ namespace RimLife.Workspace
 
         /// <summary>本轮作者标识（Agent ID，可选）。</summary>
         public string AuthorId;
+
+        /// <summary>解析后的台词行列表。由 ScriptFormat.Parse 生成，游戏侧按此列表逐行显示。</summary>
+        public List<ScriptLine> ScriptLines;
     }
 
     /// <summary>

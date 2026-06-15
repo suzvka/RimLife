@@ -1,6 +1,7 @@
 using RimLife.Agent;
 using RimLife.Core;
 using RimLife.Framework;
+using RimLife.Framework.Script;
 using RimLife.Driver;
 using RimLife.Framework.Mcp;
 using RimLife.Infrastructure.Llm;
@@ -19,6 +20,7 @@ namespace RimLife.Infrastructure
         private static bool _skillRegistryInitialized;
         private static readonly object _skillRegistryLock = new object();
         private static FrameworkConfig _frameworkConfig;
+        private static ScriptDeliveryService _scriptDeliveryService;
 
         /// <summary>日志接口。由适配层在启动时注入。</summary>
         public static ILogger Logger { get; internal set; }
@@ -29,6 +31,18 @@ namespace RimLife.Infrastructure
         /// 框架在序列化 CharacterCard 时收集所有 provider 的产出。
         /// </summary>
         public static List<ICharacterContentProvider> ContentProviders { get; } = new List<ICharacterContentProvider>();
+
+        /// <summary>
+        /// 台词消费者。游戏侧实现 IScriptConsumer 后注入此处。
+        /// ScriptDeliveryService 在收到 script.ready 事件后回调此接口。
+        /// </summary>
+        public static IScriptConsumer ScriptConsumer { get; set; }
+
+        /// <summary>
+        /// 台词占位符解析器。将 pawnId 映射为显示名。
+        /// 默认使用 Infrastructure 层的 ScriptLineResolver 实现。
+        /// </summary>
+        public static IScriptLineResolver ScriptLineResolver { get; set; }
 
         /// <summary>
         /// 注册一个人物卡内容提供者。
@@ -118,6 +132,11 @@ namespace RimLife.Infrastructure
 
             _frameworkConfig = null;
             _skillRegistryInitialized = false;
+
+            // 清理台词推送服务
+            _scriptDeliveryService?.Dispose();
+            _scriptDeliveryService = null;
+
             Logger?.Message("[RimLife.Core] Shutdown complete.");
         }
 
@@ -149,6 +168,17 @@ namespace RimLife.Infrastructure
                 count += RegisterHookProvider(new Mcp.PawnMemoryProvider());
 
                 Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
+
+                // ---- 台词推送服务 ----
+                if (_scriptDeliveryService == null)
+                {
+                    _scriptDeliveryService = new ScriptDeliveryService(
+                        getWorkspaceManager: () => Workspaces,
+                        getConsumer: () => ScriptConsumer,
+                        resolver: ScriptLineResolver ?? new DefaultScriptLineResolver(),
+                        logger: Logger);
+                    Logger?.Message("[RimLife.Core] ScriptDeliveryService initialized.");
+                }
 
                 _skillRegistryInitialized = true;
 
@@ -602,6 +632,10 @@ namespace RimLife.Infrastructure
             sb.AppendLine("- 剧情完结时 signal_workspace_status 上报 StorylineComplete");
             sb.AppendLine("- 遇到剧情瓶颈时上报 NeedsBranch 或 Stuck");
             sb.AppendLine("- 如事件不适合本剧情线，可用 route_events 推回导演工作空间");
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.Append(ScriptFormat.GetFormatSpec());
             return sb.ToString();
         }
 
@@ -630,6 +664,10 @@ namespace RimLife.Infrastructure
             sb.AppendLine("- 台词 (narrative) 是正式的叙事输出");
             sb.AppendLine("- 如事件更适合某条剧情线，用 route_events 推回导演工作空间");
             sb.AppendLine("- 你不负责上报剧情线推进状态（那是编剧的职责）");
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine();
+            sb.Append(ScriptFormat.GetFormatSpec());
             return sb.ToString();
         }
 

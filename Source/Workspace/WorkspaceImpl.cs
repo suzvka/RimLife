@@ -3,6 +3,7 @@ using RimLife.Core;
 using RimLife.Driver;
 using RimLife.Framework;
 using RimLife.Framework.Mcp;
+using RimLife.Framework.Script;
 using System;
 using System.Collections.Generic;
 
@@ -97,6 +98,9 @@ namespace RimLife.Workspace
             string now = _timeProvider();
             int nextSeq = _state.Rounds?.Count ?? 0;
 
+            // 解析 narrative JSON → ScriptLine 列表
+            var scriptLines = ScriptFormat.Parse(narrative ?? "");
+
             var round = new WorkspaceRound
             {
                 Seq = nextSeq,
@@ -106,7 +110,8 @@ namespace RimLife.Workspace
                 CreatedAt = now,
                 TriggerEventIds = triggerEventIds != null ? new List<string>(triggerEventIds) : new List<string>(),
                 AuthorRole = callerRole,
-                AuthorId = callerId
+                AuthorId = callerId,
+                ScriptLines = scriptLines
             };
 
             if (_state.Rounds == null)
@@ -117,6 +122,14 @@ namespace RimLife.Workspace
             _state.LastActivityAt = now;
 
             _publishUpdated?.Invoke(_state.Id);
+
+            // 发布脚本就绪事件，ScriptDeliveryService 将推送到游戏侧
+            EventBus.Publish(FrameworkEvents.ScriptReady, EventArg.WithPayload(
+                ("workspaceId", _state.Id),
+                ("roundSeq", nextSeq.ToString()),
+                ("callerRole", callerRole.ToString())
+            ));
+
             return true;
         }
 

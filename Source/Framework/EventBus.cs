@@ -229,6 +229,10 @@ namespace RimLife.Framework
         /// <summary>工作空间已更新（回合推送、信号上报、状态变更、分支/合并等）。</summary>
         public const string WorkspaceUpdated = "workspace.updated";
 
+        // ---- 台词 ----
+        /// <summary>台词已解析就绪，ScriptDeliveryService 将推送到游戏侧。</summary>
+        public const string ScriptReady = "script.ready";
+
         // ---- 记忆 ----
         /// <summary>记忆巩固完成。</summary>
         public const string MemoryConsolidated = "memory.consolidated";

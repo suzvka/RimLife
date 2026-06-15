@@ -80,7 +80,7 @@ namespace RimLife.Workspace
             [McpParam(Description = "目标工作空间 ID")] string workspaceId,
             [McpParam(Description = "本轮前情提要：编剧对本轮叙事起点的总结。")]
             string recap,
-            [McpParam(Description = "正式台词：编剧的叙事输出。")]
+            [McpParam(Description = "正式台词：JSON 数组格式，每元素为一句台词。字段格式详见系统提示中的台词格式说明。")]
             string narrative,
             [McpParam(Description = "本轮触发的事件 ID 列表，逗号分隔。仅作溯源，不注入 prompt。",
                       Required = McpRequired.False)] string triggerEventIds = null)
