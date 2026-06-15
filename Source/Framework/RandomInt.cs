@@ -1,3 +1,5 @@
+using System;
+
 namespace RimLife.Framework
 {
     /// <summary>
@@ -17,7 +19,8 @@ namespace RimLife.Framework
         /// </summary>
         public int Get(int min, int max)
         {
-            if (min >= max) return 0;
+            if (min >= max)
+                throw new ArgumentOutOfRangeException(nameof(min), $"min({min}) must be less than max({max})");
 
             _state ^= _state >> 12;
             _state ^= _state << 25;

@@ -1,4 +1,5 @@
 using RimLife.Framework;
+using System;
 using Xunit;
 
 namespace RimLife.Tests.Framework
@@ -71,18 +72,18 @@ namespace RimLife.Tests.Framework
         }
 
         [Fact]
-        public void Get_MinEqualsMax_ReturnsZero()
+        public void Get_MinEqualsMax_ThrowsArgumentOutOfRangeException()
         {
             var rng = new RandomInt(TestSeed);
-            Assert.Equal(0, rng.Get(5, 5));
-            Assert.Equal(0, rng.Get(100, 100));
+            Assert.Throws<ArgumentOutOfRangeException>(() => rng.Get(5, 5));
+            Assert.Throws<ArgumentOutOfRangeException>(() => rng.Get(100, 100));
         }
 
         [Fact]
-        public void Get_MinGreaterThanMax_ReturnsZero()
+        public void Get_MinGreaterThanMax_ThrowsArgumentOutOfRangeException()
         {
             var rng = new RandomInt(TestSeed);
-            Assert.Equal(0, rng.Get(100, 50));
+            Assert.Throws<ArgumentOutOfRangeException>(() => rng.Get(100, 50));
         }
 
         [Fact]

@@ -2,6 +2,7 @@ using RimLife;
 using RimLife.Cards;
 using RimLife.Core;
 using RimLife.Framework.Mcp;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
@@ -236,12 +237,12 @@ namespace RimLife.Tests.Framework
                 PawnRelation = "OurParty"
             };
 
+            // static 视图仅包含 health/psychology
+            // perspective 和 memory 在真实 Provider 中会根据 view 返回 null
             var provider = MakeProviders(new Dictionary<string, string>
             {
                 ["health"] = "疼痛: 低(Low), 流血: 无(None)",
                 ["psychology"] = "开放性: 高, 尽责性: 中",
-                ["perspective"] = "视野内: Alice(5.2m)",
-                ["memory"] = "心态: 警觉"
             });
 
             var json = CardSerializer.Default.SerializeCharacterCard(card, "static", provider);
@@ -407,27 +408,31 @@ namespace RimLife.Tests.Framework
         private static readonly IReadOnlyList<ICharacterContentProvider> EmptyProvider
             = new List<ICharacterContentProvider>();
 
-        private static IReadOnlyList<ICharacterContentProvider> MakeProviders(Dictionary<string, string> sections)
+        private static IReadOnlyList<ICharacterContentProvider> MakeProviders(Dictionary<string, string> sections, Func<string, bool> viewFilter = null)
         {
             var list = new List<ICharacterContentProvider>();
             foreach (var kv in sections)
-                list.Add(new MockContentProvider(kv.Key, kv.Value));
+                list.Add(new MockContentProvider(kv.Key, kv.Value, viewFilter));
             return list;
         }
 
         private class MockContentProvider : ICharacterContentProvider
         {
             private readonly string _content;
+            private readonly Func<string, bool> _viewFilter;
             public string SectionName { get; }
 
-            public MockContentProvider(string sectionName, string content)
+            public MockContentProvider(string sectionName, string content, Func<string, bool> viewFilter = null)
             {
                 SectionName = sectionName;
                 _content = content;
+                _viewFilter = viewFilter;
             }
 
             public string GetContent(string pawnId, string view)
             {
+                if (_viewFilter != null && !_viewFilter(view))
+                    return null;
                 return _content;
             }
         }

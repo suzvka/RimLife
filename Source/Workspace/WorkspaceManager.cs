@@ -49,6 +49,7 @@ namespace RimLife.Workspace
 
         internal void SaveToStore()
         {
+            _rwLock.EnterReadLock();
             try
             {
                 var wsJsons = new List<string>();
@@ -69,6 +70,7 @@ namespace RimLife.Workspace
             {
                 _logger.Warning($"[RimLife.Workspace] Failed to save workspaces: {e.Message}");
             }
+            finally { _rwLock.ExitReadLock(); }
         }
 
         private WorkspaceImpl Wrap(WorkspaceState state)
@@ -594,24 +596,7 @@ namespace RimLife.Workspace
 
         private static List<string> DeserializeStringList(string json)
         {
-            var result = new List<string>();
-            if (string.IsNullOrEmpty(json) || json == "[]") return result;
-
-            json = json.Trim();
-            int start = 0;
-            for (int i = 0; i < json.Length; i++)
-            {
-                if (json[i] == '"')
-                {
-                    start = i + 1;
-                    i++;
-                    while (i < json.Length && json[i] != '"')
-                        i++;
-                    if (start <= i)
-                        result.Add(JsonParser.UnescapeJson(json.Substring(start, i - start)));
-                }
-            }
-            return result;
+            return JsonParser.ParseStringArray(json);
         }
 
         // ================================================================

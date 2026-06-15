@@ -58,11 +58,12 @@ namespace RimLife.Framework
 
             for (int i = 0; i < _chain.Count; i++)
             {
-                if (_chain[i].TryLookup(term, out entry))
+                if (_chain[i].TryLookup(term, out entry) && entry != null)
                 {
                     OnLookupResult?.Invoke(term, i, true);
                     return true;
                 }
+                entry = null; // 重置，避免下行副作用污染
             }
 
             OnLookupResult?.Invoke(term, -1, false);

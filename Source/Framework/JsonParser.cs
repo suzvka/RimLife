@@ -144,6 +144,18 @@ namespace RimLife.Framework
                         case 'n': sb.Append('\n'); break;
                         case 'r': sb.Append('\r'); break;
                         case 't': sb.Append('\t'); break;
+                        case 'u':
+                            // \uXXXX Unicode 转义
+                            if (i + 5 < s.Length)
+                            {
+                                var hex = s.Substring(i + 2, 4);
+                                if (int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out int code))
+                                {
+                                    sb.Append((char)code);
+                                    i += 4; // 外层 i++ 会再跳 1，共跳过 5 个字符 (\uXXXX)
+                                }
+                            }
+                            break;
                         default: sb.Append(s[i + 1]); break;
                     }
                     i++;

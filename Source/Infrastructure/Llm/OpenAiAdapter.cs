@@ -173,9 +173,9 @@ namespace RimLife.Infrastructure.Llm
                 request.Content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
 
             // 同步发送（在后台工作线程中，阻塞是合理的）
-            var response = _httpClient.SendAsync(request).Result;
+            var response = _httpClient.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
-            return response.Content.ReadAsStringAsync().Result;
+            return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
         }
 
         // ================================================================

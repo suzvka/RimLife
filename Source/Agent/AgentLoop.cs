@@ -124,31 +124,38 @@ namespace RimLife.Agent
 
         private async void SendChat()
         {
-            var request = new LlmRequest
-            {
-                Messages = new List<LlmMessage>(_messages),
-                ToolsJson = McpSkillRegistry.GetActiveToolsJson(_skillIds),
-                MaxTokens = 4096,
-                Temperature = 0.7f
-            };
-
-            // 管道拦截：LLM 请求前
-            var llmCtx = new LlmContext { Request = request };
-            AgentPipeline.RunBeforeLlm(llmCtx);
-
-            EventBus.Publish(FrameworkEvents.LlmRequestSent, EventArg.WithPayload(
-                ("round", _round.ToString()),
-                ("messageCount", _messages.Count.ToString())
-            ));
-
             try
             {
-                var response = await _llm.ChatAsync(llmCtx.Request);
-                OnSuccess(response);
+                var request = new LlmRequest
+                {
+                    Messages = new List<LlmMessage>(_messages),
+                    ToolsJson = McpSkillRegistry.GetActiveToolsJson(_skillIds),
+                    MaxTokens = 4096,
+                    Temperature = 0.7f
+                };
+
+                // 管道拦截：LLM 请求前
+                var llmCtx = new LlmContext { Request = request };
+                AgentPipeline.RunBeforeLlm(llmCtx);
+
+                EventBus.Publish(FrameworkEvents.LlmRequestSent, EventArg.WithPayload(
+                    ("round", _round.ToString()),
+                    ("messageCount", _messages.Count.ToString())
+                ));
+
+                try
+                {
+                    var response = await _llm.ChatAsync(llmCtx.Request);
+                    OnSuccess(response);
+                }
+                catch (Exception e)
+                {
+                    OnError(e.Message);
+                }
             }
-            catch (Exception e)
+            catch (Exception ex)
             {
-                OnError(e.Message);
+                OnError($"SendChat fatal: {ex.Message}");
             }
         }
 

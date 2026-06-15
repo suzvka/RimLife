@@ -139,9 +139,9 @@ namespace RimLife.Infrastructure.Llm
             if (bodyJson != null)
                 request.Content = new StringContent(bodyJson, Encoding.UTF8, "application/json");
 
-            var response = _httpClient.SendAsync(request).Result;
+            var response = _httpClient.SendAsync(request).GetAwaiter().GetResult();
             response.EnsureSuccessStatusCode();
-            return response.Content.ReadAsStringAsync().Result;
+            return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
         }
 
         // ================================================================
