@@ -152,6 +152,9 @@ namespace RimLife.Infrastructure
             {
                 if (_skillRegistryInitialized) return;
 
+                // 先标记为初始化中，防止 RegisterHookProvider 递归调用
+                _skillRegistryInitialized = true;
+
                 McpSkillRegistry.InitializeDefaults();
 
                 int count = McpSkillRegistry.RegisterFromType(typeof(Mcp.SystemMcpTools));
@@ -179,8 +182,6 @@ namespace RimLife.Infrastructure
                         logger: Logger);
                     Logger?.Message("[RimLife.Core] ScriptDeliveryService initialized.");
                 }
-
-                _skillRegistryInitialized = true;
 
                 // 注入 Logger 到基础设施组件
                 EventBus.Logger = Logger;

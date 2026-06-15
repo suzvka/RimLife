@@ -7,6 +7,6 @@
     <li>1.5</li>
     <li>1.6</li>
   </supportedVersions>
-  <packageId>RimLife</packageId>
+  <packageId>YaoFeng.RimLife</packageId>
   <description>A new mod, separated from RimTalk.</description>
 </ModMetaData>

@@ -14,9 +14,8 @@
     <description>Internal memory storage for RimLife AI director.</description>
     <hediffClass>HediffWithComps</hediffClass>
     <isBad>false</isBad>
-    <visible>false</visible>
     <comps>
-      <li Class="RimLife.HediffComp_PawnMemory" />
+      <li Class="RimLife.HediffCompProperties_PawnMemory" />
     </comps>
   </HediffDef>
 

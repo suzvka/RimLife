@@ -11,6 +11,7 @@ using RimLife.Framework.Mcp;
 using RimLife.Infrastructure;
 using RimLife.Infrastructure.Mcp;
 using RimLife.Mappers;
+using RimLife.UI;
 using RimLife.Workspace;
 using RimWorld;
 using UnityEngine;
@@ -30,6 +31,19 @@ namespace RimLife.Tool
     /// </summary>
     public static class RimLifeSelfTest
     {
+        // ================================================================
+        // 配置面板入口
+        // ================================================================
+
+        /// <summary>
+        /// 打开 RimLife 配置面板。
+        /// 可在 Dev Mode 下通过 Gizmo 按钮触发，或从 Mod 设置调用。
+        /// </summary>
+        public static void OpenConfigPanel()
+        {
+            Find.WindowStack.Add(new ConfigPanelWindow());
+            Log.Message("[RimLife.UI] Config panel opened.");
+        }
         // ================================================================
         // 测试辅助
         // ================================================================
@@ -1400,6 +1414,7 @@ namespace RimLife.Tool
             var options = new List<FloatMenuOption>
             {
                 new FloatMenuOption("★ 一键运行全部测试", () => RunAllTests()),
+                new FloatMenuOption("★ 打开配置面板 (UI)", () => OpenConfigPanel()),
                 new FloatMenuOption("1. 基础设施 (SaveStore/CacheStore/EventLog)", () => TestInfrastructure()),
                 new FloatMenuOption("2. JSON 往返 (ParseDict/Serialize/Writer)", () => TestJsonRoundTrip()),
                 new FloatMenuOption("3. Framework 纯逻辑 (SemanticLabels/RandomInt)", () => TestFramework()),
@@ -1453,28 +1468,7 @@ namespace RimLife.Tool
     }
 
     // ================================================================
-    // Harmony 补丁 — 将自检 Gizmo 注入到选中角色的底部面板
-    // 与 PawnProDebug 使用完全相同的注入模式。
+    // Harmony 补丁已移除 — 配置面板现在直接从 Mod Settings 进入
+    // 保留 OpenConfigPanel() 方法供控制台命令调用
     // ================================================================
-    [HarmonyPatch(typeof(Pawn), nameof(Pawn.GetGizmos))]
-    internal static class Pawn_GetGizmos_RimLifeSelfTestPatch
-    {
-        static void Postfix(Pawn __instance, ref IEnumerable<Gizmo> __result)
-        {
-            try
-            {
-                if (__instance == null) return;
-                if (!Prefs.DevMode) return;
-                if (!Find.Selector.SelectedObjects.Contains(__instance)) return;
-
-                var list = __result.ToList();
-                list.AddRange(RimLifeSelfTest.GetTestGizmos(__instance));
-                __result = list;
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife.Test] Gizmo injection failed: {e.Message}");
-            }
-        }
-    }
 }

@@ -15,30 +15,41 @@ namespace RimLife.Infrastructure
 
         static RimLifeHarmony()
         {
-            // 创建 RimWorld 日志适配器，注入到框架层和核心
-            var logger = new RimWorldLogger();
-            RimLifeCore.Logger = logger;
-            MainThreadDispatcher.Logger = logger;
+            try
+            {
+                // 创建 UI 日志适配器，将框架日志重定向到调试窗口
+                var logger = new UiLoggerAdapter();
+                RimLifeCore.Logger = logger;
+                MainThreadDispatcher.Logger = logger;
 
-            // 注册人物卡维度内容提供者（钩子模式）
-            RimLifeCore.RegisterContentProvider(new HealthContentProvider());
-            RimLifeCore.RegisterContentProvider(new MoodContentProvider());
-            RimLifeCore.RegisterContentProvider(new SkillsContentProvider());
-            RimLifeCore.RegisterContentProvider(new NeedsContentProvider());
-            RimLifeCore.RegisterContentProvider(new ActivityContentProvider());
-            RimLifeCore.RegisterContentProvider(new GearContentProvider());
-            RimLifeCore.RegisterContentProvider(new BackstoryContentProvider());
-            RimLifeCore.RegisterContentProvider(new SocialContentProvider());
-            RimLifeCore.RegisterContentProvider(new PsychologyContentProvider());
-            RimLifeCore.RegisterContentProvider(new PerspectiveContentProvider());
-            RimLifeCore.RegisterContentProvider(new MemoryContentProvider());
+                // 注册人物卡维度内容提供者（钩子模式）
+                RimLifeCore.RegisterContentProvider(new HealthContentProvider());
+                RimLifeCore.RegisterContentProvider(new MoodContentProvider());
+                RimLifeCore.RegisterContentProvider(new SkillsContentProvider());
+                RimLifeCore.RegisterContentProvider(new NeedsContentProvider());
+                RimLifeCore.RegisterContentProvider(new ActivityContentProvider());
+                RimLifeCore.RegisterContentProvider(new GearContentProvider());
+                RimLifeCore.RegisterContentProvider(new BackstoryContentProvider());
+                RimLifeCore.RegisterContentProvider(new SocialContentProvider());
+                RimLifeCore.RegisterContentProvider(new PsychologyContentProvider());
+                RimLifeCore.RegisterContentProvider(new PerspectiveContentProvider());
+                RimLifeCore.RegisterContentProvider(new MemoryContentProvider());
 
-            Instance = new Harmony("RimLife.Core");
-            Instance.PatchAll();
-            logger.Message("[RimLife.Infrastructure] Harmony patches registered.");
+                Instance = new Harmony("RimLife.Core");
+                Instance.PatchAll();
+                logger.Message("[RimLife.Infrastructure] Harmony patches registered.");
 
-            // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
-            RimLifeCore.EnsureSkillRegistryInitialized();
+                // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
+                RimLifeCore.EnsureSkillRegistryInitialized();
+                logger.Message("[RimLife.Infrastructure] Startup complete.");
+            }
+            catch (System.Exception e)
+            {
+                Log.Error($"[RimLife.Infrastructure] FATAL: Static constructor failed: {e}");
+                if (e.InnerException != null)
+                    Log.Error($"[RimLife.Infrastructure] Inner: {e.InnerException}");
+                throw;
+            }
         }
     }
 }
