@@ -14,8 +14,10 @@ namespace RimLife.Infrastructure.Llm
     /// 所有公共 API 均为异步回调模式（后台线程 → MainThreadDispatcher 回调），
     /// 不会阻塞 UI 线程。
     ///
+    /// 不存储 API 密钥：配置由前端 LlmCredentialManager 在启动时注入。
+    ///
     /// 职责：
-    /// 1. 持有并持久化 LlmConfig（通过 CacheStore）
+    /// 1. 持有运行时 LlmConfig（纯内存，不持久化）
     /// 2. 根据 ProviderType 创建/切换适配器（ILlmApiProvider）
     /// 3. 异步对话调用（ChatAsync）
     /// 4. 异步连通性测试（TestConnectionAsync，供配置向导使用）
@@ -23,21 +25,16 @@ namespace RimLife.Infrastructure.Llm
     /// </summary>
     public class LlmAccessor : ILlmService, IDisposable
     {
-        private readonly ICacheStore _store;
-        private const string ConfigKey = "rimlife_llm_config";
-
         private LlmConfig _config;
         private ILlmApiProvider _adapter;
         private readonly object _lock = new object();
 
         /// <summary>
-        /// 创建 LlmAccessor 实例，从 CacheStore 加载配置。
+        /// 创建 LlmAccessor 实例。初始化为默认配置，等待前端注入。
         /// </summary>
-        /// <param name="store">缓存存储（CacheStore）。</param>
-        public LlmAccessor(ICacheStore store)
+        public LlmAccessor()
         {
-            _store = store ?? throw new ArgumentNullException(nameof(store));
-            LoadConfig();
+            _config = LlmConfig.CreateDefault();
         }
 
         // ================================================================
@@ -89,7 +86,6 @@ namespace RimLife.Infrastructure.Llm
             {
                 _config = config;
                 _adapter = CreateAdapter(config);
-                PersistConfig();
             }
         }
 
@@ -128,11 +124,13 @@ namespace RimLife.Infrastructure.Llm
             }
 
             ILlmApiProvider adapter;
+            string modelName = null;
 
             if (overrideConfig != null)
             {
                 // 临时覆盖：创建临时 adapter，不影响全局配置
                 adapter = CreateAdapter(overrideConfig);
+                modelName = overrideConfig.ModelName;
             }
             else
             {
@@ -144,7 +142,14 @@ namespace RimLife.Infrastructure.Llm
                             new InvalidOperationException("LLM not configured."));
                     }
                     adapter = _adapter;
+                    modelName = _config?.ModelName;
                 }
+            }
+
+            // 自动注入模型名称到请求（如果请求未设置）
+            if (string.IsNullOrEmpty(request.Model) && !string.IsNullOrEmpty(modelName))
+            {
+                request.Model = modelName;
             }
 
             var tcs = new TaskCompletionSource<LlmResponse>();
@@ -303,103 +308,6 @@ namespace RimLife.Infrastructure.Llm
                 default:
                     return new OpenAiAdapter(config);
             }
-        }
-
-        private void LoadConfig()
-        {
-            try
-            {
-                _config = _store.FetchOrRebuild(ConfigKey, () => LlmConfig.CreateDefault());
-                if (_config != null && _config.IsValid())
-                    _adapter = CreateAdapter(_config);
-            }
-            catch (Exception)
-            {
-                _config = LlmConfig.CreateDefault();
-                _adapter = null;
-            }
-        }
-
-        private void PersistConfig()
-        {
-            try
-            {
-                string json = SerializeConfig(_config);
-                _store.Cache(ConfigKey, json);
-            }
-            catch
-            {
-                // 持久化失败不应影响运行时
-            }
-        }
-
-        // ================================================================
-        // 配置序列化（简单 JSON，与 JsonWriter 兼容）
-        // ================================================================
-
-        private static string SerializeConfig(LlmConfig config)
-        {
-            if (config == null) return "{}";
-
-            var w = new JsonWriter(512);
-            w.Prop("baseUrl", config.BaseUrl ?? "");
-            w.Prop("apiKey", config.ApiKey ?? "");
-            w.Prop("modelName", config.ModelName ?? "");
-            w.Prop("providerType", config.ProviderType.ToString());
-            w.Prop("timeoutSeconds", config.TimeoutSeconds);
-
-            // ExtraHeaders
-            if (config.ExtraHeaders != null && config.ExtraHeaders.Count > 0)
-            {
-                var hw = new JsonWriter(256);
-                foreach (var kv in config.ExtraHeaders)
-                    hw.Prop(kv.Key, kv.Value ?? "");
-                w.PropRaw("extraHeaders", hw.Close());
-            }
-
-            return w.Close();
-        }
-
-        private static LlmConfig DeserializeConfig(string json)
-        {
-            var config = LlmConfig.CreateDefault();
-            if (string.IsNullOrEmpty(json) || json == "{}") return config;
-
-            try
-            {
-                var dict = JsonParser.ParseDict(json);
-
-                if (dict.TryGetValue("baseUrl", out string baseUrl))
-                    config.BaseUrl = baseUrl;
-                if (dict.TryGetValue("apiKey", out string apiKey))
-                    config.ApiKey = apiKey;
-                if (dict.TryGetValue("modelName", out string modelName))
-                    config.ModelName = modelName;
-                if (dict.TryGetValue("providerType", out string ptStr)
-                    && Enum.TryParse<LlmProviderType>(ptStr, out var pt))
-                    config.ProviderType = pt;
-                if (dict.TryGetValue("timeoutSeconds", out string tsStr)
-                    && int.TryParse(tsStr, out int ts))
-                    config.TimeoutSeconds = ts;
-
-                // ExtraHeaders
-                if (dict.TryGetValue("extraHeaders", out string headersJson))
-                {
-                    var headersDict = JsonParser.ParseDict(headersJson);
-                    if (headersDict.Count > 0)
-                    {
-                        config.ExtraHeaders = new System.Collections.Generic.Dictionary<string, string>();
-                        foreach (var kv in headersDict)
-                            config.ExtraHeaders[kv.Key] = kv.Value;
-                    }
-                }
-            }
-            catch
-            {
-                // 解析失败，返回默认值
-            }
-
-            return config;
         }
 
         // ================================================================

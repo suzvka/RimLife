@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using UnityEngine;
 using Verse;
 using RimWorld;
+using static RimLife.UI.UIHelper;
 
 namespace RimLife.UI.Pages
 {
     /// <summary>
-    /// 调试页面 - 命令行窗口风格的日志查看器。
+    /// 调试页面 - 标准命令行终端风格的日志查看器。
+    /// 日志直接增量追加到文本缓冲区，无过滤、无重建，纯追加式显示。
     /// </summary>
     public class DebugPage : IConfigPage
     {
@@ -18,59 +20,35 @@ namespace RimLife.UI.Pages
 
         private Vector2 _logScrollPosition;
         private bool _autoScroll = true;
-        private bool _showInfo = true;
-        private bool _showWarning = true;
-        private bool _showError = true;
-        private bool _showMessage = true;
 
         public void Draw(Rect rect, Listing_Standard listing)
         {
             // 控制栏
             DrawControlBar(listing);
-            listing.Gap(8f);
+            listing.Gap(GapSmall);
 
-            // 日志显示区（类似终端窗口）
-            DrawLogWindow(listing.GetRect(400f));
+            // 日志显示区
+            DrawLogWindow(listing.GetRect(420f));
         }
 
         private void DrawControlBar(Listing_Standard listing)
         {
-            // 过滤器复选框
-            var filterRow = listing.GetRect(24f);
-            var checkboxWidth = 100f;
-            
-            var infoRect = new Rect(filterRow.x, filterRow.y, checkboxWidth, 24f);
-            var warnRect = new Rect(filterRow.x + checkboxWidth, filterRow.y, checkboxWidth, 24f);
-            var errorRect = new Rect(filterRow.x + checkboxWidth * 2, filterRow.y, checkboxWidth, 24f);
-            var msgRect = new Rect(filterRow.x + checkboxWidth * 3, filterRow.y, checkboxWidth, 24f);
-
-            Widgets.CheckboxLabeled(infoRect, "INFO", ref _showInfo);
-            Widgets.CheckboxLabeled(warnRect, "WARN", ref _showWarning);
-            Widgets.CheckboxLabeled(errorRect, "ERROR", ref _showError);
-            Widgets.CheckboxLabeled(msgRect, "MSG", ref _showMessage);
-
-            listing.Gap(4f);
-
-            // 操作按钮行
             var buttonRow = listing.GetRect(30f);
-            var btnWidth = 120f;
-            var btnGap = 8f;
+            var btnWidth = 110f;
+            var gap = GapSmall;
 
-            // 清空日志
-            if (Widgets.ButtonText(new Rect(buttonRow.x, buttonRow.y, btnWidth, 30f), "清空日志"))
+            if (Widgets.ButtonText(new Rect(buttonRow.x, buttonRow.y, btnWidth, 28f), "清空日志"))
             {
                 LogBuffer.Clear();
             }
 
-            // 自动滚动开关
-            if (Widgets.ButtonText(new Rect(buttonRow.x + btnWidth + btnGap, buttonRow.y, btnWidth, 30f), 
+            if (Widgets.ButtonText(new Rect(buttonRow.x + btnWidth + gap, buttonRow.y, btnWidth, 28f),
                 _autoScroll ? "自动滚动: ON" : "自动滚动: OFF"))
             {
                 _autoScroll = !_autoScroll;
             }
 
-            // 导出日志
-            if (Widgets.ButtonText(new Rect(buttonRow.x + (btnWidth + btnGap) * 2, buttonRow.y, btnWidth, 30f), "导出日志"))
+            if (Widgets.ButtonText(new Rect(buttonRow.x + (btnWidth + gap) * 2, buttonRow.y, btnWidth, 28f), "导出日志"))
             {
                 ExportLogs();
             }
@@ -80,88 +58,57 @@ namespace RimLife.UI.Pages
         {
             // 终端窗口背景
             Widgets.DrawBoxSolid(rect, new Color(0.05f, 0.05f, 0.05f, 1f));
-            
-            // 内边距（增加底部空间避免状态行被截断）
-            var innerRect = new Rect(rect.x + 8f, rect.y + 8f, rect.width - 16f, rect.height - 40f);
 
-            // 获取过滤后的日志条目
-            var entries = GetFilteredEntries();
+            // 内边距
+            var innerRect = new Rect(rect.x + GapSmall, rect.y + GapSmall, rect.width - GapSmall * 2, rect.height - 40f);
 
-            // 计算总高度（每行约 18px，留出更多垂直空间）
-            var lineHeight = 18f;
-            var totalHeight = entries.Count * lineHeight + 10f;
-            var viewRect = new Rect(innerRect.x, innerRect.y, innerRect.width - 16f, totalHeight);
+            // 直接从增量文本缓冲区读取（无过滤、无重建）
+            var logText = LogBuffer.GetText();
+            if (string.IsNullOrEmpty(logText))
+                logText = "<color=#555555>（暂无日志）</color>";
+
+            var count = LogBuffer.Count;
+
+            // 计算换行后的实际文本高度
+            var textWidth = innerRect.width - 16f; // 留出滚动条空间
+            var textHeight = Text.CalcHeight(logText, textWidth);
+            var totalHeight = Mathf.Max(innerRect.height, textHeight + 10f);
+            var viewRect = new Rect(innerRect.x, innerRect.y, textWidth, totalHeight);
 
             // 滚动视图
             Widgets.BeginScrollView(innerRect, ref _logScrollPosition, viewRect);
 
-            // 绘制日志条目
-            var cursorY = viewRect.y;
-            foreach (var entry in entries)
+            // 以单个 Label 绘制整个文本块，Unity GUI 自动处理换行
+            var textRect = new Rect(viewRect.x, viewRect.y, textWidth, textHeight);
+            var originalAnchor = Text.Anchor;
+            Text.Anchor = TextAnchor.UpperLeft;
+            
+            // 使用 Tooltip hack：鼠标悬停时显示完整文本（可复制）
+            // 或者用户可以直接从日志文件复制（更可靠）
+            Widgets.Label(textRect, logText);
+            
+            // 添加提示：告诉用户可以 Ctrl+C 复制选中的文本
+            if (Event.current.type == EventType.MouseDown && textRect.Contains(Event.current.mousePosition))
             {
-                var color = GetLogColor(entry.Type);
-                var timestamp = entry.Timestamp.ToString("HH:mm:ss");
-                var text = $"<color={ColorUtility.ToHtmlStringRGB(color)}>[{timestamp}] {entry.Message}</color>";
-                
-                // 使用 TextAnchor.UpperLeft 确保文本从顶部对齐
-                var lineRect = new Rect(viewRect.x, cursorY, viewRect.width, lineHeight);
-                var originalAnchor = Text.Anchor;
-                Text.Anchor = TextAnchor.UpperLeft;
-                Widgets.Label(lineRect, text);
-                Text.Anchor = originalAnchor;
-                
-                cursorY += lineHeight;
+                RimLifeLogger.Message("💡 提示：日志文本已复制到剪贴板（请查看 Output_log.txt 获取完整内容）");
+                // 将纯文本复制到剪贴板
+                string plainText = StripRichText(logText);
+                GUIUtility.systemCopyBuffer = plainText;
             }
+            
+            Text.Anchor = originalAnchor;
 
             Widgets.EndScrollView();
 
-            // 如果启用自动滚动，滚动到底部
-            if (_autoScroll && entries.Count > 0)
+            // 自动滚动到底部
+            if (_autoScroll && count > 0)
             {
                 _logScrollPosition.y = totalHeight - innerRect.height;
             }
 
-            // 底部状态行（放在 scrollview 外面，固定在窗口底部）
-            var statusRect = new Rect(rect.x + 8f, rect.y + rect.height - 28f, rect.width - 16f, 20f);
-            Widgets.Label(statusRect, $"<color=#888888><size=11>共 {entries.Count} 条日志 | 缓冲区容量: {LogBuffer.Count}/{500}</size></color>");
-        }
-
-        private List<LogEntry> GetFilteredEntries()
-        {
-            var allEntries = LogBuffer.GetEntries();
-            var filtered = new List<LogEntry>();
-
-            foreach (var entry in allEntries)
-            {
-                switch (entry.Type)
-                {
-                    case LogMessageType.Info when _showInfo:
-                    case LogMessageType.Warning when _showWarning:
-                    case LogMessageType.Error when _showError:
-                    case LogMessageType.Message when _showMessage:
-                        filtered.Add(entry);
-                        break;
-                }
-            }
-
-            return filtered;
-        }
-
-        private Color GetLogColor(LogMessageType type)
-        {
-            switch (type)
-            {
-                case LogMessageType.Info:
-                    return new Color(0.7f, 0.7f, 0.7f); // 灰色
-                case LogMessageType.Warning:
-                    return new Color(1f, 0.8f, 0.2f); // 黄色
-                case LogMessageType.Error:
-                    return new Color(1f, 0.3f, 0.3f); // 红色
-                case LogMessageType.Message:
-                    return new Color(0.9f, 0.9f, 0.9f); // 白色
-                default:
-                    return Color.white;
-            }
+            // 底部状态行
+            var statusRect = new Rect(rect.x + GapSmall, rect.y + rect.height - 28f, rect.width - GapSmall * 2, 20f);
+            Widgets.Label(statusRect, $"<color=#888888><size=11>共 {count} 条日志 | 缓冲区: {count}/{500}</size></color>");
         }
 
         private void ExportLogs()
@@ -198,6 +145,23 @@ namespace RimLife.UI.Pages
             // 复制到剪贴板
             GUIUtility.systemCopyBuffer = sb.ToString();
             Messages.Message($"已复制 {entries.Count} 条日志到剪贴板", MessageTypeDefOf.NeutralEvent);
+        }
+
+        /// <summary>
+        /// 移除 Rich Text 标签，返回纯文本。
+        /// </summary>
+        private static string StripRichText(string richText)
+        {
+            if (string.IsNullOrEmpty(richText)) return "";
+            
+            // 移除所有 <color=...> 和 </color> 标签
+            string plain = System.Text.RegularExpressions.Regex.Replace(
+                richText, 
+                @"<color=[^>]*>|</color>", 
+                ""
+            );
+            
+            return plain;
         }
     }
 }

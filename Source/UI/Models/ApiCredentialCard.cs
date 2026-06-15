@@ -93,7 +93,7 @@ namespace RimLife.UI.Models
 
     /// <summary>
     /// LLM 凭证完整持久化状态。
-    /// 通过 ICacheStore 以 JSON 格式存取。
+    /// 通过 RimLifeModSettings.ExposeData() 以 JSON 格式全局存取。
     /// </summary>
     public class LlmCredentialState
     {

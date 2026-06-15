@@ -1,5 +1,6 @@
 using UnityEngine;
 using Verse;
+using static RimLife.UI.UIHelper;
 
 namespace RimLife.UI
 {
@@ -15,30 +16,30 @@ namespace RimLife.UI
 
         public void Draw(Rect rect, Listing_Standard listing)
         {
-            Widgets.Label(listing.GetRect(24f), "── 导演策略 ──");
-            Widgets.Label(listing.GetRect(20f), "最小事件数: [5]    冷却时间: [120]秒");
-            listing.Gap(8f);
-            if (Widgets.ButtonText(listing.GetRect(30f), "重置默认值"))
+            BeginSection(listing, "导演策略");
+            DrawInfoRow(listing, "最小事件数", "5");
+            DrawInfoRow(listing, "冷却时间", "120 秒");
+            listing.Gap(GapTiny);
+            if (Widgets.ButtonText(listing.GetRect(24f), "重置默认值"))
                 Log.Message("[RimLife.UI] Reset director strategy");
+            EndSection(listing);
 
-            listing.Gap(16f);
-
-            Widgets.Label(listing.GetRect(24f), "── Freelancer 策略 ──");
-            Widgets.Label(listing.GetRect(20f), "最小事件数: [1]    事件存活: [300]秒");
-            listing.Gap(8f);
-            if (Widgets.ButtonText(listing.GetRect(30f), "重置默认值"))
+            BeginSection(listing, "Freelancer 策略");
+            DrawInfoRow(listing, "最小事件数", "1");
+            DrawInfoRow(listing, "事件存活", "300 秒");
+            listing.Gap(GapTiny);
+            if (Widgets.ButtonText(listing.GetRect(24f), "重置默认值"))
                 Log.Message("[RimLife.UI] Reset freelancer strategy");
+            EndSection(listing);
 
-            listing.Gap(16f);
-
-            Widgets.Label(listing.GetRect(24f), "── 叙事风格 ──");
-            Widgets.Label(listing.GetRect(20f), "自由文本提示词（可编辑）:");
-            // TextField 暂不实现，首轮仅展示
-            listing.Gap(4f);
-            Widgets.Label(listing.GetRect(20f), "灵感参考: [黑曜石] [轻小说] [战锤] [自定义]");
-            listing.Gap(8f);
-            if (Widgets.ButtonText(listing.GetRect(30f), "预览"))
+            BeginSection(listing, "叙事风格");
+            Widgets.Label(listing.GetRect(22f), "<size=12>自由文本提示词（可编辑）:</size>");
+            listing.Gap(GapTiny);
+            Widgets.Label(listing.GetRect(22f), "<color=#888888>灵感参考: 黑曜石 | 轻小说 | 战锤 | 自定义</color>");
+            listing.Gap(GapTiny);
+            if (Widgets.ButtonText(listing.GetRect(26f), "预览"))
                 Log.Message("[RimLife.UI] Preview style clicked");
+            EndSection(listing);
         }
     }
 }

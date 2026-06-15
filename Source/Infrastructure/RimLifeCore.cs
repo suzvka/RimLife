@@ -761,7 +761,8 @@ namespace RimLife.Infrastructure
         private static readonly object _llmAccessorLock = new object();
 
         /// <summary>
-        /// LLM API 访问器实例。首次访问时从 CacheStore 延迟创建。
+        /// LLM API 访问器实例。首次访问时延迟创建（纯内存，不持久化密钥）。
+        /// 配置由前端 LlmCredentialManager 在 Initialize 时注入。
         /// </summary>
         public static LlmAccessor LlmAccessor
         {
@@ -771,9 +772,9 @@ namespace RimLife.Infrastructure
                 {
                     lock (_llmAccessorLock)
                     {
-                        if (_llmAccessor == null && CacheStore != null)
+                        if (_llmAccessor == null)
                         {
-                            _llmAccessor = new LlmAccessor(CacheStore);
+                            _llmAccessor = new LlmAccessor();
                         }
                     }
                 }

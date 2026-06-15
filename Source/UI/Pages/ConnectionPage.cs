@@ -9,6 +9,7 @@ using RimLife.Infrastructure;
 using RimLife.UI.Models;
 using UnityEngine;
 using Verse;
+using static RimLife.UI.UIHelper;
 
 namespace RimLife.UI.Pages
 {
@@ -86,8 +87,8 @@ namespace RimLife.UI.Pages
             if (!string.IsNullOrEmpty(_statusMessage) && Time.time - _statusMessageTime < 5f)
             {
                 var color = _statusMessage.StartsWith("[错误]") ? "#FF6666" : "#88FF88";
-                Widgets.Label(listing.GetRect(20f), $"<color={color}><size=11>{_statusMessage}</size></color>");
-                listing.Gap(4f);
+                Widgets.Label(listing.GetRect(22f), $"<color={color}><size=12>{_statusMessage}</size></color>");
+                listing.Gap(GapSmall);
             }
         }
 
@@ -103,14 +104,14 @@ namespace RimLife.UI.Pages
 
         private void DrawCardSection(Listing_Standard listing)
         {
-            Widgets.Label(listing.GetRect(24f), "<b>── API 凭证卡片 ──</b>");
-            listing.Gap(4f);
+            BeginSection(listing, "API 凭证卡片");
 
             var cards = Mgr.Cards;
             if (cards.Count == 0)
             {
-                Widgets.Label(listing.GetRect(20f), "<color=#888888>尚无凭证卡片，点击下方按钮添加。</color>");
-                listing.Gap(8f);
+                Widgets.Label(listing.GetRect(22f), "<color=#888888><size=12>尚无凭证卡片，点击下方按钮添加。</size></color>");
+                listing.Gap(GapSmall);
+                EndSection(listing);
                 return;
             }
 
@@ -118,11 +119,14 @@ namespace RimLife.UI.Pages
             {
                 DrawSingleCard(listing, card);
             }
+
+            EndSection(listing);
         }
 
         private void DrawSingleCard(Listing_Standard listing, ApiCredentialCard card)
         {
-            var cardRect = listing.GetRect(76f);
+            var cardHeight = 88f;
+            var cardRect = listing.GetRect(cardHeight);
 
             // 卡片背景
             var bgColor = card.IsActive
@@ -130,41 +134,56 @@ namespace RimLife.UI.Pages
                 : new Color(0.18f, 0.18f, 0.18f, 1f);
             Widgets.DrawBoxSolid(cardRect, bgColor);
 
+            var pad = GapSmall;
+
+            // ================================================================
+            // Row 1: 复选框 + 标签（左） + 操作按钮（右）
+            // ================================================================
+            var row1Y = cardRect.y + 6f;
+            var row1H = 26f;
+
             // 激活复选框
-            var checkRect = new Rect(cardRect.x + 8f, cardRect.y + 10f, 180f, 24f);
+            var checkRect = new Rect(cardRect.x + pad, row1Y, cardRect.width * 0.55f, row1H);
             bool isActive = card.IsActive;
-            Widgets.CheckboxLabeled(checkRect, card.Label, ref isActive);
+            Widgets.CheckboxLabeled(checkRect, $"<size=13>{card.Label}</size>", ref isActive);
             if (isActive != card.IsActive)
             {
                 Mgr.SetCardActive(card.Id, isActive);
             }
 
-            // BaseUrl
-            var urlRect = new Rect(cardRect.x + 8f, cardRect.y + 36f, cardRect.width - 120f, 18f);
-            var displayUrl = card.BaseUrl.Length > 50 ? card.BaseUrl.Substring(0, 47) + "..." : card.BaseUrl;
-            Widgets.Label(urlRect, $"<color=#AAAAAA><size=11>{displayUrl}</size></color>");
-
-            // API Key（脱敏显示）
-            var keyRect = new Rect(cardRect.x + 8f, cardRect.y + 54f, cardRect.width - 120f, 18f);
-            var maskedKey = MaskApiKey(card.ApiKey);
-            Widgets.Label(keyRect, $"<color=#888888><size=11>Key: {maskedKey}  |  {card.ProviderType}</size></color>");
-
-            // 编辑按钮
-            var editRect = new Rect(cardRect.x + cardRect.width - 100f, cardRect.y + 8f, 42f, 26f);
+            // 编辑 / 删除按钮（右对齐）
+            var btnWidth = 50f;
+            var btnGap = 6f;
+            var editRect = new Rect(cardRect.x + cardRect.width - btnWidth * 2 - btnGap - pad, row1Y, btnWidth, row1H);
             if (Widgets.ButtonText(editRect, "编辑"))
             {
                 StartEditCard(card);
             }
 
-            // 删除按钮
-            var delRect = new Rect(cardRect.x + cardRect.width - 54f, cardRect.y + 8f, 42f, 26f);
+            var delRect = new Rect(cardRect.x + cardRect.width - btnWidth - pad, row1Y, btnWidth, row1H);
             if (Widgets.ButtonText(delRect, "删除"))
             {
                 Mgr.RemoveCard(card.Id);
                 SetStatus($"已删除卡片: {card.Label}");
             }
 
-            listing.Gap(4f);
+            // ================================================================
+            // Row 2: Base URL
+            // ================================================================
+            var row2Y = cardRect.y + 36f;
+            var urlRect = new Rect(cardRect.x + pad + 24f, row2Y, cardRect.width - pad * 2 - 24f, 18f);
+            var displayUrl = card.BaseUrl.Length > 55 ? card.BaseUrl.Substring(0, 52) + "..." : card.BaseUrl;
+            Widgets.Label(urlRect, $"<color=#AAAAAA><size=11>{displayUrl}</size></color>");
+
+            // ================================================================
+            // Row 3: API Key 脱敏 + ProviderType
+            // ================================================================
+            var row3Y = cardRect.y + 56f;
+            var keyRect = new Rect(cardRect.x + pad + 24f, row3Y, cardRect.width - pad * 2 - 24f, 18f);
+            var maskedKey = MaskApiKey(card.ApiKey);
+            Widgets.Label(keyRect, $"<color=#888888><size=11>Key: {maskedKey}  |  {card.ProviderType}</size></color>");
+
+            listing.Gap(GapTiny);
         }
 
         // ================================================================
@@ -194,29 +213,28 @@ namespace RimLife.UI.Pages
         private void DrawCardEditForm(Listing_Standard listing, bool isNew)
         {
             var title = isNew ? "新增凭证卡片" : "编辑凭证卡片";
-            Widgets.Label(listing.GetRect(24f), $"<b>── {title} ──</b>");
-            listing.Gap(8f);
+            BeginSection(listing, title);
 
             // 标签
-            Widgets.Label(listing.GetRect(20f), "卡片标签");
+            Widgets.Label(listing.GetRect(20f), "<size=12>卡片标签</size>");
             var labelRect = listing.GetRect(28f);
             _editLabel = Widgets.TextField(labelRect, _editLabel);
-            listing.Gap(4f);
+            listing.Gap(GapTiny);
 
             // Base URL
-            Widgets.Label(listing.GetRect(20f), "API 基础 URL");
+            Widgets.Label(listing.GetRect(20f), "<size=12>API 基础 URL</size>");
             var urlRect = listing.GetRect(28f);
             _editBaseUrl = Widgets.TextField(urlRect, _editBaseUrl);
-            listing.Gap(4f);
+            listing.Gap(GapTiny);
 
             // API Key
-            Widgets.Label(listing.GetRect(20f), "API 密钥");
+            Widgets.Label(listing.GetRect(20f), "<size=12>API 密钥</size>");
             var keyRect = listing.GetRect(28f);
             _editApiKey = Widgets.TextField(keyRect, _editApiKey);
-            listing.Gap(4f);
+            listing.Gap(GapTiny);
 
             // Provider Type
-            Widgets.Label(listing.GetRect(20f), "提供商类型");
+            Widgets.Label(listing.GetRect(20f), "<size=12>提供商类型</size>");
             var provRect = listing.GetRect(30f);
             if (Widgets.ButtonText(new Rect(provRect.x, provRect.y, 130f, 28f),
                 _editProviderType == LlmProviderType.OpenAI ? "▶ OpenAI 兼容" : "  OpenAI 兼容"))
@@ -229,7 +247,7 @@ namespace RimLife.UI.Pages
                 _editProviderType = LlmProviderType.Anthropic;
             }
 
-            listing.Gap(12f);
+            listing.Gap(GapMedium);
 
             // 按钮行
             var btnRow = listing.GetRect(30f);
@@ -243,7 +261,7 @@ namespace RimLife.UI.Pages
                 _mode = PageMode.ViewCards;
             }
 
-            listing.Gap(8f);
+            EndSection(listing);
         }
 
         private void SaveCardEdit(bool isNew)
@@ -283,22 +301,22 @@ namespace RimLife.UI.Pages
 
         private void DrawActionButtons(Listing_Standard listing)
         {
-            listing.Gap(8f);
+            listing.Gap(GapSmall);
 
             var btnRow = listing.GetRect(32f);
 
             // 添加卡片
-            if (Widgets.ButtonText(new Rect(btnRow.x, btnRow.y, 130f, 30f), "+ 添加凭证卡片"))
+            if (Widgets.ButtonText(new Rect(btnRow.x, btnRow.y, 140f, 30f), "+ 添加凭证卡片"))
             {
                 StartAddCard();
             }
 
-            listing.Gap(4f);
+            listing.Gap(GapTiny);
 
             // 获取模型列表
             var discoverRow = listing.GetRect(32f);
             GUI.enabled = !_isDiscovering && Mgr.Cards.Any(c => c.IsActive && c.IsValid());
-            if (Widgets.ButtonText(new Rect(discoverRow.x, discoverRow.y, 160f, 30f),
+            if (Widgets.ButtonText(new Rect(discoverRow.x, discoverRow.y, 170f, 30f),
                 _isDiscovering ? "正在获取模型..." : "确认并获取模型列表"))
             {
                 StartModelDiscovery();
@@ -308,23 +326,23 @@ namespace RimLife.UI.Pages
             // 发现进度
             if (_isDiscovering && !string.IsNullOrEmpty(_discoveryStatus))
             {
-                var statusRect = listing.GetRect(20f);
-                Widgets.Label(statusRect, $"<color=#88AAFF><size=11>{_discoveryStatus}</size></color>");
+                var statusRect = listing.GetRect(22f);
+                Widgets.Label(statusRect, $"<color=#88AAFF><size=12>{_discoveryStatus}</size></color>");
             }
 
             if (_discoveryComplete)
             {
-                var doneRect = listing.GetRect(20f);
-                Widgets.Label(doneRect, "<color=#88FF88><size=11>✓ 模型发现完成</size></color>");
+                var doneRect = listing.GetRect(22f);
+                Widgets.Label(doneRect, "<color=#88FF88><size=12>✓ 模型发现完成</size></color>");
             }
 
             if (!string.IsNullOrEmpty(_discoveryError))
             {
-                var errRect = listing.GetRect(20f);
-                Widgets.Label(errRect, $"<color=#FF6666><size=11>{_discoveryError}</size></color>");
+                var errRect = listing.GetRect(22f);
+                Widgets.Label(errRect, $"<color=#FF6666><size=12>{_discoveryError}</size></color>");
             }
 
-            listing.Gap(8f);
+            listing.Gap(GapSmall);
         }
 
         private async void StartModelDiscovery()
@@ -382,20 +400,19 @@ namespace RimLife.UI.Pages
         private void DrawModelSection(Listing_Standard listing)
         {
             var models = Mgr.DiscoveredModels;
+
+            BeginSection(listing, "可用模型");
+
             if (models.Count == 0)
             {
-                listing.Gap(4f);
-                Widgets.Label(listing.GetRect(20f), "<b>── 可用模型 ──</b>");
-                Widgets.Label(listing.GetRect(20f), "<color=#888888>点击上方按钮获取模型列表。</color>");
+                Widgets.Label(listing.GetRect(22f), "<color=#888888><size=12>点击上方按钮获取模型列表。</size></color>");
 
                 // 手动添加模型（用于 Anthropic 等）
-                listing.Gap(8f);
+                listing.Gap(GapSmall);
                 DrawManualModelEntry(listing);
+                EndSection(listing);
                 return;
             }
-
-            listing.Gap(4f);
-            Widgets.Label(listing.GetRect(24f), "<b>── 可用模型 ──</b>");
 
             // 全选/全不选
             var selectRow = listing.GetRect(24f);
@@ -408,7 +425,7 @@ namespace RimLife.UI.Pages
                 foreach (var m in models) Mgr.SetModelSelected(m.ModelName, false);
             }
 
-            listing.Gap(4f);
+            listing.Gap(GapTiny);
 
             // 按来源卡片分组显示
             var cards = Mgr.Cards;
@@ -420,7 +437,7 @@ namespace RimLife.UI.Pages
                 var cardLabel = card?.Label ?? "未知来源";
                 var cardActive = card?.IsActive ?? false;
 
-                var groupHeader = listing.GetRect(20f);
+                var groupHeader = listing.GetRect(22f);
                 var activeTag = cardActive ? "<color=#88FF88>●</color>" : "<color=#666666>○</color>";
                 Widgets.Label(groupHeader, $"<size=12>{activeTag} 来源: <b>{cardLabel}</b></size>");
 
@@ -435,18 +452,18 @@ namespace RimLife.UI.Pages
                     }
                 }
 
-                listing.Gap(4f);
+                listing.Gap(GapTiny);
             }
 
             // 手动添加模型
             DrawManualModelEntry(listing);
 
-            listing.Gap(8f);
+            listing.Gap(GapSmall);
 
             // 应用按钮
             var applyRow = listing.GetRect(32f);
             int selectedCount = models.Count(m => m.IsSelected);
-            if (Widgets.ButtonText(new Rect(applyRow.x, applyRow.y, 140f, 30f),
+            if (Widgets.ButtonText(new Rect(applyRow.x, applyRow.y, 150f, 30f),
                 $"应用模型选择 ({selectedCount})"))
             {
                 Mgr.BuildActiveModelOrder();
@@ -457,10 +474,12 @@ namespace RimLife.UI.Pages
             var order = Mgr.ActiveModelOrder;
             if (order.Count > 0)
             {
-                var infoRect = listing.GetRect(20f);
+                var infoRect = listing.GetRect(22f);
                 Widgets.Label(infoRect,
-                    $"<color=#AAAAAA><size=11>当前激活: {order.Count} 个模型 | 运行时索引: {Mgr.CurrentModelIndex}</size></color>");
+                    $"<color=#AAAAAA><size=12>当前激活: {order.Count} 个模型 | 运行时索引: {Mgr.CurrentModelIndex}</size></color>");
             }
+
+            EndSection(listing);
         }
 
         private void DrawManualModelEntry(Listing_Standard listing)
@@ -469,22 +488,16 @@ namespace RimLife.UI.Pages
             var cards = Mgr.Cards;
             if (cards.Count == 0) return;
 
-            listing.Gap(4f);
-            Widgets.Label(listing.GetRect(20f), "<color=#888888><size=11>手动添加模型（用于不支持列表查询的 API）:</size></color>");
+            listing.Gap(GapTiny);
+            Widgets.Label(listing.GetRect(22f), "<color=#888888><size=12>手动添加模型（用于不支持列表查询的 API）:</size></color>");
 
-            // 选择目标卡片 + 输入模型名
-            var row1 = listing.GetRect(28f);
-            var modelName = "";
-            var targetCardId = "";
-
-            // 简化：为每张激活的卡提供输入
+            // 为每张激活的卡提供输入
             foreach (var card in cards.Where(c => c.IsActive))
             {
                 var manualRow = listing.GetRect(28f);
-                var btnRect = new Rect(manualRow.x, manualRow.y, 120f, 26f);
+                var btnRect = new Rect(manualRow.x, manualRow.y, 130f, 26f);
                 if (Widgets.ButtonText(btnRect, $"+ 添加模型到 {card.Label}"))
                 {
-                    // 使用卡片时弹出简化输入——这里简单添加一个占位模型
                     var defaultModel = card.ProviderType == LlmProviderType.Anthropic
                         ? "claude-sonnet-4-20250514"
                         : "gpt-4o";

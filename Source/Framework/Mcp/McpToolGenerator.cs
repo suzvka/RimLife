@@ -79,13 +79,21 @@ namespace RimLife.Framework.Mcp
 
         /// <summary>
         /// 将 McpToolDefinition 序列化为标准 MCP 工具提示词 JSON 字符串。
+        /// OpenAI/DeepSeek 兼容格式：包含 type="function" 字段。
         /// </summary>
         public static string Serialize(McpToolDefinition def)
         {
             var w = new JsonWriter(512);
+            
+            // DeepSeek/OpenAI 要求必须有 type 字段
+            w.Prop("type", "function");
+            
             w.Prop("name", def.Name ?? string.Empty);
             w.Prop("description", def.Description ?? string.Empty);
-            w.PropRaw("inputSchema", SerializeInputSchema(def.InputSchema));
+            
+            // inputSchema → parameters (OpenAI 标准命名)
+            w.PropRaw("parameters", SerializeInputSchema(def.InputSchema));
+            
             return w.Close();
         }
 

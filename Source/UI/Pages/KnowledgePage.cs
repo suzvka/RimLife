@@ -1,5 +1,6 @@
 using UnityEngine;
 using Verse;
+using static RimLife.UI.UIHelper;
 
 namespace RimLife.UI
 {
@@ -15,27 +16,28 @@ namespace RimLife.UI
 
         public void Draw(Rect rect, Listing_Standard listing)
         {
-            Widgets.Label(listing.GetRect(24f), "── 自动学习 ──");
-            Widgets.Label(listing.GetRect(20f), "词条总数: 42    上次更新: 2小时前");
-            listing.Gap(8f);
-            Widgets.Label(listing.GetRect(20f), "最近学习:");
-            Widgets.Label(listing.GetRect(20f), "  • 16:32  学会「机械集群」— 来源: Raid 事件");
-            Widgets.Label(listing.GetRect(20f), "  • 16:30  学会「枯萎病」— 来源: 环境事件");
-            Widgets.Label(listing.GetRect(20f), "  • 15:58  学会「虚空裂隙」— 来源: GameDef");
-            listing.Gap(4f);
-            if (Widgets.ButtonText(listing.GetRect(30f), "查看全部词条"))
+            BeginSection(listing, "自动学习");
+            DrawInfoRow(listing, "词条总数", "42");
+            DrawInfoRow(listing, "上次更新", "2 小时前");
+            listing.Gap(GapTiny);
+            Widgets.Label(listing.GetRect(22f), "<size=12>最近学习:</size>");
+            Widgets.Label(listing.GetRect(22f), "<color=#AAAAAA>  • 16:32  学会「机械集群」— 来源: Raid 事件</color>");
+            Widgets.Label(listing.GetRect(22f), "<color=#AAAAAA>  • 16:30  学会「枯萎病」— 来源: 环境事件</color>");
+            Widgets.Label(listing.GetRect(22f), "<color=#AAAAAA>  • 15:58  学会「虚空裂隙」— 来源: GameDef</color>");
+            listing.Gap(GapTiny);
+            if (Widgets.ButtonText(listing.GetRect(26f), "查看全部词条"))
                 Log.Message("[RimLife.UI] View all knowledge entries");
+            EndSection(listing);
 
-            listing.Gap(16f);
-
-            Widgets.Label(listing.GetRect(24f), "── 操作 ──");
-            if (Widgets.ButtonText(listing.GetRect(30f), "从 GameDef 重新扫描"))
+            BeginSection(listing, "操作");
+            if (Widgets.ButtonText(listing.GetRect(28f), "从 GameDef 重新扫描"))
                 Log.Message("[RimLife.UI] Rescan GameDef clicked");
-            listing.Gap(4f);
-            if (Widgets.ButtonText(listing.GetRect(30f), "导出知识库"))
+            listing.Gap(GapTiny);
+            if (Widgets.ButtonText(listing.GetRect(28f), "导出知识库"))
                 Log.Message("[RimLife.UI] Export knowledge clicked");
-            if (Widgets.ButtonText(listing.GetRect(30f), "导入知识库"))
+            if (Widgets.ButtonText(listing.GetRect(28f), "导入知识库"))
                 Log.Message("[RimLife.UI] Import knowledge clicked");
+            EndSection(listing);
         }
     }
 }

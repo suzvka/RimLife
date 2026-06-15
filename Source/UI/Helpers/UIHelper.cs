@@ -9,15 +9,33 @@ namespace RimLife.UI
     public static class UIHelper
     {
         // ================================================================
+        // 间距常量
+        // ================================================================
+
+        /// <summary>微间距：标签与输入框之间、列表项之间。</summary>
+        public const float GapTiny = 4f;
+
+        /// <summary>小间距：同组内元素之间。</summary>
+        public const float GapSmall = 8f;
+
+        /// <summary>中间距：Section 之间、卡片之间。</summary>
+        public const float GapMedium = 12f;
+
+        /// <summary>大间距：页面级区块之间。</summary>
+        public const float GapLarge = 16f;
+
+        // ================================================================
         // 颜色常量
         // ================================================================
 
         public static readonly Color ColorSidebarBg = new Color(0.15f, 0.15f, 0.15f, 0.95f);
         public static readonly Color ColorContentBg = new Color(0.2f, 0.2f, 0.2f, 1f);
+        public static readonly Color ColorCardBg = new Color(0.22f, 0.22f, 0.22f, 1f);
         public static readonly Color ColorStatusBarBg = new Color(0.12f, 0.12f, 0.12f, 1f);
         public static readonly Color ColorSelectedItem = new Color(0.25f, 0.25f, 0.25f, 1f);
-        public static readonly Color ColorHighlight = new Color(0.4f, 0.7f, 1f, 1f);
+        public static readonly Color ColorHighlight = new Color(0.35f, 0.65f, 1f, 1f);
         public static readonly Color ColorDivider = new Color(0.3f, 0.3f, 0.3f, 1f);
+        public static readonly Color ColorCardBorder = new Color(0.28f, 0.28f, 0.28f, 1f);
 
         // ================================================================
         // Section 绘制
@@ -35,7 +53,87 @@ namespace RimLife.UI
 
         public static void EndSection(Listing_Standard listing)
         {
-            listing.Gap(12f);
+            listing.Gap(GapMedium);
+        }
+
+        /// <summary>
+        /// 绘制 Section 底部分隔线。
+        /// 在 Section 内容下方绘制一条细线增强视觉分隔。
+        /// </summary>
+        public static void DrawSectionDivider(Listing_Standard listing)
+        {
+            listing.Gap(GapTiny);
+            var lineRect = listing.GetRect(1f);
+            Widgets.DrawBoxSolid(lineRect, ColorDivider);
+        }
+
+        // ================================================================
+        // 卡片式 Section
+        // ================================================================
+
+        /// <summary>
+        /// 绘制一个卡片式容器。为逻辑分组提供视觉边界。
+        /// 返回卡片内部可用区域的起始 Y（调用方自行管理 listing 游标）。
+        /// 注意：此方法绘制背景和标题，调用方需在返回后继续绘制内容。
+        /// </summary>
+        /// <param name="listing">Listing 实例。</param>
+        /// <param name="title">卡片标题（可为 null，null 时不绘制标题）。</param>
+        /// <param name="contentHeight">卡片内容区估算高度（用于绘制背景）。</param>
+        /// <returns>卡片背景 Rect，供调用方参考。</returns>
+        public static Rect BeginCard(Listing_Standard listing, string title, float contentHeight)
+        {
+            listing.Gap(GapTiny);
+            var totalHeight = (title != null ? 28f + GapTiny : 0f) + contentHeight + GapSmall;
+            var cardRect = listing.GetRect(totalHeight);
+
+            // 卡片背景
+            Widgets.DrawBoxSolid(cardRect, ColorCardBg);
+            // 顶部边框线
+            var topBorder = new Rect(cardRect.x, cardRect.y, cardRect.width, 1f);
+            Widgets.DrawBoxSolid(topBorder, ColorCardBorder);
+            // 底部边框线
+            var bottomBorder = new Rect(cardRect.x, cardRect.y + cardRect.height - 1f, cardRect.width, 1f);
+            Widgets.DrawBoxSolid(bottomBorder, ColorCardBorder);
+
+            // 标题
+            if (title != null)
+            {
+                var titleRect = new Rect(cardRect.x + GapSmall, cardRect.y + GapTiny, cardRect.width - GapSmall * 2, 24f);
+                Widgets.Label(titleRect, $"<size=14><b>{title}</b></size>");
+            }
+
+            return cardRect;
+        }
+
+        // ================================================================
+        // Key-Value 信息行
+        // ================================================================
+
+        /// <summary>
+        /// 绘制 Label: Value 格式的信息行。
+        /// Label 为浅灰色，Value 为白色，适合展示只读状态数据。
+        /// </summary>
+        public static void DrawInfoRow(Listing_Standard listing, string label, string value)
+        {
+            var rowRect = listing.GetRect(22f);
+            var labelWidth = Text.CalcHeight(label, listing.ColumnWidth) * 4f; // 粗略估算 label 宽度
+            var labelRect = new Rect(rowRect.x, rowRect.y, Mathf.Min(140f, labelWidth + 8f), rowRect.height);
+            var valueRect = new Rect(rowRect.x + labelRect.width, rowRect.y, rowRect.width - labelRect.width, rowRect.height);
+
+            Widgets.Label(labelRect, $"<color=#888888>{label}:</color>");
+            Widgets.Label(valueRect, value);
+        }
+
+        /// <summary>
+        /// 绘制带状态指示器的信息行。
+        /// </summary>
+        public static void DrawStatusRow(Listing_Standard listing, string label, string status, string value = null)
+        {
+            var rowRect = listing.GetRect(22f);
+            var color = GetStatusColor(status);
+            var indicator = WrapColor("● ", color);
+            var text = value != null ? $"{indicator}{label}: {value}" : $"{indicator}{label}";
+            Widgets.Label(rowRect, text);
         }
 
         // ================================================================
@@ -51,8 +149,8 @@ namespace RimLife.UI
             Widgets.Label(listing.GetRect(labelHeight), label);
             if (!string.IsNullOrEmpty(description))
             {
-                var descHeight = Text.CalcHeight($"<color=#888888><size=11>{description}</size></color>", listing.ColumnWidth);
-                Widgets.Label(listing.GetRect(descHeight), $"<color=#888888><size=11>{description}</size></color>");
+                var descHeight = Text.CalcHeight($"<color=#888888><size=12>{description}</size></color>", listing.ColumnWidth);
+                Widgets.Label(listing.GetRect(descHeight), $"<color=#888888><size=12>{description}</size></color>");
             }
         }
 

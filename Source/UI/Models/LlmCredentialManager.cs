@@ -6,6 +6,8 @@ using System.Threading.Tasks;
 using RimLife.Core;
 using RimLife.Framework;
 using RimLife.Framework.Llm;
+using RimLife.Infrastructure;
+using RimLife.Settings;
 
 namespace RimLife.UI.Models
 {
@@ -13,13 +15,10 @@ namespace RimLife.UI.Models
     /// LLM 凭证管理器。管理多张 API 凭证卡片的增删改查、模型发现、
     /// 模型选择以及在运行时的模型 fallback 循环。
     ///
-    /// 通过 ICacheStore 持久化完整状态。
+    /// 通过 RimWorld ModSettings (RimLifeModSettings) 全局持久化，不绑定存档。
     /// </summary>
     public class LlmCredentialManager
     {
-        private const string CacheKey = "rimlife_llm_credentials";
-
-        private ICacheStore _store;
         private LlmCredentialState _state;
         private readonly object _lock = new object();
 
@@ -44,26 +43,27 @@ namespace RimLife.UI.Models
         // ================================================================
 
         /// <summary>
-        /// 初始化：从 CacheStore 加载持久化状态。
+        /// 初始化：从 RimLifeModSettings 加载全局持久化状态，并注入到 LlmAccessor。
         /// </summary>
-        public void Initialize(ICacheStore store)
+        public void Initialize()
         {
-            _store = store ?? throw new ArgumentNullException(nameof(store));
             Load();
+            SyncToLlmAccessor();
         }
 
         /// <summary>
-        /// 持久化当前状态到 CacheStore。
+        /// 持久化当前状态到 ModSettings（全局，不绑定存档）。
         /// </summary>
         public void Save()
         {
-            if (_store == null) return;
+            var settings = RimLifeModSettings.Instance;
+            if (settings == null) return;
             lock (_lock)
             {
                 try
                 {
-                    string json = SerializeState(_state);
-                    _store.Cache(CacheKey, json);
+                    settings.LlmCredentialsJson = SerializeState(_state);
+                    settings.SaveNow();
                 }
                 catch
                 {
@@ -72,13 +72,51 @@ namespace RimLife.UI.Models
             }
         }
 
+        /// <summary>
+        /// 将当前激活的模型配置同步到 LlmAccessor，确保 Agent 可以正常调用 LLM。
+        /// 在凭证/模型变更时自动调用，实现前后端配置联动。
+        /// </summary>
+        private void SyncToLlmAccessor()
+        {
+            lock (_lock)
+            {
+                LlmConfig config = null;
+
+                // 优先使用已选择模型列表中的第一个
+                if (_state.ActiveModelOrder.Count > 0)
+                {
+                    config = BuildConfigForModel(_state.ActiveModelOrder[0]);
+                }
+
+                // 回退：没有模型列表时，取第一张激活卡片的默认配置
+                if (config == null)
+                {
+                    var firstActive = _state.Cards.FirstOrDefault(c => c.IsActive && c.IsValid());
+                    if (firstActive != null)
+                        config = firstActive.ToLlmConfig();
+                }
+
+                if (config != null && config.IsValid())
+                {
+                    RimLifeCore.LlmAccessor?.UpdateConfig(config);
+                }
+            }
+        }
+
         private void Load()
         {
+            var settings = RimLifeModSettings.Instance;
+            if (settings == null)
+            {
+                _state = new LlmCredentialState();
+                return;
+            }
+
             lock (_lock)
             {
                 try
                 {
-                    string json = _store.FetchCache<string>(CacheKey);
+                    string json = settings.LlmCredentialsJson;
                     if (!string.IsNullOrEmpty(json))
                         _state = DeserializeState(json) ?? new LlmCredentialState();
                     else
@@ -134,6 +172,7 @@ namespace RimLife.UI.Models
                 _state.Cards.Add(card);
             }
             Save();
+            SyncToLlmAccessor();
             return card;
         }
 
@@ -149,6 +188,7 @@ namespace RimLife.UI.Models
                 RebuildActiveModelOrder();
             }
             Save();
+            SyncToLlmAccessor();
         }
 
         /// <summary>
@@ -168,6 +208,7 @@ namespace RimLife.UI.Models
                 }
             }
             Save();
+            SyncToLlmAccessor();
         }
 
         /// <summary>
@@ -182,6 +223,7 @@ namespace RimLife.UI.Models
                     card.IsActive = isActive;
             }
             Save();
+            SyncToLlmAccessor();
         }
 
         // ================================================================
@@ -308,6 +350,7 @@ namespace RimLife.UI.Models
                 });
             }
             Save();
+            SyncToLlmAccessor();
         }
 
         /// <summary>
@@ -320,6 +363,7 @@ namespace RimLife.UI.Models
                 RebuildActiveModelOrder();
             }
             Save();
+            SyncToLlmAccessor();
         }
 
         private void RebuildActiveModelOrder()

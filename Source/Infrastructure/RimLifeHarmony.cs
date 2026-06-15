@@ -43,8 +43,8 @@ namespace RimLife.Infrastructure
                 // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
                 RimLifeCore.EnsureSkillRegistryInitialized();
 
-                // 初始化 LLM 凭证管理器（游戏侧多卡片配置）
-                LlmCredentialManager.Instance.Initialize(RimLifeCore.CacheStore);
+                // 初始化 LLM 凭证管理器（从 ModSettings 全局加载，不绑定存档）
+                LlmCredentialManager.Instance.Initialize();
 
                 logger.Message("[RimLife.Infrastructure] Startup complete.");
             }

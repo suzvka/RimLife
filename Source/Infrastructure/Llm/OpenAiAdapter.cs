@@ -38,13 +38,24 @@ namespace RimLife.Infrastructure.Llm
             if (request == null)
                 return LlmResponse.FromError("request is null");
             if (!request.IsValid())
-                return LlmResponse.FromError("invalid request: model and messages required");
+                return LlmResponse.FromError($"invalid request: model='{request.Model}', messages={request.Messages?.Count ?? 0}");
 
             try
             {
                 string requestJson = BuildChatRequest(request);
+                // 调试：记录请求 JSON
+                RimLifeCore.Logger?.Message($"[RimLife.OpenAiAdapter] Request JSON: {TruncateJson(requestJson)}");
+                
                 string responseJson = SendHttpRequest("/v1/chat/completions", requestJson);
-                return ParseChatResponse(responseJson);
+                var response = ParseChatResponse(responseJson);
+                
+                // 调试：记录响应状态
+                if (!response.IsSuccess)
+                    RimLifeCore.Logger?.Warning($"[RimLife.OpenAiAdapter] Response error: {response.Error}");
+                else
+                    RimLifeCore.Logger?.Message($"[RimLife.OpenAiAdapter] Success, content length: {response.Content?.Length ?? 0}");
+                
+                return response;
             }
             catch (HttpRequestException e)
             {
@@ -174,7 +185,16 @@ namespace RimLife.Infrastructure.Llm
 
             // 同步发送（在后台工作线程中，阻塞是合理的）
             var response = _httpClient.SendAsync(request).GetAwaiter().GetResult();
-            response.EnsureSuccessStatusCode();
+            
+            // 如果状态码不是成功，读取响应体获取详细错误信息
+            if (!response.IsSuccessStatusCode)
+            {
+                string errorBody = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+                throw new HttpRequestException(
+                    $"HTTP {(int)response.StatusCode} ({response.ReasonPhrase}): {TruncateJson(errorBody, 300)}"
+                );
+            }
+            
             return response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
         }
 
@@ -363,6 +383,12 @@ namespace RimLife.Infrastructure.Llm
             }
 
             return result;
+        }
+
+        private static string TruncateJson(string json, int maxLength = 500)
+        {
+            if (string.IsNullOrEmpty(json)) return "(empty)";
+            return json.Length > maxLength ? json.Substring(0, maxLength) + "..." : json;
         }
     }
 }
