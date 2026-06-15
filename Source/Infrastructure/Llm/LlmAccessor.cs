@@ -116,9 +116,10 @@ namespace RimLife.Infrastructure.Llm
         /// 在后台工作线程中执行 HTTP 调用，Task 完成时已通过 MainThreadDispatcher 回主线程。
         /// </summary>
         /// <param name="request">对话请求。</param>
+        /// <param name="overrideConfig">临时覆盖配置。非 null 时创建临时 adapter，不影响全局状态。</param>
         /// <param name="ct">取消令牌。</param>
         /// <returns>LLM 响应 Task。</returns>
-        public Task<LlmResponse> ChatAsync(LlmRequest request, CancellationToken ct = default)
+        public Task<LlmResponse> ChatAsync(LlmRequest request, LlmConfig overrideConfig = null, CancellationToken ct = default)
         {
             if (request == null)
             {
@@ -127,14 +128,23 @@ namespace RimLife.Infrastructure.Llm
             }
 
             ILlmApiProvider adapter;
-            lock (_lock)
+
+            if (overrideConfig != null)
             {
-                if (_adapter == null)
+                // 临时覆盖：创建临时 adapter，不影响全局配置
+                adapter = CreateAdapter(overrideConfig);
+            }
+            else
+            {
+                lock (_lock)
                 {
-                    return Task.FromException<LlmResponse>(
-                        new InvalidOperationException("LLM not configured."));
+                    if (_adapter == null)
+                    {
+                        return Task.FromException<LlmResponse>(
+                            new InvalidOperationException("LLM not configured."));
+                    }
+                    adapter = _adapter;
                 }
-                adapter = _adapter;
             }
 
             var tcs = new TaskCompletionSource<LlmResponse>();
@@ -225,19 +235,29 @@ namespace RimLife.Infrastructure.Llm
         /// 在后台工作线程中执行，Task 完成时已通过 MainThreadDispatcher 回主线程。
         /// 部分 API 不支持此功能（如 Anthropic），返回空数组。
         /// </summary>
+        /// <param name="overrideConfig">临时覆盖配置。非 null 时创建临时 adapter 查询，不影响全局状态。</param>
         /// <param name="ct">取消令牌。</param>
         /// <returns>模型 ID 列表。</returns>
-        public Task<string[]> ListModelsAsync(CancellationToken ct = default)
+        public Task<string[]> ListModelsAsync(LlmConfig overrideConfig = null, CancellationToken ct = default)
         {
             ILlmApiProvider adapter;
-            lock (_lock)
+
+            if (overrideConfig != null)
             {
-                if (_adapter == null)
+                // 临时覆盖：创建临时 adapter，不影响全局配置
+                adapter = CreateAdapter(overrideConfig);
+            }
+            else
+            {
+                lock (_lock)
                 {
-                    return Task.FromException<string[]>(
-                        new InvalidOperationException("LLM not configured."));
+                    if (_adapter == null)
+                    {
+                        return Task.FromException<string[]>(
+                            new InvalidOperationException("LLM not configured."));
+                    }
+                    adapter = _adapter;
                 }
-                adapter = _adapter;
             }
 
             var tcs = new TaskCompletionSource<string[]>();
