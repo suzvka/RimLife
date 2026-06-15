@@ -102,7 +102,7 @@ namespace RimLife.Framework.Script
                 },
                 ["type"] = (line, val) =>
                 {
-                    line.Type = ParseScriptLineType(val);
+                    line.Type = ParseLineType(val);
                 },
             };
 
@@ -259,7 +259,10 @@ namespace RimLife.Framework.Script
             }
         }
 
-        private static ScriptLineType ParseScriptLineType(string val)
+        /// <summary>
+        /// 解析类型字符串为 ScriptLineType。供外部（如 PushLine）使用。
+        /// </summary>
+        public static ScriptLineType ParseLineType(string val)
         {
             if (string.IsNullOrEmpty(val))
                 return ScriptLineType.Dialogue;

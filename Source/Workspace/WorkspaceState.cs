@@ -145,7 +145,8 @@ namespace RimLife.Workspace
         /// <summary>结束原因描述（Completed / Abandoned 时填充）。</summary>
         public string Outcome;
 
-        /// <summary>编剧最近一次上报的推进状态信号。</summary>
-        public StorylineSignal? LastSignal;
+        /// <summary>编剧给导演的留言。每轮 finish_round 时写入，导演查看所有活跃工作空间时可见。
+        /// 内容：本轮剧情发展简述、是否可继续、期望接收的事件类型等。</summary>
+        public string DirectorMessage;
     }
 }

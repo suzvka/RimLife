@@ -238,5 +238,43 @@ namespace RimLife.Tests.Framework
             Assert.Equal(1.5f, lines[1].RelativeTime);
             Assert.Equal(ScriptLineType.Narration, lines[1].Type);
         }
+
+        // ================================================================
+        // ParseLineType — 逐句类型解析
+        // ================================================================
+
+        [Fact]
+        public void ParseLineType_Dialogue_ReturnsDialogue()
+        {
+            Assert.Equal(ScriptLineType.Dialogue, ScriptFormat.ParseLineType("dialogue"));
+            Assert.Equal(ScriptLineType.Dialogue, ScriptFormat.ParseLineType("DIALOGUE"));
+            Assert.Equal(ScriptLineType.Dialogue, ScriptFormat.ParseLineType(""));
+            Assert.Equal(ScriptLineType.Dialogue, ScriptFormat.ParseLineType(null));
+        }
+
+        [Fact]
+        public void ParseLineType_Narration_ReturnsNarration()
+        {
+            Assert.Equal(ScriptLineType.Narration, ScriptFormat.ParseLineType("narration"));
+        }
+
+        [Fact]
+        public void ParseLineType_Action_ReturnsAction()
+        {
+            Assert.Equal(ScriptLineType.Action, ScriptFormat.ParseLineType("action"));
+        }
+
+        [Fact]
+        public void ParseLineType_Pause_ReturnsPause()
+        {
+            Assert.Equal(ScriptLineType.Pause, ScriptFormat.ParseLineType("pause"));
+        }
+
+        [Fact]
+        public void ParseLineType_Invalid_DefaultsToDialogue()
+        {
+            Assert.Equal(ScriptLineType.Dialogue, ScriptFormat.ParseLineType("invalid"));
+            Assert.Equal(ScriptLineType.Dialogue, ScriptFormat.ParseLineType("unknown"));
+        }
     }
 }

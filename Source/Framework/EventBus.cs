@@ -230,7 +230,9 @@ namespace RimLife.Framework
         public const string WorkspaceUpdated = "workspace.updated";
 
         // ---- 台词 ----
-        /// <summary>台词已解析就绪，ScriptDeliveryService 将推送到游戏侧。</summary>
+        /// <summary>单句台词已就绪，ScriptDeliveryService 将逐行推送到游戏侧。</summary>
+        public const string ScriptLineReady = "script.line_ready";
+        /// <summary>台词轮次完成（finish_round 调用后）。</summary>
         public const string ScriptReady = "script.ready";
 
         // ---- 记忆 ----

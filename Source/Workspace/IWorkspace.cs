@@ -1,4 +1,5 @@
 using RimLife.Core;
+using RimLife.Framework.Script;
 using System.Collections.Generic;
 
 namespace RimLife.Workspace
@@ -24,7 +25,9 @@ namespace RimLife.Workspace
         string CreatedAt { get; }
         string LastActivityAt { get; }
         string Outcome { get; }
-        StorylineSignal? LastSignal { get; }
+
+        /// <summary>编剧给导演的留言。由 FinishRound 写入。</summary>
+        string DirectorMessage { get; }
 
         // --- 内部组件 ---
 
@@ -36,12 +39,12 @@ namespace RimLife.Workspace
 
         // --- 叙事操作 ---
 
-        /// <summary>推送一个叙事回合。</summary>
-        bool PushRound(string recap, string narrative,
-            IReadOnlyList<string> triggerEventIds, WorkspaceRole callerRole, string callerId = null);
+        /// <summary>推送单句台词。立即投递到游戏侧显示。</summary>
+        bool PushLine(string speakerId, string text, float delay, string type,
+            WorkspaceRole callerRole, string callerId = null);
 
-        /// <summary>上报剧情信号。</summary>
-        bool ReportSignal(SignalType signalType, string note,
-            string suggestedTargetId, WorkspaceRole callerRole);
+        /// <summary>结束本轮叙事。归档 recap + outcome，给导演留言。</summary>
+        bool FinishRound(string recap, string outcome, string directorNote,
+            IReadOnlyList<string> triggerEventIds, WorkspaceRole callerRole, string callerId = null);
     }
 }

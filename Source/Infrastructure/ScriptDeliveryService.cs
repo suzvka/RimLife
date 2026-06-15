@@ -7,13 +7,12 @@ using System.Collections.Generic;
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// 台词推送服务。订阅 EventBus 的 script.ready 事件，
+    /// 台词推送服务。订阅 EventBus 的 script.line_ready（逐行）和 script.ready（轮次完成）事件，
     /// 解析占位符后通过 MainThreadDispatcher 投递到游戏侧 IScriptConsumer。
     ///
     /// 职责边界：
-    ///   - 从工作空间取出解析好的 ScriptLine 列表
-    ///   - 调用 IScriptLineResolver 填充 SpeakerName
-    ///   - 通过 MainThreadDispatcher 回调 IScriptConsumer
+    ///   - script.line_ready: 逐行解析 SpeakerName 后立即投递单行
+    ///   - script.ready: 轮次完成时投递完整 ScriptLines 列表作为最终同步
     ///   - 不关心台词格式（格式是 ScriptFormat 的事）
     ///   - 不关心时间轴（时间是游戏侧的事）
     /// </summary>
@@ -24,6 +23,7 @@ namespace RimLife.Infrastructure
         private readonly IScriptLineResolver _resolver;
         private readonly ILogger _logger;
         private readonly Action _unsubscribe;
+        private readonly Action _unsubscribeLine;
         private bool _disposed;
 
         public ScriptDeliveryService(
@@ -39,15 +39,75 @@ namespace RimLife.Infrastructure
             _resolver = resolver
                 ?? throw new ArgumentNullException(nameof(resolver));
             _logger = logger;
-
+        
             // 订阅 EventBus
             _unsubscribe = EventBus.Subscribe(FrameworkEvents.ScriptReady, OnScriptReady, priority: 50);
-            _logger?.Message("[RimLife.ScriptDelivery] Initialized and subscribed to script.ready.");
+            _unsubscribeLine = EventBus.Subscribe(FrameworkEvents.ScriptLineReady, OnScriptLineReady, priority: 50);
+            _logger?.Message("[RimLife.ScriptDelivery] Initialized and subscribed to script.ready + script.line_ready.");
         }
 
         // ================================================================
         // 事件处理
         // ================================================================
+
+        /// <summary>
+        /// 逐行投递：script.line_ready → 解析 SpeakerName → 立即单行投递到游戏侧。
+        /// </summary>
+        private void OnScriptLineReady(EventArg args)
+        {
+            if (_disposed) return;
+
+            try
+            {
+                if (args?.Payload == null) return;
+
+                args.Payload.TryGetValue("speakerId", out var speakerId);
+                args.Payload.TryGetValue("text", out var text);
+                args.Payload.TryGetValue("delay", out var delayStr);
+                args.Payload.TryGetValue("type", out var typeStr);
+                args.Payload.TryGetValue("workspaceId", out var workspaceId);
+                int.TryParse(args.Payload.TryGetValue("roundSeq", out var rs) ? rs : "0", out int roundSeq);
+
+                float.TryParse(delayStr,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out float delay);
+
+                var line = new ScriptLine
+                {
+                    SpeakerId = string.IsNullOrEmpty(speakerId) ? null : speakerId,
+                    Text = text ?? "",
+                    RelativeTime = delay,
+                    Type = ScriptFormat.ParseLineType(typeStr)
+                };
+
+                var lines = new List<ScriptLine> { line };
+                _resolver.Resolve(lines);
+
+                var consumer = _getConsumer();
+                if (consumer == null) return;
+
+                MainThreadDispatcher.Enqueue(() =>
+                {
+                    try
+                    {
+                        consumer.OnScriptLinesReady(workspaceId ?? "", roundSeq, lines);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.Warning($"[RimLife.ScriptDelivery] Line consumer error: {ex.Message}");
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.Warning($"[RimLife.ScriptDelivery] OnScriptLineReady error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 轮次完成投递：script.ready → 取完整 ScriptLines 列表最终同步投递。
+        /// </summary>
 
         private void OnScriptReady(EventArg args)
         {
@@ -157,6 +217,7 @@ namespace RimLife.Infrastructure
             _disposed = true;
 
             _unsubscribe?.Invoke();
+            _unsubscribeLine?.Invoke();
             _logger?.Message("[RimLife.ScriptDelivery] Disposed.");
         }
     }

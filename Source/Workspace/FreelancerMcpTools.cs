@@ -14,8 +14,8 @@ namespace RimLife.Workspace
     ///
     /// 与 WritingMcpProvider 的关键区别：
     /// - 无 get_workspace（含叙事内容）—— Freelancer 不维护剧情上下文
-    /// - 无 signal_workspace_status —— Freelancer 不汇报剧情线推进状态
-    /// - push_round 使用 WorkspaceRole.Freelancer 身份
+    /// - 无 finish_round 的 outcome/directorNote —— Freelancer 不汇报剧情线推进状态
+    /// - push_line / finish_round 使用 WorkspaceRole.Freelancer 身份
     /// - route_events 可将不适合的事件推回导演工作空间
     /// </summary>
     public class FreelancerMcpProvider : IMcpHookProvider
@@ -31,14 +31,15 @@ namespace RimLife.Workspace
 
         public string HookId => "workspace_freelancer";
         public string HookName => "工作空间(临时任务代理)";
-        public string HookDescription => "处理日常对话、突发独立事件的叙事输出。与编剧同构但无剧情上下文。Freelancer 专用。";
+        public string HookDescription => "处理日常对话、突发独立事件的叙事输出。逐句台词推送，与编剧同构但无剧情上下文。Freelancer 专用。";
 
         public IReadOnlyList<McpTool> GetTools()
         {
             return new McpTool[]
             {
                 McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(GetWorkspace)), this),
-                McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(PushRound)), this),
+                McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(PushLine)), this),
+                McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(FinishRound)), this),
                 McpTool.FromMethod(typeof(FreelancerMcpProvider).GetMethod(nameof(RouteEvents)), this),
             };
         }
@@ -74,21 +75,60 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 回合推送
+        // 逐句台词推送
         // ================================================================
 
         /// <summary>
-        /// 推送一个新轮次到工作空间。Freelancer 身份调用，内部由 IWorkspace 校验。
+        /// 推送单句台词到工作空间。Freelancer 身份调用。
         /// </summary>
-        [McpTool(Name = "push_round",
-                 Description = "向工作空间推送一个新轮次：摘要 + 正式台词。Freelancer 无前情提要，每次激活独立处理。")]
-        public string PushRound(
+        [McpTool(Name = "push_line",
+                 Description = "推送单句台词到工作空间，立即在游戏内显示。可一次并行调用多个。\n" +
+                               "type: dialogue(角色对话) / narration(旁白/环境描写) / action(动作描写) / pause(纯停顿)。")]
+        public string PushLine(
+            [McpParam(Description = "目标工作空间 ID")] string workspaceId,
+            [McpParam(Description = "说话者的 ThingID。dialogue 类型必填，其他类型省略。")]
+            string speakerId,
+            [McpParam(Description = "台词/描述文本。pause 类型时可为空。")]
+            string text,
+            [McpParam(Description = "本行之前的等待秒数，默认 0。")]
+            double delay = 0,
+            [McpParam(Description = "类型：dialogue/narration/action/pause，默认 dialogue。")]
+            string type = "dialogue")
+        {
+            try
+            {
+                var manager = _getWorkspaceManager();
+                if (manager == null) return "{}";
+
+                var ws = manager.Get(workspaceId);
+                if (ws == null) return "{}";
+
+                bool ok = ws.PushLine(speakerId, text, (float)delay, type,
+                                      WorkspaceRole.Freelancer);
+                return ok ? "{\"ok\":true}" : "{}";
+            }
+            catch (Exception e)
+            {
+                _logger.Warning($"[RimLife.FreelancerMcp] push_line failed: {e.Message}");
+                return "{}";
+            }
+        }
+
+        // ================================================================
+        // 结束本轮
+        // ================================================================
+
+        /// <summary>
+        /// 结束本轮叙事。Freelancer 身份调用，无 outcome/directorNote。
+        /// </summary>
+        [McpTool(Name = "finish_round",
+                 Description = "结束本轮叙事。Freelancer 不维护剧情上下文，recap 为本轮摘要即可。\n" +
+                               "在 push_line 推送完所有台词后必须调用。")]
+        public string FinishRound(
             [McpParam(Description = "目标工作空间 ID")] string workspaceId,
             [McpParam(Description = "本轮摘要：Freelancer 对当前事件批次的简要总结。")]
             string recap,
-            [McpParam(Description = "正式台词：JSON 数组格式，每元素为一句台词。字段格式详见系统提示中的台词格式说明。")]
-            string narrative,
-            [McpParam(Description = "本轮触发的事件 ID 列表，逗号分隔。仅作溯源，不注入 prompt。",
+            [McpParam(Description = "本轮触发的事件 ID 列表，逗号分隔。仅作溯源。",
                       Required = McpRequired.False)] string triggerEventIds = null)
         {
             try
@@ -100,15 +140,15 @@ namespace RimLife.Workspace
                 if (ws == null) return "{}";
 
                 var eventIdList = ParseStringList(triggerEventIds);
-                bool ok = ws.PushRound(recap, narrative, eventIdList,
-                                       WorkspaceRole.Freelancer);
+                bool ok = ws.FinishRound(recap, null, null, eventIdList,
+                                         WorkspaceRole.Freelancer);
                 if (!ok) return "{}";
 
                 return SerializeResult(manager.Get(workspaceId));
             }
             catch (Exception e)
             {
-                _logger.Warning($"[RimLife.FreelancerMcp] push_round failed: {e.Message}");
+                _logger.Warning($"[RimLife.FreelancerMcp] finish_round failed: {e.Message}");
                 return "{}";
             }
         }

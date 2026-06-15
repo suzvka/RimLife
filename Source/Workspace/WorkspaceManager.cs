@@ -109,7 +109,7 @@ namespace RimLife.Workspace
                 PendingEventIds = new List<string>(),
                 PendingImportance = 0,
                 Outcome = null,
-                LastSignal = null
+                DirectorMessage = null
             };
 
             var impl = Wrap(ws);
@@ -242,7 +242,7 @@ namespace RimLife.Workspace
                 PendingEventIds = new List<string>(),
                 PendingImportance = 0,
                 Outcome = null,
-                LastSignal = null
+                DirectorMessage = null
             };
 
             var childImpl = Wrap(child);
@@ -493,18 +493,8 @@ namespace RimLife.Workspace
             w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
-            if (ws.LastSignal.HasValue)
-            {
-                var sig = ws.LastSignal.Value;
-                var sigWriter = new JsonWriter(256);
-                sigWriter.Prop("type", sig.Type.ToString());
-                sigWriter.Prop("reportedAt", sig.ReportedAt ?? "");
-                if (!string.IsNullOrEmpty(sig.Note))
-                    sigWriter.Prop("note", sig.Note);
-                if (!string.IsNullOrEmpty(sig.SuggestedTargetId))
-                    sigWriter.Prop("suggestedTargetId", sig.SuggestedTargetId);
-                w.PropRaw("lastSignal", sigWriter.Close());
-            }
+            if (!string.IsNullOrEmpty(ws.DirectorMessage))
+                w.Prop("directorMessage", ws.DirectorMessage);
             return w.Close();
         }
 
@@ -548,7 +538,7 @@ namespace RimLife.Workspace
                 PendingEventIds = DeserializeStringList(data.TryGetValue("pendingEventIds", out v) ? v : null),
                 PendingImportance = data.TryGetValue("pendingImportance", out v) && int.TryParse(v, out var imp) ? imp : 0,
                 Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null,
-                LastSignal = DeserializeSignal(data.TryGetValue("lastSignal", out v) ? v : null)
+                DirectorMessage = data.TryGetValue("directorMessage", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
             };
 
             return ws;
@@ -600,31 +590,6 @@ namespace RimLife.Workspace
             if (Enum.TryParse<WorkspaceRole>(s, true, out var role))
                 return role;
             return WorkspaceRole.Director;
-        }
-
-        private static StorylineSignal? DeserializeSignal(string json)
-        {
-            if (string.IsNullOrEmpty(json)) return null;
-
-            var dict = JsonParser.ParseDict(json);
-            if (dict == null || dict.Count == 0) return null;
-
-            var signal = new StorylineSignal
-            {
-                Type = ParseSignalType(dict.TryGetValue("type", out var v) ? v : "Progressing"),
-                ReportedAt = dict.TryGetValue("reportedAt", out v) ? v : "",
-                Note = dict.TryGetValue("note", out v) ? v : "",
-                SuggestedTargetId = dict.TryGetValue("suggestedTargetId", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
-            };
-            return signal;
-        }
-
-        private static SignalType ParseSignalType(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return SignalType.Progressing;
-            if (Enum.TryParse<SignalType>(s, true, out var st))
-                return st;
-            return SignalType.Progressing;
         }
 
         private static List<string> DeserializeStringList(string json)

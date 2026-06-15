@@ -600,10 +600,16 @@ namespace RimLife.Infrastructure
                 if (ws.Tags != null && ws.Tags.Count > 0)
                     sb.Append($" tags=[{string.Join(",", ws.Tags)}]");
                 sb.Append($" rounds={ws.Rounds?.Count ?? 0}");
-                if (ws.LastSignal.HasValue)
-                    sb.Append($" signal={ws.LastSignal.Value.Type}");
+                if (!string.IsNullOrEmpty(ws.DirectorMessage))
+                    sb.Append($" msg={TruncateForSummary(ws.DirectorMessage, 60)}");
             }
             return sb.ToString();
+        }
+
+        private static string TruncateForSummary(string text, int maxLen)
+        {
+            if (string.IsNullOrEmpty(text)) return "";
+            return text.Length <= maxLen ? text : text.Substring(0, maxLen) + "...";
         }
 
         private static string BuildScreenwriterSystemPrompt(Workspace.IWorkspace ws)
@@ -622,15 +628,16 @@ namespace RimLife.Infrastructure
             sb.AppendLine("你的职责：");
             sb.AppendLine("1. 审查推送到本工作空间的事件");
             sb.AppendLine("2. 根据需要调用角色查询、环境感知等工具获取上下文");
-            sb.AppendLine("3. 使用 push_round 工具撰写叙事内容（recap + narrative）");
-            sb.AppendLine("4. 在同一响应中调用 signal_workspace_status 上报推进状态");
+            sb.AppendLine("3. 使用 push_line 工具逐句撰写台词（可一次并行调用多个 push_line）");
+            sb.AppendLine("4. 台词写完后调用 finish_round 结束本轮，填写 recap/outcome/directorNote");
             sb.AppendLine();
             sb.AppendLine("工作原则：");
-            sb.AppendLine("- push_round 和 signal_workspace_status 应在同一次响应中调用");
+            sb.AppendLine("- 优先使用 push_line 逐句输出台词以降低玩家等待延迟");
+            sb.AppendLine("- 多句台词可在一个响应中并行调用多个 push_line，减少 API 往返");
+            sb.AppendLine("- 台词写完后必须调用 finish_round 收尾");
+            sb.AppendLine("- recap (前情提要) 总结本轮叙事起点，outcome 简述剧情发展结果");
+            sb.AppendLine("- directorNote 给导演留言：剧情线是否可以继续、期望接收什么类型的事件等");
             sb.AppendLine("- 每次激活只推送 1 个轮次");
-            sb.AppendLine("- 前情提要 (recap) 总结当前叙事起点，台词 (narrative) 是正式的叙事输出");
-            sb.AppendLine("- 剧情完结时 signal_workspace_status 上报 StorylineComplete");
-            sb.AppendLine("- 遇到剧情瓶颈时上报 NeedsBranch 或 Stuck");
             sb.AppendLine("- 如事件不适合本剧情线，可用 route_events 推回导演工作空间");
             sb.AppendLine();
             sb.AppendLine("---");
@@ -654,16 +661,17 @@ namespace RimLife.Infrastructure
             sb.AppendLine("1. 处理突发性、独立性的事件（日常对话、随机遭遇、环境变化等）");
             sb.AppendLine("2. 这些事件不属于任何正在进行的剧情线，你不需要维护跨轮次的剧情上下文");
             sb.AppendLine("3. 调用角色查询、环境感知等工具获取当前状态");
-            sb.AppendLine("4. 使用 push_round 工具输出叙事内容");
+            sb.AppendLine("4. 使用 push_line 工具逐句输出台词，写完后调用 finish_round 收尾");
             sb.AppendLine();
             sb.AppendLine("工作原则：");
             sb.AppendLine("- 每次激活都是独立任务，不维护剧情延续性");
             sb.AppendLine("- 叙事风格保持轻快、即兴，快速响应");
             sb.AppendLine("- 每次激活只处理当前批次事件，输出 1 个轮次");
-            sb.AppendLine("- 前情提要 (recap) 只总结本次事件批次，不需要回顾历史");
-            sb.AppendLine("- 台词 (narrative) 是正式的叙事输出");
+            sb.AppendLine("- recap 只总结本次事件批次，不需要回顾历史");
+            sb.AppendLine("- 多句台词可在一个响应中并行调用多个 push_line");
+            sb.AppendLine("- 台词写完后必须调用 finish_round");
             sb.AppendLine("- 如事件更适合某条剧情线，用 route_events 推回导演工作空间");
-            sb.AppendLine("- 你不负责上报剧情线推进状态（那是编剧的职责）");
+            sb.AppendLine("- 你不负责汇报剧情线推进状态（那是编剧的职责）");
             sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();

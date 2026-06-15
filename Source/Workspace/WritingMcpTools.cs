@@ -26,15 +26,15 @@ namespace RimLife.Workspace
 
         public string HookId => "workspace_writing";
         public string HookName => "工作空间(编剧)";
-        public string HookDescription => "查看工作空间完整内容、推送叙事回合、上报推进状态信号。编剧专用。";
+        public string HookDescription => "查看工作空间完整内容、推送逐句台词、结束本轮叙事。编剧专用。";
 
         public IReadOnlyList<McpTool> GetTools()
         {
             return new McpTool[]
             {
                 McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(GetWorkspace)), this),
-                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(PushRound)), this),
-                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(SignalWorkspaceStatus)), this),
+                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(PushLine)), this),
+                McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(FinishRound)), this),
                 McpTool.FromMethod(typeof(WritingMcpProvider).GetMethod(nameof(RouteEvents)), this),
             };
         }
@@ -68,21 +68,65 @@ namespace RimLife.Workspace
         }
 
         // ================================================================
-        // 回合推送
+        // 逐句台词推送
         // ================================================================
 
         /// <summary>
-        /// 推送一个新轮次到工作空间。仅 Screenwriter 可调用，内部由 IWorkspace 校验。
+        /// 推送单句台词到工作空间。每句立即投递到游戏侧显示。可并行调用多句。
         /// </summary>
-        [McpTool(Name = "push_round",
-                 Description = "向工作空间推送一个新轮次：前情提要 + 正式台词。只有 Active 空间可推送。推送后 CurrentRecap 自动更新。")]
-        public string PushRound(
+        [McpTool(Name = "push_line",
+                 Description = "推送单句台词到工作空间，立即在游戏内显示。\n" +
+                               "可一次并行调用多个 push_line 来输出多句台词，减少 API 往返。\n" +
+                               "type: dialogue(角色对话) / narration(旁白/环境描写) / action(动作描写) / pause(纯停顿)。")]
+        public string PushLine(
+            [McpParam(Description = "目标工作空间 ID")] string workspaceId,
+            [McpParam(Description = "说话者的 ThingID。dialogue 类型必填，其他类型省略。")]
+            string speakerId,
+            [McpParam(Description = "台词/描述文本。pause 类型时可为空。")]
+            string text,
+            [McpParam(Description = "本行之前的等待秒数，默认 0。")]
+            double delay = 0,
+            [McpParam(Description = "类型：dialogue/narration/action/pause，默认 dialogue。")]
+            string type = "dialogue")
+        {
+            try
+            {
+                var manager = _getWorkspaceManager();
+                if (manager == null) return "{}";
+
+                var ws = manager.Get(workspaceId);
+                if (ws == null) return "{}";
+
+                bool ok = ws.PushLine(speakerId, text, (float)delay, type,
+                                      WorkspaceRole.Screenwriter);
+                return ok ? "{\"ok\":true}" : "{}";
+            }
+            catch (Exception e)
+            {
+                _logger.Warning($"[RimLife.WritingMcp] push_line failed: {e.Message}");
+                return "{}";
+            }
+        }
+
+        // ================================================================
+        // 结束本轮
+        // ================================================================
+
+        /// <summary>
+        /// 结束本轮叙事。归档 recap + outcome，给导演留言。编剧所有台词推送完毕后必须调用。
+        /// </summary>
+        [McpTool(Name = "finish_round",
+                 Description = "结束本轮叙事。归档前情提要和剧情发展结果，给导演留言说明后续状态。\n" +
+                               "编剧在 push_line 推送完所有台词后必须调用此工具。")]
+        public string FinishRound(
             [McpParam(Description = "目标工作空间 ID")] string workspaceId,
             [McpParam(Description = "本轮前情提要：编剧对本轮叙事起点的总结。")]
             string recap,
-            [McpParam(Description = "正式台词：JSON 数组格式，每元素为一句台词。字段格式详见系统提示中的台词格式说明。")]
-            string narrative,
-            [McpParam(Description = "本轮触发的事件 ID 列表，逗号分隔。仅作溯源，不注入 prompt。",
+            [McpParam(Description = "本轮剧情发展结果简述。如：角色关系进展、事件解决方式、情绪走向等。")]
+            string outcome,
+            [McpParam(Description = "给导演的留言：说明剧情线是否可继续(继续推进/需要新事件/可关闭/建议分支等)、期望接收什么类型的事件。")]
+            string directorNote,
+            [McpParam(Description = "本轮触发的事件 ID 列表，逗号分隔。仅作溯源。",
                       Required = McpRequired.False)] string triggerEventIds = null)
         {
             try
@@ -94,63 +138,15 @@ namespace RimLife.Workspace
                 if (ws == null) return "{}";
 
                 var eventIdList = ParseStringList(triggerEventIds);
-                bool ok = ws.PushRound(recap, narrative, eventIdList,
-                                       WorkspaceRole.Screenwriter);
+                bool ok = ws.FinishRound(recap, outcome, directorNote, eventIdList,
+                                         WorkspaceRole.Screenwriter);
                 if (!ok) return "{}";
 
                 return SerializeWriterView(manager.Get(workspaceId));
             }
             catch (Exception e)
             {
-                _logger.Warning($"[RimLife.WritingMcp] push_round failed: {e.Message}");
-                return "{}";
-            }
-        }
-
-        // ================================================================
-        // 推进信号
-        // ================================================================
-
-        /// <summary>
-        /// 编剧上报剧情线推进状态信号。仅 Screenwriter 可调用，内部由 IWorkspace 校验。
-        /// </summary>
-        [McpTool(Name = "signal_workspace_status",
-                 Description = "上报剧情线推进状态信号。导演据此信号做分支/合并/关闭决策。\n" +
-                               "signalType: Progressing(正常推进) / StorylineComplete(走到终点) / " +
-                               "NeedsBranch(需要分叉) / Stuck(僵局) / ReadyForMerge(建议合并)。\n" +
-                               "编剧只上报状态，不透露具体叙事内容。")]
-        public string SignalWorkspaceStatus(
-            [McpParam(Description = "目标工作空间 ID")] string workspaceId,
-            [McpParam(Description = "信号类型：Progressing/StorylineComplete/NeedsBranch/Stuck/ReadyForMerge")]
-            string signalType,
-            [McpParam(Description = "编剧给导演的简短说明（≤200字）。结构化摘要，不透露剧情细节。",
-                      Required = McpRequired.False)] string note = null,
-            [McpParam(Description = "ReadyForMerge 时：建议合并到的目标工作空间 ID。其他类型留空。",
-                      Required = McpRequired.False)] string suggestedTargetId = null)
-        {
-            try
-            {
-                var manager = _getWorkspaceManager();
-                if (manager == null) return "{}";
-
-                var ws = manager.Get(workspaceId);
-                if (ws == null) return "{}";
-
-                if (!Enum.TryParse<SignalType>(signalType, true, out var parsedType))
-                {
-                    _logger.Warning($"[RimLife.WritingMcp] signal_workspace_status: invalid signalType '{signalType}'.");
-                    return "{}";
-                }
-
-                bool ok = ws.ReportSignal(parsedType, note, suggestedTargetId,
-                                          WorkspaceRole.Screenwriter);
-                if (!ok) return "{}";
-
-                return SerializeWriterView(manager.Get(workspaceId));
-            }
-            catch (Exception e)
-            {
-                _logger.Warning($"[RimLife.WritingMcp] signal_workspace_status failed: {e.Message}");
+                _logger.Warning($"[RimLife.WritingMcp] finish_round failed: {e.Message}");
                 return "{}";
             }
         }
@@ -263,25 +259,15 @@ namespace RimLife.Workspace
 
             w.Prop("currentRecap", ws.CurrentRecap ?? "");
 
+            if (!string.IsNullOrEmpty(ws.DirectorMessage))
+                w.Prop("directorMessage", ws.DirectorMessage);
+
             if (ws.Rounds != null && ws.Rounds.Count > 0)
             {
                 var roundJsons = new List<string>();
                 foreach (var r in ws.Rounds)
                     roundJsons.Add(SerializeRound(r));
                 w.ArrayRaw("rounds", roundJsons);
-            }
-
-            if (ws.LastSignal.HasValue)
-            {
-                var sig = ws.LastSignal.Value;
-                var sigW = new JsonWriter(256);
-                sigW.Prop("type", sig.Type.ToString());
-                sigW.Prop("reportedAt", sig.ReportedAt ?? "");
-                if (!string.IsNullOrEmpty(sig.Note))
-                    sigW.Prop("note", sig.Note);
-                if (!string.IsNullOrEmpty(sig.SuggestedTargetId))
-                    sigW.Prop("suggestedTargetId", sig.SuggestedTargetId);
-                w.PropRaw("lastSignal", sigW.Close());
             }
 
             return w.Close();

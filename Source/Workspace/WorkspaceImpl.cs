@@ -62,7 +62,7 @@ namespace RimLife.Workspace
         public string CreatedAt => _state.CreatedAt;
         public string LastActivityAt => _state.LastActivityAt;
         public string Outcome => _state.Outcome;
-        public StorylineSignal? LastSignal => _state.LastSignal;
+        public string DirectorMessage => _state.DirectorMessage;
 
         // ================================================================
         // 组件
@@ -78,35 +78,77 @@ namespace RimLife.Workspace
         // 叙事操作
         // ================================================================
 
-        public bool PushRound(string recap, string narrative,
-            IReadOnlyList<string> triggerEventIds, WorkspaceRole callerRole, string callerId = null)
+        private readonly List<ScriptLine> _pendingScriptLines = new List<ScriptLine>();
+
+        public bool PushLine(string speakerId, string text, float delay, string type,
+            WorkspaceRole callerRole, string callerId = null)
         {
-            if (string.IsNullOrEmpty(recap) && string.IsNullOrEmpty(narrative)) return false;
+            if (string.IsNullOrEmpty(text) && type != "pause") return false;
 
             if (callerRole != WorkspaceRole.Screenwriter && callerRole != WorkspaceRole.Freelancer)
             {
-                _logger?.Warning($"[RimLife.Workspace] PushRound rejected: caller is {callerRole}, only Screenwriter/Freelancer can push rounds.");
+                _logger?.Warning($"[RimLife.Workspace] PushLine rejected: caller is {callerRole}, only Screenwriter/Freelancer can push lines.");
                 return false;
             }
 
             if (_state.Status != WorkspaceStatus.Active)
             {
-                _logger?.Warning($"[RimLife.Workspace] PushRound failed: workspace '{_state.Label}' is not Active (status={_state.Status}).");
+                _logger?.Warning($"[RimLife.Workspace] PushLine failed: workspace '{_state.Label}' is not Active (status={_state.Status}).");
+                return false;
+            }
+
+            var lineType = ScriptFormat.ParseLineType(type);
+            var line = new ScriptLine
+            {
+                SpeakerId = string.IsNullOrEmpty(speakerId) ? null : speakerId,
+                Text = text ?? "",
+                RelativeTime = delay,
+                Type = lineType
+            };
+
+            _pendingScriptLines.Add(line);
+            _state.LastActivityAt = _timeProvider();
+            _publishUpdated?.Invoke(_state.Id);
+
+            // 立即发布单行就绪事件 → ScriptDeliveryService 逐行投递
+            EventBus.Publish(FrameworkEvents.ScriptLineReady, EventArg.WithPayload(
+                ("workspaceId", _state.Id),
+                ("speakerId", line.SpeakerId ?? ""),
+                ("text", line.Text),
+                ("delay", line.RelativeTime.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("type", line.Type.ToString())
+            ));
+
+            return true;
+        }
+
+        public bool FinishRound(string recap, string outcome, string directorNote,
+            IReadOnlyList<string> triggerEventIds, WorkspaceRole callerRole, string callerId = null)
+        {
+            if (callerRole != WorkspaceRole.Screenwriter && callerRole != WorkspaceRole.Freelancer)
+            {
+                _logger?.Warning($"[RimLife.Workspace] FinishRound rejected: caller is {callerRole}.");
+                return false;
+            }
+
+            if (_state.Status != WorkspaceStatus.Active)
+            {
+                _logger?.Warning($"[RimLife.Workspace] FinishRound failed: workspace '{_state.Label}' is not Active (status={_state.Status}).");
                 return false;
             }
 
             string now = _timeProvider();
             int nextSeq = _state.Rounds?.Count ?? 0;
 
-            // 解析 narrative JSON → ScriptLine 列表
-            var scriptLines = ScriptFormat.Parse(narrative ?? "");
+            var scriptLines = new List<ScriptLine>(_pendingScriptLines);
+            _pendingScriptLines.Clear();
 
             var round = new WorkspaceRound
             {
                 Seq = nextSeq,
                 Type = RoundType.Normal,
                 Recap = recap ?? "",
-                Narrative = narrative ?? "",
+                Narrative = "",
                 CreatedAt = now,
                 TriggerEventIds = triggerEventIds != null ? new List<string>(triggerEventIds) : new List<string>(),
                 AuthorRole = callerRole,
@@ -121,38 +163,21 @@ namespace RimLife.Workspace
             _state.CurrentRecap = recap ?? "";
             _state.LastActivityAt = now;
 
+            if (!string.IsNullOrEmpty(outcome))
+                _state.Outcome = outcome;
+
+            if (!string.IsNullOrEmpty(directorNote))
+                _state.DirectorMessage = directorNote;
+
             _publishUpdated?.Invoke(_state.Id);
 
-            // 发布脚本就绪事件，ScriptDeliveryService 将推送到游戏侧
+            // 发布轮次完成事件
             EventBus.Publish(FrameworkEvents.ScriptReady, EventArg.WithPayload(
                 ("workspaceId", _state.Id),
                 ("roundSeq", nextSeq.ToString()),
                 ("callerRole", callerRole.ToString())
             ));
 
-            return true;
-        }
-
-        public bool ReportSignal(SignalType signalType, string note,
-            string suggestedTargetId, WorkspaceRole callerRole)
-        {
-            if (callerRole != WorkspaceRole.Screenwriter)
-            {
-                _logger?.Warning($"[RimLife.Workspace] ReportSignal rejected: caller is {callerRole}, only Screenwriter can report signals.");
-                return false;
-            }
-
-            string now = _timeProvider();
-            _state.LastSignal = new StorylineSignal
-            {
-                Type = signalType,
-                ReportedAt = now,
-                Note = note ?? "",
-                SuggestedTargetId = suggestedTargetId
-            };
-            _state.LastActivityAt = now;
-
-            _publishUpdated?.Invoke(_state.Id);
             return true;
         }
 

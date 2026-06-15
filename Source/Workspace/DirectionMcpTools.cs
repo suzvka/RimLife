@@ -388,24 +388,14 @@ namespace RimLife.Workspace
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
 
-            if (ws.LastSignal.HasValue)
-            {
-                var sig = ws.LastSignal.Value;
-                var sigW = new JsonWriter(256);
-                sigW.Prop("type", sig.Type.ToString());
-                sigW.Prop("reportedAt", sig.ReportedAt ?? "");
-                if (!string.IsNullOrEmpty(sig.Note))
-                    sigW.Prop("note", sig.Note);
-                if (!string.IsNullOrEmpty(sig.SuggestedTargetId))
-                    sigW.Prop("suggestedTargetId", sig.SuggestedTargetId);
-                w.PropRaw("lastSignal", sigW.Close());
-            }
+            if (!string.IsNullOrEmpty(ws.DirectorMessage))
+                w.Prop("directorMessage", ws.DirectorMessage);
 
             return w.Close();
         }
 
         /// <summary>
-        /// 导演视图摘要列表（轻量，不含轮次详情，含信号）。
+        /// 导演视图摘要列表（轻量，不含轮次详情，含导演留言）。
         /// </summary>
         private string SerializeDirectorSummaryList(IReadOnlyList<IWorkspace> workspaces)
         {
@@ -440,14 +430,9 @@ namespace RimLife.Workspace
             w.Prop("lastActivityAt", ws.LastActivityAt ?? "");
             if (ws.Outcome != null)
                 w.Prop("outcome", ws.Outcome);
-            // 信号摘要
-            if (ws.LastSignal.HasValue)
-            {
-                var sig = ws.LastSignal.Value;
-                w.Prop("signalType", sig.Type.ToString());
-                if (!string.IsNullOrEmpty(sig.Note))
-                    w.Prop("signalNote", Truncate(sig.Note, 80));
-            }
+            // 导演留言
+            if (!string.IsNullOrEmpty(ws.DirectorMessage))
+                w.Prop("directorMessage", Truncate(ws.DirectorMessage, 120));
             return w.Close();
         }
 
