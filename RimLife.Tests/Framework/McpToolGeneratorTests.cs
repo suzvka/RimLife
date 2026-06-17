@@ -118,7 +118,8 @@ namespace RimLife.Tests.Framework
 
             Assert.Contains("\"name\":\"query_events\"", json);
             Assert.Contains("\"description\":\"查询殖民地近期事件\"", json);
-            Assert.Contains("\"inputSchema\"", json);
+            Assert.Contains("\"function\"", json);
+            Assert.Contains("\"parameters\"", json);
             Assert.Contains("\"properties\"", json);
             Assert.Contains("\"required\"", json);
             Assert.Contains("\"limit\"", json);

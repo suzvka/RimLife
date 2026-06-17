@@ -88,11 +88,15 @@ namespace RimLife.Framework.Mcp
             // DeepSeek/OpenAI 要求必须有 type 字段
             w.Prop("type", "function");
             
-            w.Prop("name", def.Name ?? string.Empty);
-            w.Prop("description", def.Description ?? string.Empty);
+            // function 对象：name, description, parameters
+            var funcW = new JsonWriter(256);
+            funcW.Prop("name", def.Name ?? string.Empty);
+            funcW.Prop("description", def.Description ?? string.Empty);
             
             // inputSchema → parameters (OpenAI 标准命名)
-            w.PropRaw("parameters", SerializeInputSchema(def.InputSchema));
+            funcW.PropRaw("parameters", SerializeInputSchema(def.InputSchema));
+            
+            w.PropRaw("function", funcW.Close());
             
             return w.Close();
         }
