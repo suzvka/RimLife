@@ -263,7 +263,7 @@ namespace RimLife.Infrastructure.Llm
 
             var funcWriter = new JsonWriter(128);
             funcWriter.Prop("name", tc.Name ?? "");
-            funcWriter.PropRaw("arguments", tc.Arguments ?? "{}");
+            funcWriter.Prop("arguments", tc.Arguments ?? "{}");
             w.PropRaw("function", funcWriter.Close());
 
             return w.Close();
