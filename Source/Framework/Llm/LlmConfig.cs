@@ -29,7 +29,7 @@ namespace RimLife.Framework.Llm
         public string ApiKey { get; set; } = "";
 
         /// <summary>模型名称。</summary>
-        public string ModelName { get; set; } = "gpt-4o";
+        public string ModelName { get; set; } = "";
 
         /// <summary>提供商类型，决定使用哪个适配器。</summary>
         public LlmProviderType ProviderType { get; set; } = LlmProviderType.OpenAI;
@@ -59,7 +59,7 @@ namespace RimLife.Framework.Llm
             {
                 BaseUrl = "https://api.openai.com",
                 ApiKey = "",
-                ModelName = "gpt-4o",
+                ModelName = "",
                 ProviderType = LlmProviderType.OpenAI,
                 TimeoutSeconds = 120
             };

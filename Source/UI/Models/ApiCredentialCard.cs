@@ -50,7 +50,7 @@ namespace RimLife.UI.Models
             {
                 BaseUrl = BaseUrl,
                 ApiKey = ApiKey,
-                ModelName = modelName ?? "gpt-4o",
+                ModelName = modelName ?? "",
                 ProviderType = ProviderType
             };
         }
