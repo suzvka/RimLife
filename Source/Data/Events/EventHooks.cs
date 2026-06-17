@@ -48,8 +48,9 @@ namespace RimLife
                 var initiator = Traverse.Create(__instance).Field("pawn").GetValue<Pawn>();
                 if (initiator == null) return;
 
-                // 写入 EventLog（事件卡）
-                RimLifeCore.GetDirectorWorkspace()?.EventPool?.Append(EventCardMapper.FromSocialInteraction(initiator, recipient, intDef));
+                // 不写入 EventPool —— 社交互动频率极高（每次闲聊/侮辱/安慰均触发），
+                // 属于流水账式记录。互动数据已通过 InteractionHistoryStore 持久化，
+                // 并由 MCP 工具 get_interaction_history 按需拉取，无需主动推送。
 
                 // 写入 InteractionHistoryStore（流水记录）
                 RimLifeCore.InteractionStore?.Append(new Cards.InteractionRecord
@@ -113,22 +114,9 @@ namespace RimLife
     }
 
     // ================================================================
-    // Pawn 派系变更 Hook (殖民者加入/叛逃/被俘)
+    // Pawn 派系变更 Hook — 已移除
+    // 原因：Pawn.SetFaction 是底层 API，会捕获玩家不可见的隐藏事件
+    // （如野生动物加入商队派系、AI 内部调度），导致叙事漂移。
+    // 玩家可见的派系变更（叛逃/被俘/加入）已通过 Letter Hook 覆盖。
     // ================================================================
-    [HarmonyPatch(typeof(Pawn), nameof(Pawn.SetFaction), new Type[] { typeof(Faction), typeof(Pawn) })]
-    internal static class Patch_Pawn_SetFaction
-    {
-        static void Postfix(Pawn __instance, Faction newFaction)
-        {
-            if (__instance == null) return;
-            try
-            {
-                RimLifeCore.GetDirectorWorkspace()?.EventPool?.Append(EventCardMapper.FromFactionChange(__instance, newFaction));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] SetFaction hook failed: {e.Message}");
-            }
-        }
-    }
 }
