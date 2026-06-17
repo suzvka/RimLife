@@ -33,9 +33,11 @@ namespace RimLife.UI.Pages
 
         private void DrawControlBar(Listing_Standard listing)
         {
+            // 4 个按钮需要适配可用宽度，使用较小尺寸避免换行
+            var btnW = 100f;
             var btnResults = DrawButtonRow(listing,
                 new[] { "清空日志", _autoScroll ? "自动滚动: ON" : "自动滚动: OFF", "复制全部", "导出日志" },
-                new[] { BtnWidthMedium, BtnWidthMedium + 20f, BtnWidthMedium, BtnWidthMedium });
+                new[] { btnW, btnW + 30f, btnW, btnW });
 
             if (btnResults[0])
             {

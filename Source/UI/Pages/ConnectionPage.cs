@@ -551,9 +551,13 @@ namespace RimLife.UI.Pages
             // 为每张激活的卡提供输入
             foreach (var card in cards.Where(c => c.IsActive))
             {
+                var btnLabel = $"+ 添加模型到 {card.Label}";
+                // 根据文本长度动态计算按钮宽度，避免截断
+                var textWidth = Text.CalcSize(btnLabel).x + 24f;
+                var btnWidth = Mathf.Max(BtnWidthLarge, textWidth);
                 var manualResults = DrawButtonRow(listing,
-                    new[] { $"+ 添加模型到 {card.Label}" },
-                    new[] { BtnWidthLarge + 40f });
+                    new[] { btnLabel },
+                    new[] { btnWidth });
                 if (manualResults[0])
                 {
                     var defaultModel = card.ProviderType == LlmProviderType.Anthropic
