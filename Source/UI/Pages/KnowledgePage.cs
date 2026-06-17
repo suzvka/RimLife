@@ -25,17 +25,24 @@ namespace RimLife.UI
             Widgets.Label(listing.GetRect(22f), "<color=#AAAAAA>  • 16:30  学会「枯萎病」— 来源: 环境事件</color>");
             Widgets.Label(listing.GetRect(22f), "<color=#AAAAAA>  • 15:58  学会「虚空裂隙」— 来源: GameDef</color>");
             listing.Gap(GapTiny);
-            if (Widgets.ButtonText(listing.GetRect(26f), "查看全部词条"))
+            var viewResults = DrawButtonRow(listing, new[] { "查看全部词条" }, new[] { BtnWidthMedium });
+            if (viewResults[0])
                 Log.Message("[RimLife.UI] View all knowledge entries");
             EndSection(listing);
 
             BeginSection(listing, "操作");
-            if (Widgets.ButtonText(listing.GetRect(28f), "从 GameDef 重新扫描"))
+            var opResults = DrawButtonRow(listing,
+                new[] { "从 GameDef 重新扫描" },
+                new[] { BtnWidthLarge + 20f });
+            if (opResults[0])
                 Log.Message("[RimLife.UI] Rescan GameDef clicked");
             listing.Gap(GapTiny);
-            if (Widgets.ButtonText(listing.GetRect(28f), "导出知识库"))
+            var ioResults = DrawButtonRow(listing,
+                new[] { "导出知识库", "导入知识库" },
+                new[] { BtnWidthMedium, BtnWidthMedium });
+            if (ioResults[0])
                 Log.Message("[RimLife.UI] Export knowledge clicked");
-            if (Widgets.ButtonText(listing.GetRect(28f), "导入知识库"))
+            if (ioResults[1])
                 Log.Message("[RimLife.UI] Import knowledge clicked");
             EndSection(listing);
         }

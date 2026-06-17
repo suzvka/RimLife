@@ -25,6 +25,25 @@ namespace RimLife.UI
         public const float GapLarge = 16f;
 
         // ================================================================
+        // 按钮尺寸常量
+        // ================================================================
+
+        /// <summary>按钮统一高度。</summary>
+        public const float BtnHeight = 28f;
+
+        /// <summary>小按钮宽度（如"取消""全选"）。</summary>
+        public const float BtnWidthSmall = 80f;
+
+        /// <summary>中按钮宽度（如"保存""编辑"）。</summary>
+        public const float BtnWidthMedium = 120f;
+
+        /// <summary>大按钮宽度（如"添加卡片""获取模型"）。</summary>
+        public const float BtnWidthLarge = 160f;
+
+        /// <summary>按钮之间的间距。</summary>
+        public const float BtnGap = 8f;
+
+        // ================================================================
         // 颜色常量
         // ================================================================
 
@@ -33,9 +52,12 @@ namespace RimLife.UI
         public static readonly Color ColorCardBg = new Color(0.22f, 0.22f, 0.22f, 1f);
         public static readonly Color ColorStatusBarBg = new Color(0.12f, 0.12f, 0.12f, 1f);
         public static readonly Color ColorSelectedItem = new Color(0.25f, 0.25f, 0.25f, 1f);
+        public static readonly Color ColorHoverItem = new Color(0.22f, 0.22f, 0.22f, 1f);
         public static readonly Color ColorHighlight = new Color(0.35f, 0.65f, 1f, 1f);
         public static readonly Color ColorDivider = new Color(0.3f, 0.3f, 0.3f, 1f);
-        public static readonly Color ColorCardBorder = new Color(0.28f, 0.28f, 0.28f, 1f);
+        public static readonly Color ColorCardBorder = new Color(0.35f, 0.35f, 0.35f, 1f);
+        public static readonly Color ColorDanger = new Color(0.9f, 0.3f, 0.3f, 1f);
+        public static readonly Color ColorDangerBg = new Color(0.35f, 0.12f, 0.12f, 1f);
 
         // ================================================================
         // Section 绘制
@@ -88,12 +110,8 @@ namespace RimLife.UI
 
             // 卡片背景
             Widgets.DrawBoxSolid(cardRect, ColorCardBg);
-            // 顶部边框线
-            var topBorder = new Rect(cardRect.x, cardRect.y, cardRect.width, 1f);
-            Widgets.DrawBoxSolid(topBorder, ColorCardBorder);
-            // 底部边框线
-            var bottomBorder = new Rect(cardRect.x, cardRect.y + cardRect.height - 1f, cardRect.width, 1f);
-            Widgets.DrawBoxSolid(bottomBorder, ColorCardBorder);
+            // 四边完整边框
+            Widgets.DrawBox(cardRect, 1);
 
             // 标题
             if (title != null)
@@ -116,11 +134,13 @@ namespace RimLife.UI
         public static void DrawInfoRow(Listing_Standard listing, string label, string value)
         {
             var rowRect = listing.GetRect(22f);
-            var labelWidth = Text.CalcHeight(label, listing.ColumnWidth) * 4f; // 粗略估算 label 宽度
-            var labelRect = new Rect(rowRect.x, rowRect.y, Mathf.Min(140f, labelWidth + 8f), rowRect.height);
-            var valueRect = new Rect(rowRect.x + labelRect.width, rowRect.y, rowRect.width - labelRect.width, rowRect.height);
+            var labelText = $"{label}:";
+            var labelSize = Text.CalcSize(labelText);
+            var labelWidth = Mathf.Min(rowRect.width * 0.45f, labelSize.x + 8f);
+            var labelRect = new Rect(rowRect.x, rowRect.y, labelWidth, rowRect.height);
+            var valueRect = new Rect(rowRect.x + labelWidth, rowRect.y, rowRect.width - labelWidth, rowRect.height);
 
-            Widgets.Label(labelRect, $"<color=#888888>{label}:</color>");
+            Widgets.Label(labelRect, $"<color=#888888>{labelText}</color>");
             Widgets.Label(valueRect, value);
         }
 
@@ -230,6 +250,115 @@ namespace RimLife.UI
         public static string WrapBold(string text)
         {
             return $"<b>{text}</b>";
+        }
+
+        // ================================================================
+        // 按钮行布局
+        // ================================================================
+
+        /// <summary>
+        /// 在 listing 中绘制一行按钮，自动处理间距和布局。
+        /// 返回每个按钮是否被点击的数组。
+        /// </summary>
+        /// <param name="listing">Listing 实例。</param>
+        /// <param name="labels">按钮标签数组。</param>
+        /// <param name="widths">按钮宽度数组（与 labels 一一对应）。若为 null 则使用 BtnWidthMedium。</param>
+        /// <returns>每个按钮是否被点击。</returns>
+        public static bool[] DrawButtonRow(Listing_Standard listing, string[] labels, float[] widths = null)
+        {
+            var rowRect = listing.GetRect(BtnHeight + 2f);
+            var results = new bool[labels.Length];
+            var cursorX = rowRect.x;
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                var w = widths != null && i < widths.Length ? widths[i] : BtnWidthMedium;
+                var btnRect = new Rect(cursorX, rowRect.y, w, BtnHeight);
+                results[i] = Widgets.ButtonText(btnRect, labels[i]);
+                cursorX += w + BtnGap;
+            }
+
+            return results;
+        }
+
+        /// <summary>
+        /// 在指定 Rect 内绘制一行按钮（不使用 listing），适用于卡片内部等场景。
+        /// </summary>
+        public static bool[] DrawButtonRowInRect(Rect rowRect, string[] labels, float[] widths = null)
+        {
+            var results = new bool[labels.Length];
+            var cursorX = rowRect.x;
+
+            for (int i = 0; i < labels.Length; i++)
+            {
+                var w = widths != null && i < widths.Length ? widths[i] : BtnWidthMedium;
+                var btnRect = new Rect(cursorX, rowRect.y, w, BtnHeight);
+                results[i] = Widgets.ButtonText(btnRect, labels[i]);
+                cursorX += w + BtnGap;
+            }
+
+            return results;
+        }
+
+        // ================================================================
+        // 分段选择器（替代并排按钮模拟单选）
+        // ================================================================
+
+        /// <summary>
+        /// 绘制分段选择器。选中项有高亮背景，未选中项为普通按钮样式。
+        /// </summary>
+        /// <param name="listing">Listing 实例。</param>
+        /// <param name="options">选项标签数组。</param>
+        /// <param name="selectedIndex">当前选中索引。</param>
+        /// <returns>新的选中索引。</returns>
+        public static int DrawSegmentedSelector(Listing_Standard listing, string[] options, int selectedIndex)
+        {
+            var rowRect = listing.GetRect(BtnHeight + 2f);
+            var totalWidth = rowRect.width;
+            var segWidth = (totalWidth - BtnGap * (options.Length - 1)) / options.Length;
+            var cursorX = rowRect.x;
+
+            for (int i = 0; i < options.Length; i++)
+            {
+                var segRect = new Rect(cursorX, rowRect.y, segWidth, BtnHeight);
+
+                if (i == selectedIndex)
+                {
+                    // 选中态：高亮背景 + 白色文字
+                    Widgets.DrawBoxSolid(segRect, new Color(ColorHighlight.r, ColorHighlight.g, ColorHighlight.b, 0.3f));
+                    Widgets.DrawBox(segRect, 1);
+                    Widgets.Label(segRect, $"<color=#FFFFFF><b>{options[i]}</b></color>");
+                }
+                else
+                {
+                    // 未选中态：普通按钮
+                    if (Widgets.ButtonText(segRect, options[i]))
+                    {
+                        selectedIndex = i;
+                    }
+                }
+
+                cursorX += segWidth + BtnGap;
+            }
+
+            return selectedIndex;
+        }
+
+        // ================================================================
+        // Hover 检测辅助
+        // ================================================================
+
+        /// <summary>
+        /// 如果鼠标悬停在指定区域内，绘制半透明高亮背景。
+        /// </summary>
+        public static bool DrawHoverBackground(Rect rect, Color? hoverColor = null)
+        {
+            var isHover = Mouse.IsOver(rect);
+            if (isHover)
+            {
+                Widgets.DrawBoxSolid(rect, hoverColor ?? ColorHoverItem);
+            }
+            return isHover;
         }
     }
 }

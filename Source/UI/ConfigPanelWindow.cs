@@ -16,12 +16,12 @@ namespace RimLife.UI
             doCloseButton = true;
             closeOnClickedOutside = true;
             draggable = true;
-            resizeable = false;
+            resizeable = true;
 
             _layout = new ConfigPanelLayout();
         }
 
-        public override Vector2 InitialSize => new Vector2(720f, 520f);
+        public override Vector2 InitialSize => new Vector2(820f, 600f);
 
         public override void DoWindowContents(Rect inRect) => _layout.Draw(inRect);
     }

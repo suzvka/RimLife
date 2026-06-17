@@ -20,7 +20,8 @@ namespace RimLife.UI
             DrawInfoRow(listing, "最小事件数", "5");
             DrawInfoRow(listing, "冷却时间", "120 秒");
             listing.Gap(GapTiny);
-            if (Widgets.ButtonText(listing.GetRect(24f), "重置默认值"))
+            var dirResults = DrawButtonRow(listing, new[] { "重置默认值" }, new[] { BtnWidthMedium });
+            if (dirResults[0])
                 Log.Message("[RimLife.UI] Reset director strategy");
             EndSection(listing);
 
@@ -28,7 +29,8 @@ namespace RimLife.UI
             DrawInfoRow(listing, "最小事件数", "1");
             DrawInfoRow(listing, "事件存活", "300 秒");
             listing.Gap(GapTiny);
-            if (Widgets.ButtonText(listing.GetRect(24f), "重置默认值"))
+            var freeResults = DrawButtonRow(listing, new[] { "重置默认值" }, new[] { BtnWidthMedium });
+            if (freeResults[0])
                 Log.Message("[RimLife.UI] Reset freelancer strategy");
             EndSection(listing);
 
@@ -37,7 +39,8 @@ namespace RimLife.UI
             listing.Gap(GapTiny);
             Widgets.Label(listing.GetRect(22f), "<color=#888888>灵感参考: 黑曜石 | 轻小说 | 战锤 | 自定义</color>");
             listing.Gap(GapTiny);
-            if (Widgets.ButtonText(listing.GetRect(26f), "预览"))
+            var previewResults = DrawButtonRow(listing, new[] { "预览" }, new[] { BtnWidthSmall });
+            if (previewResults[0])
                 Log.Message("[RimLife.UI] Preview style clicked");
             EndSection(listing);
         }

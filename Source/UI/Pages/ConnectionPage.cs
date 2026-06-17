@@ -49,6 +49,12 @@ namespace RimLife.UI.Pages
         private string _statusMessage;
         private float _statusMessageTime;
 
+        // 删除确认（两步确认：首次点击标记待删除，再次点击执行）
+        private string _pendingDeleteCardId;
+
+        // API Key 显示切换
+        private bool _showApiKey;
+
         private CancellationTokenSource _discoveryCts;
 
         // 缓存
@@ -86,8 +92,23 @@ namespace RimLife.UI.Pages
         {
             if (!string.IsNullOrEmpty(_statusMessage) && Time.time - _statusMessageTime < 5f)
             {
-                var color = _statusMessage.StartsWith("[错误]") ? "#FF6666" : "#88FF88";
-                Widgets.Label(listing.GetRect(22f), $"<color={color}><size=12>{_statusMessage}</size></color>");
+                var elapsed = Time.time - _statusMessageTime;
+                var baseColor = _statusMessage.StartsWith("[错误]") ? "#FF6666" : "#88FF88";
+
+                // 最后 1 秒淡出：通过 alpha 通道实现
+                string colorTag;
+                if (elapsed > 4f)
+                {
+                    var alpha = Mathf.Clamp01(5f - elapsed);
+                    var alphaHex = ((int)(alpha * 255)).ToString("X2");
+                    colorTag = $"<color={baseColor}{alphaHex}>";
+                }
+                else
+                {
+                    colorTag = $"<color={baseColor}>";
+                }
+
+                Widgets.Label(listing.GetRect(22f), $"{colorTag}<size=12>{_statusMessage}</size></color>");
                 listing.Gap(GapSmall);
             }
         }
@@ -133,6 +154,8 @@ namespace RimLife.UI.Pages
                 ? new Color(0.18f, 0.22f, 0.18f, 1f)
                 : new Color(0.18f, 0.18f, 0.18f, 1f);
             Widgets.DrawBoxSolid(cardRect, bgColor);
+            // 四边完整边框
+            Widgets.DrawBox(cardRect, 1);
 
             var pad = GapSmall;
 
@@ -151,20 +174,36 @@ namespace RimLife.UI.Pages
                 Mgr.SetCardActive(card.Id, isActive);
             }
 
-            // 编辑 / 删除按钮（右对齐）
-            var btnWidth = 50f;
-            var btnGap = 6f;
-            var editRect = new Rect(cardRect.x + cardRect.width - btnWidth * 2 - btnGap - pad, row1Y, btnWidth, row1H);
+            // 编辑 / 删除按钮（右对齐，使用统一尺寸）
+            var cardBtnWidth = 56f;
+            var cardBtnGap = 6f;
+            var editRect = new Rect(cardRect.x + cardRect.width - cardBtnWidth * 2 - cardBtnGap - pad, row1Y, cardBtnWidth, row1H);
             if (Widgets.ButtonText(editRect, "编辑"))
             {
+                _pendingDeleteCardId = null; // 切换模式时清除待删除状态
                 StartEditCard(card);
             }
 
-            var delRect = new Rect(cardRect.x + cardRect.width - btnWidth - pad, row1Y, btnWidth, row1H);
-            if (Widgets.ButtonText(delRect, "删除"))
+            // 两步删除确认
+            var isPendingDelete = _pendingDeleteCardId == card.Id;
+            var delRect = new Rect(cardRect.x + cardRect.width - cardBtnWidth - pad, row1Y, cardBtnWidth, row1H);
+            if (isPendingDelete)
             {
-                Mgr.RemoveCard(card.Id);
-                SetStatus($"已删除卡片: {card.Label}");
+                // 待确认态：红色背景 + "确认删除"文字
+                Widgets.DrawBoxSolid(delRect, ColorDangerBg);
+                if (Widgets.ButtonText(delRect, "确认删除"))
+                {
+                    Mgr.RemoveCard(card.Id);
+                    SetStatus($"已删除卡片: {card.Label}");
+                    _pendingDeleteCardId = null;
+                }
+            }
+            else
+            {
+                if (Widgets.ButtonText(delRect, "删除"))
+                {
+                    _pendingDeleteCardId = card.Id;
+                }
             }
 
             // ================================================================
@@ -227,37 +266,56 @@ namespace RimLife.UI.Pages
             _editBaseUrl = Widgets.TextField(urlRect, _editBaseUrl);
             listing.Gap(GapTiny);
 
-            // API Key
+            // API Key（带显示/隐藏切换）
             Widgets.Label(listing.GetRect(20f), "<size=12>API 密钥</size>");
-            var keyRect = listing.GetRect(28f);
-            _editApiKey = Widgets.TextField(keyRect, _editApiKey);
+            var keyRowRect = listing.GetRect(28f);
+            var keyFieldWidth = keyRowRect.width - BtnWidthSmall - BtnGap;
+            var keyFieldRect = new Rect(keyRowRect.x, keyRowRect.y, keyFieldWidth, keyRowRect.height);
+            var toggleRect = new Rect(keyRowRect.x + keyFieldWidth + BtnGap, keyRowRect.y, BtnWidthSmall, keyRowRect.height);
+
+            if (_showApiKey)
+            {
+                _editApiKey = Widgets.TextField(keyFieldRect, _editApiKey);
+            }
+            else
+            {
+                // 显示脱敏值，不可编辑
+                var maskedDisplay = MaskApiKey(_editApiKey);
+                Widgets.TextField(keyFieldRect, maskedDisplay);
+            }
+
+            if (Widgets.ButtonText(toggleRect, _showApiKey ? "隐藏" : "显示"))
+            {
+                _showApiKey = !_showApiKey;
+            }
             listing.Gap(GapTiny);
 
-            // Provider Type
+            // Provider Type（使用分段选择器）
             Widgets.Label(listing.GetRect(20f), "<size=12>提供商类型</size>");
-            var provRect = listing.GetRect(30f);
-            if (Widgets.ButtonText(new Rect(provRect.x, provRect.y, 130f, 28f),
-                _editProviderType == LlmProviderType.OpenAI ? "▶ OpenAI 兼容" : "  OpenAI 兼容"))
+            var providerIndex = _editProviderType == LlmProviderType.Anthropic ? 1 : 0;
+            var newProviderIndex = DrawSegmentedSelector(listing,
+                new[] { "OpenAI 兼容", "Anthropic" }, providerIndex);
+            if (newProviderIndex != providerIndex)
             {
-                _editProviderType = LlmProviderType.OpenAI;
-            }
-            if (Widgets.ButtonText(new Rect(provRect.x + 138f, provRect.y, 130f, 28f),
-                _editProviderType == LlmProviderType.Anthropic ? "▶ Anthropic" : "  Anthropic"))
-            {
-                _editProviderType = LlmProviderType.Anthropic;
+                _editProviderType = newProviderIndex == 1
+                    ? LlmProviderType.Anthropic
+                    : LlmProviderType.OpenAI;
             }
 
             listing.Gap(GapMedium);
 
-            // 按钮行
-            var btnRow = listing.GetRect(30f);
+            // 按钮行（使用统一布局）
             var saveLabel = isNew ? "添加卡片" : "保存修改";
-            if (Widgets.ButtonText(new Rect(btnRow.x, btnRow.y, 110f, 30f), saveLabel))
+            var btnResults = DrawButtonRow(listing,
+                new[] { saveLabel, "取消" },
+                new[] { BtnWidthMedium, BtnWidthSmall });
+            if (btnResults[0])
             {
                 SaveCardEdit(isNew);
             }
-            if (Widgets.ButtonText(new Rect(btnRow.x + 118f, btnRow.y, 80f, 30f), "取消"))
+            if (btnResults[1])
             {
+                _showApiKey = false;
                 _mode = PageMode.ViewCards;
             }
 
@@ -303,25 +361,21 @@ namespace RimLife.UI.Pages
         {
             listing.Gap(GapSmall);
 
-            var btnRow = listing.GetRect(32f);
+            // 添加卡片 + 获取模型列表（同一行）
+            var btnResults = DrawButtonRow(listing,
+                new[] { "+ 添加凭证卡片", _isDiscovering ? "正在获取模型..." : "确认并获取模型列表" },
+                new[] { BtnWidthLarge, BtnWidthLarge + 20f });
 
-            // 添加卡片
-            if (Widgets.ButtonText(new Rect(btnRow.x, btnRow.y, 140f, 30f), "+ 添加凭证卡片"))
+            if (btnResults[0])
             {
+                _pendingDeleteCardId = null;
                 StartAddCard();
             }
 
-            listing.Gap(GapTiny);
-
-            // 获取模型列表
-            var discoverRow = listing.GetRect(32f);
-            GUI.enabled = !_isDiscovering && Mgr.Cards.Any(c => c.IsActive && c.IsValid());
-            if (Widgets.ButtonText(new Rect(discoverRow.x, discoverRow.y, 170f, 30f),
-                _isDiscovering ? "正在获取模型..." : "确认并获取模型列表"))
+            if (btnResults[1] && !_isDiscovering && Mgr.Cards.Any(c => c.IsActive && c.IsValid()))
             {
                 StartModelDiscovery();
             }
-            GUI.enabled = true;
 
             // 发现进度
             if (_isDiscovering && !string.IsNullOrEmpty(_discoveryStatus))
@@ -415,12 +469,14 @@ namespace RimLife.UI.Pages
             }
 
             // 全选/全不选
-            var selectRow = listing.GetRect(24f);
-            if (Widgets.ButtonText(new Rect(selectRow.x, selectRow.y, 60f, 22f), "全选"))
+            var selectResults = DrawButtonRow(listing,
+                new[] { "全选", "取消全选" },
+                new[] { BtnWidthSmall, BtnWidthSmall });
+            if (selectResults[0])
             {
                 foreach (var m in models) Mgr.SetModelSelected(m.ModelName, true);
             }
-            if (Widgets.ButtonText(new Rect(selectRow.x + 68f, selectRow.y, 80f, 22f), "取消全选"))
+            if (selectResults[1])
             {
                 foreach (var m in models) Mgr.SetModelSelected(m.ModelName, false);
             }
@@ -461,10 +517,11 @@ namespace RimLife.UI.Pages
             listing.Gap(GapSmall);
 
             // 应用按钮
-            var applyRow = listing.GetRect(32f);
             int selectedCount = models.Count(m => m.IsSelected);
-            if (Widgets.ButtonText(new Rect(applyRow.x, applyRow.y, 150f, 30f),
-                $"应用模型选择 ({selectedCount})"))
+            var applyResults = DrawButtonRow(listing,
+                new[] { $"应用模型选择 ({selectedCount})" },
+                new[] { BtnWidthLarge });
+            if (applyResults[0])
             {
                 Mgr.BuildActiveModelOrder();
                 SetStatus($"已应用模型选择: {selectedCount} 个模型就绪");
@@ -494,9 +551,10 @@ namespace RimLife.UI.Pages
             // 为每张激活的卡提供输入
             foreach (var card in cards.Where(c => c.IsActive))
             {
-                var manualRow = listing.GetRect(28f);
-                var btnRect = new Rect(manualRow.x, manualRow.y, 130f, 26f);
-                if (Widgets.ButtonText(btnRect, $"+ 添加模型到 {card.Label}"))
+                var manualResults = DrawButtonRow(listing,
+                    new[] { $"+ 添加模型到 {card.Label}" },
+                    new[] { BtnWidthLarge + 40f });
+                if (manualResults[0])
                 {
                     var defaultModel = card.ProviderType == LlmProviderType.Anthropic
                         ? "claude-sonnet-4-20250514"

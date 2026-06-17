@@ -99,6 +99,11 @@ namespace RimLife.UI
                     var highlightRect = new Rect(rect.x + GapTiny, cursorY + 4f, 4f, NavItemHeight - 8f);
                     Widgets.DrawBoxSolid(highlightRect, ColorHighlight);
                 }
+                else
+                {
+                    // Hover 效果：未选中时鼠标悬停显示半透明高亮
+                    DrawHoverBackground(itemRect);
+                }
 
                 var labelRect = new Rect(rect.x + 16f, cursorY + 6f, rect.width - 36f, NavItemHeight - 12f);
                 if (isSelected)
@@ -133,10 +138,14 @@ namespace RimLife.UI
                 rect.height - ContentPadding * 2
             );
 
-            var viewRect = new Rect(innerRect.x, innerRect.y, innerRect.width - 16f, 1200f);
+            // 动态计算虚拟高度：取内容区可见高度的 3 倍与 800f 的较大值，
+            // 确保有足够滚动空间，同时避免固定 1200f 导致的空白过多
+            var estimatedContentHeight = Mathf.Max(innerRect.height * 3f, 800f);
+            var viewRect = new Rect(innerRect.x, innerRect.y, innerRect.width - 16f, estimatedContentHeight);
             Widgets.BeginScrollView(innerRect, ref _scrollPosition, viewRect);
 
             var listing = new Listing_Standard();
+            listing.maxOneColumn = true;
             listing.Begin(viewRect);
 
             var titleRect = listing.GetRect(28f);

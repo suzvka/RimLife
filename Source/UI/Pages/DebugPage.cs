@@ -33,22 +33,23 @@ namespace RimLife.UI.Pages
 
         private void DrawControlBar(Listing_Standard listing)
         {
-            var buttonRow = listing.GetRect(30f);
-            var btnWidth = 110f;
-            var gap = GapSmall;
+            var btnResults = DrawButtonRow(listing,
+                new[] { "清空日志", _autoScroll ? "自动滚动: ON" : "自动滚动: OFF", "复制全部", "导出日志" },
+                new[] { BtnWidthMedium, BtnWidthMedium + 20f, BtnWidthMedium, BtnWidthMedium });
 
-            if (Widgets.ButtonText(new Rect(buttonRow.x, buttonRow.y, btnWidth, 28f), "清空日志"))
+            if (btnResults[0])
             {
                 LogBuffer.Clear();
             }
-
-            if (Widgets.ButtonText(new Rect(buttonRow.x + btnWidth + gap, buttonRow.y, btnWidth, 28f),
-                _autoScroll ? "自动滚动: ON" : "自动滚动: OFF"))
+            if (btnResults[1])
             {
                 _autoScroll = !_autoScroll;
             }
-
-            if (Widgets.ButtonText(new Rect(buttonRow.x + (btnWidth + gap) * 2, buttonRow.y, btnWidth, 28f), "导出日志"))
+            if (btnResults[2])
+            {
+                CopyAllLogs();
+            }
+            if (btnResults[3])
             {
                 ExportLogs();
             }
@@ -82,33 +83,41 @@ namespace RimLife.UI.Pages
             var textRect = new Rect(viewRect.x, viewRect.y, textWidth, textHeight);
             var originalAnchor = Text.Anchor;
             Text.Anchor = TextAnchor.UpperLeft;
-            
-            // 使用 Tooltip hack：鼠标悬停时显示完整文本（可复制）
-            // 或者用户可以直接从日志文件复制（更可靠）
             Widgets.Label(textRect, logText);
-            
-            // 添加提示：告诉用户可以 Ctrl+C 复制选中的文本
-            if (Event.current.type == EventType.MouseDown && textRect.Contains(Event.current.mousePosition))
-            {
-                RimLifeLogger.Message("💡 提示：日志文本已复制到剪贴板（请查看 Output_log.txt 获取完整内容）");
-                // 将纯文本复制到剪贴板
-                string plainText = StripRichText(logText);
-                GUIUtility.systemCopyBuffer = plainText;
-            }
-            
             Text.Anchor = originalAnchor;
 
             Widgets.EndScrollView();
 
-            // 自动滚动到底部
+            // 智能自动滚动：仅在用户处于底部附近时强制滚动到底部
+            // 如果用户手动向上翻阅（距底部超过阈值），不干扰其阅读位置
             if (_autoScroll && count > 0)
             {
-                _logScrollPosition.y = totalHeight - innerRect.height;
+                var maxScrollY = totalHeight - innerRect.height;
+                var nearBottomThreshold = 30f;
+
+                if (maxScrollY <= 0 || _logScrollPosition.y >= maxScrollY - nearBottomThreshold)
+                {
+                    _logScrollPosition.y = maxScrollY;
+                }
             }
 
             // 底部状态行
             var statusRect = new Rect(rect.x + GapSmall, rect.y + rect.height - 28f, rect.width - GapSmall * 2, 20f);
             Widgets.Label(statusRect, $"<color=#888888><size=11>共 {count} 条日志 | 缓冲区: {count}/{500}</size></color>");
+        }
+
+        private void CopyAllLogs()
+        {
+            var logText = LogBuffer.GetText();
+            if (string.IsNullOrEmpty(logText))
+            {
+                Messages.Message("没有日志可复制", MessageTypeDefOf.NeutralEvent);
+                return;
+            }
+
+            var plainText = StripRichText(logText);
+            GUIUtility.systemCopyBuffer = plainText;
+            Messages.Message($"已复制 {LogBuffer.Count} 条日志到剪贴板", MessageTypeDefOf.NeutralEvent);
         }
 
         private void ExportLogs()

@@ -37,12 +37,14 @@ namespace RimLife.UI
             EndSection(listing);
 
             BeginSection(listing, "危险操作");
-            if (Widgets.ButtonText(listing.GetRect(28f), "重置所有配置"))
+            var dangerResults = DrawButtonRow(listing,
+                new[] { "重置所有配置", "导出配置", "导入配置" },
+                new[] { BtnWidthMedium, BtnWidthMedium, BtnWidthMedium });
+            if (dangerResults[0])
                 Log.Message("[RimLife.UI] Reset all config clicked");
-            listing.Gap(GapTiny);
-            if (Widgets.ButtonText(listing.GetRect(28f), "导出配置"))
+            if (dangerResults[1])
                 Log.Message("[RimLife.UI] Export config clicked");
-            if (Widgets.ButtonText(listing.GetRect(28f), "导入配置"))
+            if (dangerResults[2])
                 Log.Message("[RimLife.UI] Import config clicked");
             EndSection(listing);
         }
