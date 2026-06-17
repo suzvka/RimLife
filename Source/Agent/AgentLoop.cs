@@ -32,6 +32,7 @@ namespace RimLife.Agent
         private readonly Action _unsubscribe; // 取消事件订阅的委托
         private readonly Func<string> _contextProvider;
         private readonly IKnowledgeBase _knowledgeBase;
+        private readonly float _temperature;
 
         private bool _isProcessing;
         private int _round;
@@ -50,6 +51,7 @@ namespace RimLife.Agent
         /// <param name="serializer">Card 序列化器（可选，默认使用 CardSerializer.Default）。</param>
         /// <param name="contextProvider">动态上下文提供者（可选）。每次激活时调用，返回值追加到用户消息末尾。</param>
         /// <param name="knowledgeBase">知识库（可选）。Agent 激活时收集事件关键词去重后批量查询，命中结果注入提示词。</param>
+        /// <param name="temperature">LLM 采样温度（0~2），默认 0.7。</param>
         public AgentLoop(
             IEventLog pool,
             ILlmService llm,
@@ -59,7 +61,8 @@ namespace RimLife.Agent
             ILogger logger,
             ICardSerializer serializer = null,
             Func<string> contextProvider = null,
-            IKnowledgeBase knowledgeBase = null)
+            IKnowledgeBase knowledgeBase = null,
+            float temperature = 0.7f)
         {
             _pool = pool ?? throw new ArgumentNullException(nameof(pool));
             _llm = llm ?? throw new ArgumentNullException(nameof(llm));
@@ -70,6 +73,7 @@ namespace RimLife.Agent
             _serializer = serializer ?? CardSerializer.Default;
             _contextProvider = contextProvider;
             _knowledgeBase = knowledgeBase;
+            _temperature = temperature;
 
             // 订阅池子事件——唯一激活路径
             _pool.OnThresholdReached += OnPoolChanged;
@@ -130,8 +134,7 @@ namespace RimLife.Agent
                 {
                     Messages = new List<LlmMessage>(_messages),
                     ToolsJson = McpSkillRegistry.GetActiveToolsJson(_skillIds),
-                    MaxTokens = 4096,
-                    Temperature = 0.7f
+                    Temperature = _temperature
                 };
 
                 // 管道拦截：LLM 请求前

@@ -320,6 +320,9 @@ namespace RimLife.Framework
                 }
 
                 // Agent Loop
+                int totalActivations = roleActivations[(int)AgentRole.Director]
+                    + roleActivations[(int)AgentRole.Screenwriter]
+                    + roleActivations[(int)AgentRole.Freelancer];
                 snap.AgentLoops = new MetricsSnapshot.AgentLoopStat
                 {
                     ActivationsByRole = new Dictionary<string, int>
@@ -329,8 +332,8 @@ namespace RimLife.Framework
                         ["freelancer"] = roleActivations[(int)AgentRole.Freelancer]
                     },
                     TotalRounds = roleTotalRounds.Sum(),
-                    AvgRoundsPerActivation = snap.AgentLoops.TotalActivations > 0
-                        ? (double)roleTotalRounds.Sum() / snap.AgentLoops.TotalActivations
+                    AvgRoundsPerActivation = totalActivations > 0
+                        ? (double)roleTotalRounds.Sum() / totalActivations
                         : 0,
                     TotalEventsProcessed = roleTotalEvents.Sum(),
                     TotalErrors = roleErrors.Sum()

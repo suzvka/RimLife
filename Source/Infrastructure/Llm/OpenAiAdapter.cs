@@ -94,7 +94,6 @@ namespace RimLife.Infrastructure.Llm
                 var testRequest = LlmRequest.SinglePrompt(
                     _config.ModelName,
                     "Hi. Respond with just 'ok'.");
-                testRequest.MaxTokens = 5;
                 string requestJson = BuildChatRequest(testRequest);
                 string responseJson = SendHttpRequest("/v1/chat/completions", requestJson);
                 var response = ParseChatResponse(responseJson);
@@ -215,10 +214,6 @@ namespace RimLife.Infrastructure.Llm
                     msgJsons.Add(BuildMessage(msg));
                 w.ArrayRaw("messages", msgJsons);
             }
-
-            // max_tokens
-            if (req.MaxTokens.HasValue)
-                w.Prop("max_tokens", req.MaxTokens.Value);
 
             // temperature
             if (req.Temperature.HasValue)

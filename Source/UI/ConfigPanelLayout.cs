@@ -31,6 +31,7 @@ namespace RimLife.UI
         public readonly List<IConfigPage> Pages;
         public IConfigPage CurrentPage { get; private set; }
         private Vector2 _scrollPosition;
+        private float _measuredContentHeight = 800f;
 
         // ================================================================
         // 构造
@@ -42,6 +43,7 @@ namespace RimLife.UI
             {
                 new ConnectionPage(),
                 new NarrativePage(),
+                new PromptPage(),
                 new KnowledgePage(),
                 new AdvancedPage(),
                 new DebugPage()
@@ -138,10 +140,10 @@ namespace RimLife.UI
                 rect.height - ContentPadding * 2
             );
 
-            // 动态计算虚拟高度：取内容区可见高度的 3 倍与 800f 的较大值，
-            // 确保有足够滚动空间，同时避免固定 1200f 导致的空白过多
-            var estimatedContentHeight = Mathf.Max(innerRect.height * 3f, 800f);
-            var viewRect = new Rect(innerRect.x, innerRect.y, innerRect.width - 16f, estimatedContentHeight);
+            // 使用上一帧测量的实际内容高度设定滚动区，保证所有绘制内容可滚动
+            // 下限为可见区域的 3 倍，避免小页面出现无意义的短滚动
+            var scrollHeight = Mathf.Max(innerRect.height * 3f, _measuredContentHeight);
+            var viewRect = new Rect(innerRect.x, innerRect.y, innerRect.width - 16f, scrollHeight);
             Widgets.BeginScrollView(innerRect, ref _scrollPosition, viewRect);
 
             var listing = new Listing_Standard();
@@ -155,6 +157,13 @@ namespace RimLife.UI
             listing.Gap(GapMedium);
 
             CurrentPage.Draw(viewRect, listing);
+
+            // 测量实际内容高度，供下一帧使用（IMGUI 双帧收敛）
+            // 使用 GetRect(0) 获取当前位置而不推进游标
+            var endMarker = listing.GetRect(0f);
+            var actualHeight = endMarker.y + ContentPadding;
+            if (actualHeight > 100f) // 过滤异常值
+                _measuredContentHeight = actualHeight;
 
             listing.End();
             Widgets.EndScrollView();

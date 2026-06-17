@@ -74,7 +74,6 @@ namespace RimLife.Infrastructure.Llm
                 var testRequest = LlmRequest.SinglePrompt(
                     _config.ModelName,
                     "Hi.");
-                testRequest.MaxTokens = 5;
                 string requestJson = BuildChatRequest(testRequest);
                 string responseJson = SendHttpRequest("/v1/messages", requestJson);
                 var response = ParseChatResponse(responseJson);
@@ -152,7 +151,6 @@ namespace RimLife.Infrastructure.Llm
         {
             var w = new JsonWriter(2048);
             w.Prop("model", req.Model);
-            w.Prop("max_tokens", req.MaxTokens ?? 1024);
 
             // temperature
             if (req.Temperature.HasValue)

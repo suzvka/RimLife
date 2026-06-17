@@ -17,9 +17,6 @@ namespace RimLife.Framework.Llm
         /// <summary>工具定义 JSON 数组字符串。MCP 标准 tools 格式。</summary>
         public string ToolsJson { get; set; }
 
-        /// <summary>最大生成 token 数。null 表示使用 API 默认值。</summary>
-        public int? MaxTokens { get; set; }
-
         /// <summary>采样温度，0~2。null 表示使用 API 默认值。</summary>
         public float? Temperature { get; set; }
 

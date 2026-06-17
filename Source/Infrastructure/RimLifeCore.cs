@@ -1,8 +1,8 @@
 using RimLife.Agent;
 using RimLife.Core;
+using RimLife.Driver;
 using RimLife.Framework;
 using RimLife.Framework.Script;
-using RimLife.Driver;
 using RimLife.Framework.Mcp;
 using RimLife.Infrastructure.Llm;
 using System;
@@ -21,6 +21,8 @@ namespace RimLife.Infrastructure
         private static readonly object _skillRegistryLock = new object();
         private static FrameworkConfig _frameworkConfig;
         private static ScriptDeliveryService _scriptDeliveryService;
+        private static PromptConfig _promptConfig;
+        private static readonly object _promptConfigLock = new object();
 
         /// <summary>日志接口。由适配层在启动时注入。</summary>
         public static ILogger Logger { get; internal set; }
@@ -74,6 +76,36 @@ namespace RimLife.Infrastructure
 
         /// <summary>当前框架配置。未配置时返回默认配置。</summary>
         public static FrameworkConfig Config => _frameworkConfig ?? FrameworkConfig.CreateDefault();
+
+        /// <summary>
+        /// 提示词配置。从 CacheStore 延迟加载，UI 修改后通过 SetPromptConfig 写回。
+        /// </summary>
+        public static PromptConfig PromptConfig
+        {
+            get
+            {
+                lock (_promptConfigLock)
+                {
+                    if (_promptConfig == null)
+                        _promptConfig = LoadPromptConfig();
+                    return _promptConfig;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 更新提示词配置并持久化到 CacheStore。
+        /// 修改后需调用 RebuildAgents() 才能生效。
+        /// </summary>
+        public static void SetPromptConfig(PromptConfig config)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            lock (_promptConfigLock)
+            {
+                _promptConfig = config;
+                SavePromptConfig(config);
+            }
+        }
 
         /// <summary>
         /// 统一配置入口。设置全局配置并触发配置就绪通知。
@@ -131,6 +163,7 @@ namespace RimLife.Infrastructure
             _freelancerAgent = null;
 
             _frameworkConfig = null;
+            _promptConfig = null;
             _skillRegistryInitialized = false;
 
             // 清理台词推送服务
@@ -400,6 +433,31 @@ namespace RimLife.Infrastructure
             }
         }
 
+        /// <summary>
+        /// 更新驱动配置并持久化。修改后需调用 RebuildAgents() 才能生效。
+        /// </summary>
+        public static void SetDriverConfig(DriverConfig config)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            lock (_driverConfigLock)
+            {
+                _driverConfig = config;
+                try
+                {
+                    var w = new Framework.JsonWriter(256);
+                    w.Prop("countThreshold", config.CountThreshold);
+                    w.Prop("importanceThreshold", config.ImportanceThreshold);
+                    w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
+                    w.Prop("maxAgentRounds", config.MaxAgentRounds);
+                    CacheStore?.Cache("rimlife_driver_config", w.Close());
+                }
+                catch (Exception e)
+                {
+                    Logger?.Warning($"[RimLife.Core] Failed to save DriverConfig: {e.Message}");
+                }
+            }
+        }
+
         private static AgentLoop _directorAgent;
         private static readonly object _directorAgentLock = new object();
         private static AgentLoop _freelancerAgent;
@@ -466,7 +524,8 @@ namespace RimLife.Infrastructure
                                 maxRounds: DriverConfig.MaxAgentRounds,
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
-                                knowledgeBase: KnowledgeBase);
+                                knowledgeBase: KnowledgeBase,
+                                temperature: PromptConfig.Temperature);
                         }
                     }
                 }
@@ -498,7 +557,8 @@ namespace RimLife.Infrastructure
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
                                 contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
-                                knowledgeBase: KnowledgeBase);
+                                knowledgeBase: KnowledgeBase,
+                                temperature: PromptConfig.Temperature);
                         }
                     }
                 }
@@ -553,7 +613,8 @@ namespace RimLife.Infrastructure
                     maxRounds: DriverConfig.MaxAgentRounds,
                     logger: Logger,
                     serializer: CardSerializer.Default,
-                    knowledgeBase: KnowledgeBase);
+                    knowledgeBase: KnowledgeBase,
+                    temperature: PromptConfig.Temperature);
 
                 _screenwriters[workspaceId] = agent;
                 Logger?.Message($"[RimLife.Core] ScreenwriterAgent created for workspace '{ws.Label}' ({workspaceId})");
@@ -580,26 +641,9 @@ namespace RimLife.Infrastructure
 
         private static string BuildDirectorSystemPrompt()
         {
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("你是 RimWorld 殖民地的剧情导演 (Director Agent)。");
-            sb.AppendLine();
-            sb.AppendLine("你的职责：");
-            sb.AppendLine("1. 审查以下积累的事件列表");
-            sb.AppendLine("2. 挑选值得发展为剧情线的事件");
-            sb.AppendLine("3. 为选中的事件创建或分支工作空间（workspace）");
-            sb.AppendLine("4. 使用 route_events 将事件路由到对应工作空间");
-            sb.AppendLine("5. 未被路由的事件将被丢弃");
-            sb.AppendLine();
-            sb.AppendLine("决策原则：");
-            sb.AppendLine("- 优先处理 Extreme 和 Major 严重度的事件");
-            sb.AppendLine("- 相关事件可合并到同一个工作空间（如同一场袭击中的多个角色受伤）");
-            sb.AppendLine("- 互不相关的事件应创建独立工作空间");
-            sb.AppendLine("- 如无值得发展的内容，可以不创建任何工作空间");
-            sb.AppendLine("- 对已有工作空间可用 branch_workspace 创建分支、merge_workspaces 合并");
-            sb.AppendLine();
-            sb.AppendLine("事件路由：");
-            sb.AppendLine("- 每条事件都有 eventId，使用 route_events 将事件推送到对应工作空间");
-            sb.AppendLine("- 如无合适的工作空间，先 create_workspace 再用 route_events");
+            var pc = PromptConfig;
+            var sb = new System.Text.StringBuilder(pc.DirectorPrompt ?? Driver.PromptConfig.DefaultDirectorPrompt);
+            AppendStyleInstruction(sb, pc);
             return sb.ToString();
         }
 
@@ -633,8 +677,11 @@ namespace RimLife.Infrastructure
 
         private static string BuildScreenwriterSystemPrompt(Workspace.IWorkspace ws)
         {
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("你是 RimWorld 殖民地某条剧情线的编剧 (Screenwriter Agent)。");
+            var pc = PromptConfig;
+            var sb = new System.Text.StringBuilder(pc.ScreenwriterPrompt ?? Driver.PromptConfig.DefaultScreenwriterPrompt);
+
+            // 运行时动态上下文追加
+            sb.AppendLine();
             sb.AppendLine();
             sb.AppendLine($"工作空间 ID：{ws.Id}");
             sb.AppendLine($"工作空间：{ws.Label ?? "Unnamed"}");
@@ -644,31 +691,21 @@ namespace RimLife.Infrastructure
             if (ws.ColonistIds != null && ws.ColonistIds.Count > 0)
                 sb.AppendLine($"关联角色：{string.Join(", ", ws.ColonistIds)}");
             sb.AppendLine();
-            sb.AppendLine("你的职责：");
-            sb.AppendLine("1. 审查推送到本工作空间的事件");
-            sb.AppendLine("2. 根据需要调用角色查询、环境感知等工具获取上下文");
-            sb.AppendLine("3. 使用 push_line 工具逐句撰写台词（可一次并行调用多个 push_line）");
-            sb.AppendLine("4. 台词写完后调用 finish_round 结束本轮，填写 recap/outcome/directorNote");
-            sb.AppendLine();
-            sb.AppendLine("工作原则：");
-            sb.AppendLine("- 优先使用 push_line 逐句输出台词以降低玩家等待延迟");
-            sb.AppendLine("- 多句台词可在一个响应中并行调用多个 push_line，减少 API 往返");
-            sb.AppendLine("- 台词写完后必须调用 finish_round 收尾");
-            sb.AppendLine("- recap (前情提要) 总结本轮叙事起点，outcome 简述剧情发展结果");
-            sb.AppendLine("- directorNote 给导演留言：剧情线是否可以继续、期望接收什么类型的事件等");
-            sb.AppendLine("- 每次激活只推送 1 个轮次");
-            sb.AppendLine("- 如事件不适合本剧情线，可用 route_events 推回导演工作空间");
-            sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();
             sb.Append(ScriptFormat.GetFormatSpec());
+
+            AppendStyleInstruction(sb, pc);
             return sb.ToString();
         }
 
         private static string BuildFreelancerSystemPrompt(Workspace.IWorkspace ws)
         {
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("你是 RimWorld 殖民地的临时任务代理 (Freelancer Agent)。");
+            var pc = PromptConfig;
+            var sb = new System.Text.StringBuilder(pc.FreelancerPrompt ?? Driver.PromptConfig.DefaultFreelancerPrompt);
+
+            // 运行时动态上下文追加
+            sb.AppendLine();
             sb.AppendLine();
             sb.AppendLine($"工作空间 ID：{ws.Id}");
             sb.AppendLine($"工作空间：{ws.Label ?? "Freelancer"}");
@@ -676,40 +713,115 @@ namespace RimLife.Infrastructure
             if (directorWs != null)
                 sb.AppendLine($"导演工作空间 ID：{directorWs.Id}");
             sb.AppendLine();
-            sb.AppendLine("你的职责：");
-            sb.AppendLine("1. 处理突发性、独立性的事件（日常对话、随机遭遇、环境变化等）");
-            sb.AppendLine("2. 这些事件不属于任何正在进行的剧情线，你不需要维护跨轮次的剧情上下文");
-            sb.AppendLine("3. 调用角色查询、环境感知等工具获取当前状态");
-            sb.AppendLine("4. 使用 push_line 工具逐句输出台词，写完后调用 finish_round 收尾");
-            sb.AppendLine();
-            sb.AppendLine("工作原则：");
-            sb.AppendLine("- 每次激活都是独立任务，不维护剧情延续性");
-            sb.AppendLine("- 叙事风格保持轻快、即兴，快速响应");
-            sb.AppendLine("- 每次激活只处理当前批次事件，输出 1 个轮次");
-            sb.AppendLine("- recap 只总结本次事件批次，不需要回顾历史");
-            sb.AppendLine("- 多句台词可在一个响应中并行调用多个 push_line");
-            sb.AppendLine("- 台词写完后必须调用 finish_round");
-            sb.AppendLine("- 如事件更适合某条剧情线，用 route_events 推回导演工作空间");
-            sb.AppendLine("- 你不负责汇报剧情线推进状态（那是编剧的职责）");
-            sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();
             sb.Append(ScriptFormat.GetFormatSpec());
+
+            AppendStyleInstruction(sb, pc);
             return sb.ToString();
+        }
+
+        /// <summary>将全局风格指令追加到提示词末尾（共用辅助）。</summary>
+        private static void AppendStyleInstruction(System.Text.StringBuilder sb, PromptConfig pc)
+        {
+            if (!string.IsNullOrEmpty(pc?.StyleInstruction))
+            {
+                sb.AppendLine();
+                sb.AppendLine("## 叙事风格");
+                sb.AppendLine(pc.StyleInstruction);
+            }
         }
 
         private static DriverConfig LoadDriverConfig()
         {
             try
             {
-                var config = CacheStore?.FetchOrRebuild("rimlife_driver_config",
-                    () => DriverConfig.CreateDefault());
-                return config ?? DriverConfig.CreateDefault();
+                var json = CacheStore?.FetchCache<string>("rimlife_driver_config", null);
+                if (!string.IsNullOrEmpty(json) && json.StartsWith("{"))
+                {
+                    var dict = Framework.JsonParser.ParseDict(json);
+                    var dc = DriverConfig.CreateDefault();
+                    if (dict.TryGetValue("countThreshold", out var ct) && int.TryParse(ct, out var ctv))
+                        dc.CountThreshold = ctv;
+                    if (dict.TryGetValue("importanceThreshold", out var it) && int.TryParse(it, out var itv))
+                        dc.ImportanceThreshold = itv;
+                    if (dict.TryGetValue("recentHistoryCapacity", out var rhc) && int.TryParse(rhc, out var rhcv))
+                        dc.RecentHistoryCapacity = rhcv;
+                    if (dict.TryGetValue("maxAgentRounds", out var mar) && int.TryParse(mar, out var marv))
+                        dc.MaxAgentRounds = marv;
+                    return dc;
+                }
             }
             catch
             {
-                return DriverConfig.CreateDefault();
+                // 加载失败，返回默认
             }
+            return DriverConfig.CreateDefault();
+        }
+
+        private static PromptConfig LoadPromptConfig()
+        {
+            try
+            {
+                var json = CacheStore?.FetchCache<string>("rimlife_prompt_config", null);
+                if (!string.IsNullOrEmpty(json))
+                    return PromptConfig.FromJson(json);
+            }
+            catch
+            {
+                // 加载失败，返回默认
+            }
+            return PromptConfig.CreateDefault();
+        }
+
+        private static void SavePromptConfig(PromptConfig config)
+        {
+            try
+            {
+                CacheStore?.Cache("rimlife_prompt_config", config.ToJson());
+            }
+            catch (Exception e)
+            {
+                Logger?.Warning($"[RimLife.Core] Failed to save PromptConfig: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 重建所有 Agent。修改提示词或驱动参数后调用，
+        /// 销毁现有 Agent 实例，下次事件触发时用新参数自动重建。
+        /// </summary>
+        public static void RebuildAgents()
+        {
+            Logger?.Message("[RimLife.Core] Rebuilding agents...");
+
+            lock (_directorAgentLock)
+            {
+                _directorAgent?.Dispose();
+                _directorAgent = null;
+            }
+
+            lock (_freelancerAgentLock)
+            {
+                _freelancerAgent?.Dispose();
+                _freelancerAgent = null;
+            }
+
+            lock (_screenwritersLock)
+            {
+                foreach (var kv in _screenwriters)
+                    kv.Value?.Dispose();
+                _screenwriters.Clear();
+            }
+
+            // 如果工作空间管理器已就绪，立即为活跃工作空间重建 Agent
+            if (Workspaces != null)
+            {
+                var actives = Workspaces.GetActive();
+                foreach (var ws in actives)
+                    EnsureAgentForWorkspace(ws.Id);
+            }
+
+            Logger?.Message("[RimLife.Core] Agents rebuilt successfully.");
         }
 
         private static IInteractionStore _interactionStore;
