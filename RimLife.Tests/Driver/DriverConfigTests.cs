@@ -13,8 +13,12 @@ namespace RimLife.Tests.Driver
         {
             var config = DriverConfig.CreateDefault();
 
-            Assert.Equal(5, config.CountThreshold);
-            Assert.Equal(15, config.ImportanceThreshold);
+            Assert.Equal(5, config.DirectorCountThreshold);
+            Assert.Equal(15, config.DirectorImportanceThreshold);
+            Assert.Equal(5, config.ScreenwriterCountThreshold);
+            Assert.Equal(15, config.ScreenwriterImportanceThreshold);
+            Assert.Equal(5, config.FreelancerCountThreshold);
+            Assert.Equal(15, config.FreelancerImportanceThreshold);
             Assert.Equal(200, config.RecentHistoryCapacity);
             Assert.Equal(10, config.MaxAgentRounds);
         }

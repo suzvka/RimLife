@@ -301,6 +301,36 @@ namespace RimLife.Mappers
         }
 
         // ================================================================
+        // 定时器脉冲事件
+        // ================================================================
+
+        /// <summary>
+        /// 创建定时器脉冲合成事件。由 RimWorldAgentDriver 定时器驱动，
+        /// 向导演/临时编剧工作空间注入一条无外部依赖的系统事件。
+        /// 重要度固定为 Minor，避免单次脉冲就触发阈值（需配合 Count 累积）。
+        /// </summary>
+        /// <param name="role">触发此脉冲的角色（Director 或 Freelancer）。</param>
+        /// <param name="tick">当前游戏 tick。</param>
+        public static IGameEvent CreateTimerPulse(Workspace.WorkspaceRole role, int tick)
+        {
+            return new EventCardImpl
+            {
+                EventID = $"timer_pulse_{role.ToString().ToLowerInvariant()}_{tick}",
+                DefName = "TimerPulse",
+                Tags = new List<string> { "TimerPulse", "System" },
+                Tick = tick,
+                Severity = "Minor",
+                Actors = new List<EventActorRef>(),
+                MapHint = "",
+                Payload = new Dictionary<string, string>
+                {
+                    ["sourceRole"] = role.ToString(),
+                    ["pulseTick"] = tick.ToString()
+                }
+            };
+        }
+
+        // ================================================================
         // 私有实现
         // ================================================================
 

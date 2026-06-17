@@ -1231,7 +1231,7 @@ namespace RimLife.Tool
 
                 if (callbackFired)
                     Pass("OnThresholdReached: 数量达标触发回调");
-                else if (pool.PendingCount < RimLifeCore.DriverConfig.CountThreshold)
+                else if (pool.PendingCount < RimLifeCore.DriverConfig.DirectorCountThreshold)
                     Pass("OnThresholdReached: 未触发（数量未达标，预期行为）");
                 else
                     Fail("OnThresholdReached: 数量达标但未触发");
@@ -1336,15 +1336,15 @@ namespace RimLife.Tool
 
                 // 填充事件到阈值
                 var events = new List<IGameEvent>();
-                for (int i = 0; i < config.CountThreshold; i++)
+                for (int i = 0; i < config.DirectorCountThreshold; i++)
                     events.Add(MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, "Major"));
 
                 wsManager.RouteEvents(testWs.Id, events);
 
-                if (testWs.EventPool.PendingCount == config.CountThreshold)
-                    Pass($"RouteEvents 达到阈值 (count={testWs.EventPool.PendingCount}, threshold={config.CountThreshold})");
+                if (testWs.EventPool.PendingCount == config.DirectorCountThreshold)
+                    Pass($"RouteEvents 达到阈值 (count={testWs.EventPool.PendingCount}, threshold={config.DirectorCountThreshold})");
                 else
-                    Fail($"PendingCount={testWs.EventPool.PendingCount} (expected {config.CountThreshold})");
+                    Fail($"PendingCount={testWs.EventPool.PendingCount} (expected {config.DirectorCountThreshold})");
             }
             catch (Exception e) { Fail("工作空间回调测试异常", e.Message); }
 
@@ -1364,8 +1364,8 @@ namespace RimLife.Tool
 
                 int count = testWs.EventPool.PendingCount;
                 int importance = testWs.EventPool.TotalImportance;
-                bool countOk = count >= config.CountThreshold;
-                bool impOk = importance >= config.ImportanceThreshold;
+                bool countOk = count >= config.DirectorCountThreshold;
+                bool impOk = importance >= config.DirectorImportanceThreshold;
 
                 if (!countOk && impOk)
                     Pass("1个Extreme: Count不满足, Importance满足 (纯事件驱动)");
@@ -1374,8 +1374,8 @@ namespace RimLife.Tool
                 else
                     Fail($"激活条件异常: Count={countOk}, Importance={impOk}");
 
-                DumpObject("  CountThreshold", config.CountThreshold);
-                DumpObject("  ImportanceThreshold", config.ImportanceThreshold);
+                DumpObject("  DirectorCountThreshold", config.DirectorCountThreshold);
+                DumpObject("  DirectorImportanceThreshold", config.DirectorImportanceThreshold);
             }
             catch (Exception e) { Fail("激活条件测试异常", e.Message); }
 

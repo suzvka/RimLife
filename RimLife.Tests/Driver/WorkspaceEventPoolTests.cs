@@ -20,8 +20,12 @@ namespace RimLife.Tests.Driver
         {
             return new DriverConfig
             {
-                CountThreshold = 3,
-                ImportanceThreshold = 10,
+                DirectorCountThreshold = 3,
+                DirectorImportanceThreshold = 10,
+                ScreenwriterCountThreshold = 3,
+                ScreenwriterImportanceThreshold = 10,
+                FreelancerCountThreshold = 3,
+                FreelancerImportanceThreshold = 10,
                 RecentHistoryCapacity = 20
             };
         }

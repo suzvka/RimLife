@@ -88,14 +88,6 @@ namespace RimLife.UI.Models
                     config = BuildConfigForModel(_state.ActiveModelOrder[0]);
                 }
 
-                // 回退：没有模型列表时，取第一张激活卡片的默认配置
-                if (config == null)
-                {
-                    var firstActive = _state.Cards.FirstOrDefault(c => c.IsActive && c.IsValid());
-                    if (firstActive != null)
-                        config = firstActive.ToLlmConfig();
-                }
-
                 if (config != null && config.IsValid())
                 {
                     RimLifeCore.LlmAccessor?.UpdateConfig(config);

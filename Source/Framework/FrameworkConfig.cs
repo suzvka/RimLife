@@ -60,8 +60,8 @@ namespace RimLife.Framework
             if (Driver == null) errors.Add("Driver section is null.");
             else
             {
-                if (Driver.CountThreshold < 1) errors.Add("Driver.CountThreshold must be >= 1.");
-                if (Driver.ImportanceThreshold < 1) errors.Add("Driver.ImportanceThreshold must be >= 1.");
+                if (Driver.DirectorCountThreshold < 1) errors.Add("Driver.DirectorCountThreshold must be >= 1.");
+                if (Driver.DirectorImportanceThreshold < 1) errors.Add("Driver.DirectorImportanceThreshold must be >= 1.");
                 if (Driver.RecentHistoryCapacity < 10) errors.Add("Driver.RecentHistoryCapacity must be >= 10.");
                 if (Driver.MaxAgentRounds < 1 || Driver.MaxAgentRounds > 100)
                     errors.Add("Driver.MaxAgentRounds must be between 1 and 100.");
@@ -86,8 +86,14 @@ namespace RimLife.Framework
             // Driver
             var dw = new JsonWriter(256);
             var d = Driver ?? DriverConfig.CreateDefault();
-            dw.Prop("countThreshold", d.CountThreshold);
-            dw.Prop("importanceThreshold", d.ImportanceThreshold);
+            dw.Prop("directorCountThreshold", d.DirectorCountThreshold);
+            dw.Prop("directorImportanceThreshold", d.DirectorImportanceThreshold);
+            dw.Prop("freelancerCountThreshold", d.FreelancerCountThreshold);
+            dw.Prop("freelancerImportanceThreshold", d.FreelancerImportanceThreshold);
+            dw.Prop("screenwriterCountThreshold", d.ScreenwriterCountThreshold);
+            dw.Prop("screenwriterImportanceThreshold", d.ScreenwriterImportanceThreshold);
+            dw.Prop("directorTimerInterval", d.DirectorTimerInterval);
+            dw.Prop("freelancerTimerInterval", d.FreelancerTimerInterval);
             dw.Prop("recentHistoryCapacity", d.RecentHistoryCapacity);
             dw.Prop("maxAgentRounds", d.MaxAgentRounds);
             if (d.SeverityWeights != null && d.SeverityWeights.Count > 0)
@@ -135,10 +141,22 @@ namespace RimLife.Framework
                 {
                     var dd = JsonParser.ParseDict(driverJson);
                     var dc = DriverConfig.CreateDefault();
-                    if (dd.TryGetValue("countThreshold", out string ct) && int.TryParse(ct, out int ctv))
-                        dc.CountThreshold = ctv;
-                    if (dd.TryGetValue("importanceThreshold", out string it) && int.TryParse(it, out int itv))
-                        dc.ImportanceThreshold = itv;
+                    if (dd.TryGetValue("directorCountThreshold", out string dct) && int.TryParse(dct, out int dctv))
+                        dc.DirectorCountThreshold = dctv;
+                    if (dd.TryGetValue("directorImportanceThreshold", out string dit) && int.TryParse(dit, out int ditv))
+                        dc.DirectorImportanceThreshold = ditv;
+                    if (dd.TryGetValue("freelancerCountThreshold", out string fct) && int.TryParse(fct, out int fctv))
+                        dc.FreelancerCountThreshold = fctv;
+                    if (dd.TryGetValue("freelancerImportanceThreshold", out string fit) && int.TryParse(fit, out int fitv))
+                        dc.FreelancerImportanceThreshold = fitv;
+                    if (dd.TryGetValue("screenwriterCountThreshold", out string sct) && int.TryParse(sct, out int sctv))
+                        dc.ScreenwriterCountThreshold = sctv;
+                    if (dd.TryGetValue("screenwriterImportanceThreshold", out string sit) && int.TryParse(sit, out int sitv))
+                        dc.ScreenwriterImportanceThreshold = sitv;
+                    if (dd.TryGetValue("directorTimerInterval", out string dti) && int.TryParse(dti, out int dtiv))
+                        dc.DirectorTimerInterval = dtiv;
+                    if (dd.TryGetValue("freelancerTimerInterval", out string fti) && int.TryParse(fti, out int ftiv))
+                        dc.FreelancerTimerInterval = ftiv;
                     if (dd.TryGetValue("recentHistoryCapacity", out string rhc) && int.TryParse(rhc, out int rhcv))
                         dc.RecentHistoryCapacity = rhcv;
                     if (dd.TryGetValue("maxAgentRounds", out string mar) && int.TryParse(mar, out int marv))

@@ -8,6 +8,7 @@ namespace RimLife.UI
 {
     /// <summary>
     /// 叙事页面：Agent 驱动参数配置。
+    /// 支持分角色（导演/剧情编剧/临时编剧）触发阈值和定时器脉冲间隔。
     /// 所有控件直接读写真实配置，保存后重建 Agent 生效。
     /// </summary>
     public class NarrativePage : IConfigPage
@@ -19,8 +20,22 @@ namespace RimLife.UI
 
         // 本地编辑缓冲（首次 Draw 从配置初始化）
         private bool _initialized;
-        private int _countThreshold;
-        private int _importanceThreshold;
+
+        // 导演专用
+        private int _directorCountThreshold;
+        private int _directorImportanceThreshold;
+        private int _directorTimerInterval;
+
+        // Freelancer 专用
+        private int _freelancerCountThreshold;
+        private int _freelancerImportanceThreshold;
+        private int _freelancerTimerInterval;
+
+        // 剧情编剧专用
+        private int _screenwriterCountThreshold;
+        private int _screenwriterImportanceThreshold;
+
+        // 通用
         private int _recentHistoryCapacity;
         private int _maxAgentRounds;
 
@@ -31,41 +46,68 @@ namespace RimLife.UI
         {
             InitializeIfNeeded();
 
-            // ---- 导演策略 ----
+            // ================================================================
+            // 导演策略
+            // ================================================================
             BeginSection(listing, "导演策略");
 
-            var r1 = listing.GetRect(24f);
-            Widgets.Label(new Rect(r1.x, r1.y, r1.width * 0.45f, r1.height), "触发事件数阈值:");
-            DrawIntField(new Rect(r1.x + r1.width * 0.45f, r1.y, 120f, r1.height), ref _countThreshold, 1, 999);
+            listing.Gap(GapTiny);
 
-            var r2 = listing.GetRect(24f);
-            Widgets.Label(new Rect(r2.x, r2.y, r2.width * 0.45f, r2.height), "重要度阈值:");
-            DrawIntField(new Rect(r2.x + r2.width * 0.45f, r2.y, 120f, r2.height), ref _importanceThreshold, 1, 999);
+            // 导演专用覆盖
+            DrawLabeledIntRow(listing, "导演专用事件数阈值:", ref _directorCountThreshold, 1, 999,
+                "pending 事件数达到此值时触发导演 Agent");
+            DrawLabeledIntRow(listing, "导演专用重要度阈值:", ref _directorImportanceThreshold, 1, 999,
+                "pending 事件总重要度达到此值时触发导演 Agent");
+            DrawLabeledIntRow(listing, "导演定时器间隔 (ticks):", ref _directorTimerInterval, 0, 999999,
+                "0 = 禁用定时器；每 N ticks 注入一个 TimerPulse 事件");
 
             listing.Gap(GapTiny);
             EndSection(listing);
 
-            // ---- 通用设置 ----
+            // ================================================================
+            // Freelancer 策略
+            // ================================================================
+            BeginSection(listing, "Freelancer 策略");
+
+            DrawLabeledIntRow(listing, "Freelancer 专用事件数阈值:", ref _freelancerCountThreshold, 1, 999,
+                "pending 事件数达到此值时触发 Freelancer Agent");
+            DrawLabeledIntRow(listing, "Freelancer 专用重要度阈值:", ref _freelancerImportanceThreshold, 1, 999,
+                "pending 事件总重要度达到此值时触发 Freelancer Agent");
+            DrawLabeledIntRow(listing, "Freelancer 定时器间隔 (ticks):", ref _freelancerTimerInterval, 0, 999999,
+                "0 = 禁用定时器；每 N ticks 注入一个 TimerPulse 事件");
+
+            listing.Gap(GapTiny);
+            EndSection(listing);
+
+            // ================================================================
+            // 剧情编剧策略
+            // ================================================================
+            BeginSection(listing, "剧情编剧策略");
+
+            DrawLabeledIntRow(listing, "剧情编剧专用事件数阈值:", ref _screenwriterCountThreshold, 1, 999,
+                "pending 事件数达到此值时触发编剧 Agent；剧情编剧创作叙事内容，无定时器");
+            DrawLabeledIntRow(listing, "剧情编剧专用重要度阈值:", ref _screenwriterImportanceThreshold, 1, 999,
+                "pending 事件总重要度达到此值时触发编剧 Agent");
+
+            listing.Gap(GapTiny);
+            EndSection(listing);
+
+            // ================================================================
+            // 通用设置
+            // ================================================================
             BeginSection(listing, "通用设置");
 
-            var r3 = listing.GetRect(24f);
-            Widgets.Label(new Rect(r3.x, r3.y, r3.width * 0.45f, r3.height), "历史缓冲区容量:");
-            DrawIntField(new Rect(r3.x + r3.width * 0.45f, r3.y, 120f, r3.height), ref _recentHistoryCapacity, 10, 9999);
-
-            var r4 = listing.GetRect(24f);
-            Widgets.Label(new Rect(r4.x, r4.y, r4.width * 0.45f, r4.height), "Agent 最大轮数:");
-            DrawIntField(new Rect(r4.x + r4.width * 0.45f, r4.y, 120f, r4.height), ref _maxAgentRounds, 1, 100);
+            DrawLabeledIntRow(listing, "历史缓冲区容量:", ref _recentHistoryCapacity, 10, 9999,
+                "保留在内存中的近期事件数量上限");
+            DrawLabeledIntRow(listing, "Agent 最大轮数:", ref _maxAgentRounds, 1, 100,
+                "单次激活中工具调用的最大轮数（防死循环）");
 
             listing.Gap(GapTiny);
             EndSection(listing);
 
-            // ---- Freelancer 策略 ----
-            BeginSection(listing, "Freelancer 策略");
-            Widgets.Label(listing.GetRect(22f),
-                "<color=#888888><size=12>Freelancer 共享上述触发阈值，处理未归入剧情线的临时事件。</size></color>");
-            EndSection(listing);
-
-            // ---- 操作按钮 ----
+            // ================================================================
+            // 操作按钮
+            // ================================================================
             var btnResults = DrawButtonRow(listing,
                 new[] { "保存并应用", "重置默认值" },
                 new[] { BtnWidthLarge, BtnWidthMedium });
@@ -74,8 +116,14 @@ namespace RimLife.UI
             {
                 var dc = new DriverConfig
                 {
-                    CountThreshold = _countThreshold,
-                    ImportanceThreshold = _importanceThreshold,
+                    DirectorCountThreshold = _directorCountThreshold,
+                    DirectorImportanceThreshold = _directorImportanceThreshold,
+                    DirectorTimerInterval = _directorTimerInterval,
+                    FreelancerCountThreshold = _freelancerCountThreshold,
+                    FreelancerImportanceThreshold = _freelancerImportanceThreshold,
+                    FreelancerTimerInterval = _freelancerTimerInterval,
+                    ScreenwriterCountThreshold = _screenwriterCountThreshold,
+                    ScreenwriterImportanceThreshold = _screenwriterImportanceThreshold,
                     RecentHistoryCapacity = _recentHistoryCapacity,
                     MaxAgentRounds = _maxAgentRounds,
                     SeverityWeights = RimLifeCore.DriverConfig.SeverityWeights
@@ -89,8 +137,14 @@ namespace RimLife.UI
             if (btnResults[1])
             {
                 var defaultDc = DriverConfig.CreateDefault();
-                _countThreshold = defaultDc.CountThreshold;
-                _importanceThreshold = defaultDc.ImportanceThreshold;
+                _directorCountThreshold = defaultDc.DirectorCountThreshold;
+                _directorImportanceThreshold = defaultDc.DirectorImportanceThreshold;
+                _directorTimerInterval = defaultDc.DirectorTimerInterval;
+                _freelancerCountThreshold = defaultDc.FreelancerCountThreshold;
+                _freelancerImportanceThreshold = defaultDc.FreelancerImportanceThreshold;
+                _freelancerTimerInterval = defaultDc.FreelancerTimerInterval;
+                _screenwriterCountThreshold = defaultDc.ScreenwriterCountThreshold;
+                _screenwriterImportanceThreshold = defaultDc.ScreenwriterImportanceThreshold;
                 _recentHistoryCapacity = defaultDc.RecentHistoryCapacity;
                 _maxAgentRounds = defaultDc.MaxAgentRounds;
                 _statusMessage = "已重置（需保存生效）";
@@ -110,15 +164,44 @@ namespace RimLife.UI
             if (_initialized) return;
             _initialized = true;
             var dc = RimLifeCore.DriverConfig;
-            _countThreshold = dc.CountThreshold;
-            _importanceThreshold = dc.ImportanceThreshold;
+            _directorCountThreshold = dc.DirectorCountThreshold;
+            _directorImportanceThreshold = dc.DirectorImportanceThreshold;
+            _directorTimerInterval = dc.DirectorTimerInterval;
+            _freelancerCountThreshold = dc.FreelancerCountThreshold;
+            _freelancerImportanceThreshold = dc.FreelancerImportanceThreshold;
+            _freelancerTimerInterval = dc.FreelancerTimerInterval;
+            _screenwriterCountThreshold = dc.ScreenwriterCountThreshold;
+            _screenwriterImportanceThreshold = dc.ScreenwriterImportanceThreshold;
             _recentHistoryCapacity = dc.RecentHistoryCapacity;
             _maxAgentRounds = dc.MaxAgentRounds;
         }
 
         // ================================================================
-        // 整数输入辅助
+        // UI 辅助
         // ================================================================
+
+        /// <summary>
+        /// 绘制标签+整数输入+描述的复合行。
+        /// </summary>
+        private static void DrawLabeledIntRow(Listing_Standard listing, string label, ref int value, int min, int max, string description)
+        {
+            // 标签行
+            var labelRect = listing.GetRect(20f);
+            Widgets.Label(labelRect, label);
+
+            // 输入行
+            var inputRect = listing.GetRect(24f);
+            var fieldWidth = 100f;
+            DrawIntField(new Rect(inputRect.x + 4f, inputRect.y, fieldWidth, inputRect.height), ref value, min, max);
+
+            if (!string.IsNullOrEmpty(description))
+            {
+                var descRect = new Rect(inputRect.x + 4f + fieldWidth + 8f, inputRect.y, inputRect.width - fieldWidth - 8f - 4f, inputRect.height);
+                Widgets.Label(descRect, $"<color=#888888><size=11>{description}</size></color>");
+            }
+
+            listing.Gap(2f);
+        }
 
         private static void DrawIntField(Rect rect, ref int value, int min, int max)
         {

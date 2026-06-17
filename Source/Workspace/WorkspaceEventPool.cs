@@ -80,8 +80,10 @@ namespace RimLife.Workspace
 
         private void CheckThreshold()
         {
-            if (PendingCount >= _config.CountThreshold
-                || TotalImportance >= _config.ImportanceThreshold)
+            int effectiveCount = _config.GetEffectiveCountThreshold(_ws.CreatedByRole);
+            int effectiveImportance = _config.GetEffectiveImportanceThreshold(_ws.CreatedByRole);
+            if (PendingCount >= effectiveCount
+                || TotalImportance >= effectiveImportance)
             {
                 OnThresholdReached?.Invoke();
             }

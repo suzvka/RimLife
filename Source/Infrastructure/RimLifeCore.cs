@@ -5,6 +5,8 @@ using RimLife.Framework;
 using RimLife.Framework.Script;
 using RimLife.Framework.Mcp;
 using RimLife.Infrastructure.Llm;
+using RimLife.Mappers;
+using RimLife.Workspace;
 using System;
 using System.Collections.Generic;
 using Verse;
@@ -445,8 +447,14 @@ namespace RimLife.Infrastructure
                 try
                 {
                     var w = new Framework.JsonWriter(256);
-                    w.Prop("countThreshold", config.CountThreshold);
-                    w.Prop("importanceThreshold", config.ImportanceThreshold);
+                    w.Prop("directorCountThreshold", config.DirectorCountThreshold);
+                    w.Prop("directorImportanceThreshold", config.DirectorImportanceThreshold);
+                    w.Prop("freelancerCountThreshold", config.FreelancerCountThreshold);
+                    w.Prop("freelancerImportanceThreshold", config.FreelancerImportanceThreshold);
+                    w.Prop("screenwriterCountThreshold", config.ScreenwriterCountThreshold);
+                    w.Prop("screenwriterImportanceThreshold", config.ScreenwriterImportanceThreshold);
+                    w.Prop("directorTimerInterval", config.DirectorTimerInterval);
+                    w.Prop("freelancerTimerInterval", config.FreelancerTimerInterval);
                     w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
                     w.Prop("maxAgentRounds", config.MaxAgentRounds);
                     CacheStore?.Cache("rimlife_driver_config", w.Close());
@@ -456,6 +464,73 @@ namespace RimLife.Infrastructure
                     Logger?.Warning($"[RimLife.Core] Failed to save DriverConfig: {e.Message}");
                 }
             }
+        }
+
+        // ================================================================
+        // 定时器脉冲驱动（全局时钟源）
+        // ================================================================
+
+        /// <summary>
+        /// 全局时钟脉冲计数器。每个游戏 tick 递增 1。
+        /// 各角色定时器通过取模运算（_globalTimerTick % interval == 0）判断是否触发。
+        /// </summary>
+        private static int _globalTimerTick;
+
+        /// <summary>
+        /// 每帧脉冲驱动函数。由 RimWorldAgentDriver.GameComponentUpdate() 调用。
+        /// 递增全局时钟计数器，检查导演和 Freelancer 的定时器间隔，
+        /// 若取模命中则注入 TimerPulse 事件。
+        /// </summary>
+        public static void TickTimerPulses()
+        {
+            if (Workspaces == null || SaveStore == null) return;
+
+            _globalTimerTick++;
+
+            var dc = DriverConfig;
+            if (dc == null) return;
+
+            // 导演定时器：间隔 > 0 且全局时钟整除间隔时触发
+            int directorInterval = dc.GetTimerInterval(Workspace.WorkspaceRole.Director);
+            if (directorInterval > 0 && _globalTimerTick % directorInterval == 0)
+            {
+                var directorWs = GetDirectorWorkspace();
+                if (directorWs != null)
+                {
+                    int tick = _globalTimerTick;
+                    var pulseEvt = EventCardMapper.CreateTimerPulse(Workspace.WorkspaceRole.Director, tick);
+                    directorWs.EventPool.Append(pulseEvt);
+                }
+            }
+
+            // Freelancer 定时器：间隔 > 0 且全局时钟整除间隔时触发
+            int freelancerInterval = dc.GetTimerInterval(Workspace.WorkspaceRole.Freelancer);
+            if (freelancerInterval > 0 && _globalTimerTick % freelancerInterval == 0)
+            {
+                var freelancerWs = GetFreelancerWorkspace();
+                if (freelancerWs != null)
+                {
+                    int tick = _globalTimerTick;
+                    var pulseEvt = EventCardMapper.CreateTimerPulse(Workspace.WorkspaceRole.Freelancer, tick);
+                    freelancerWs.EventPool.Append(pulseEvt);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 获取全局时钟脉冲累加器的当前值。由 MCP 工具暴露给 Agent 查询。
+        /// </summary>
+        public static int GetTimerPulseAccumulator()
+        {
+            return _globalTimerTick;
+        }
+
+        /// <summary>
+        /// 获取指定角色的定时器脉冲间隔（ticks）。0 表示禁用。
+        /// </summary>
+        public static int GetTimerPulseInterval(Workspace.WorkspaceRole role)
+        {
+            return DriverConfig?.GetTimerInterval(role) ?? 0;
         }
 
         private static AgentLoop _directorAgent;
@@ -741,10 +816,22 @@ namespace RimLife.Infrastructure
                 {
                     var dict = Framework.JsonParser.ParseDict(json);
                     var dc = DriverConfig.CreateDefault();
-                    if (dict.TryGetValue("countThreshold", out var ct) && int.TryParse(ct, out var ctv))
-                        dc.CountThreshold = ctv;
-                    if (dict.TryGetValue("importanceThreshold", out var it) && int.TryParse(it, out var itv))
-                        dc.ImportanceThreshold = itv;
+                    if (dict.TryGetValue("directorCountThreshold", out var dct) && int.TryParse(dct, out var dctv))
+                        dc.DirectorCountThreshold = dctv;
+                    if (dict.TryGetValue("directorImportanceThreshold", out var dit) && int.TryParse(dit, out var ditv))
+                        dc.DirectorImportanceThreshold = ditv;
+                    if (dict.TryGetValue("freelancerCountThreshold", out var fct) && int.TryParse(fct, out var fctv))
+                        dc.FreelancerCountThreshold = fctv;
+                    if (dict.TryGetValue("freelancerImportanceThreshold", out var fit) && int.TryParse(fit, out var fitv))
+                        dc.FreelancerImportanceThreshold = fitv;
+                    if (dict.TryGetValue("screenwriterCountThreshold", out var sct) && int.TryParse(sct, out var sctv))
+                        dc.ScreenwriterCountThreshold = sctv;
+                    if (dict.TryGetValue("screenwriterImportanceThreshold", out var sit) && int.TryParse(sit, out var sitv))
+                        dc.ScreenwriterImportanceThreshold = sitv;
+                    if (dict.TryGetValue("directorTimerInterval", out var dti) && int.TryParse(dti, out var dtiv))
+                        dc.DirectorTimerInterval = dtiv;
+                    if (dict.TryGetValue("freelancerTimerInterval", out var fti) && int.TryParse(fti, out var ftiv))
+                        dc.FreelancerTimerInterval = ftiv;
                     if (dict.TryGetValue("recentHistoryCapacity", out var rhc) && int.TryParse(rhc, out var rhcv))
                         dc.RecentHistoryCapacity = rhcv;
                     if (dict.TryGetValue("maxAgentRounds", out var mar) && int.TryParse(mar, out var marv))

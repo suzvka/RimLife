@@ -8,7 +8,7 @@ namespace RimLife.UI
 {
     /// <summary>
     /// 提示词页面：各角色完整提示词全文编辑 + LLM 采样参数。
-    /// 缓存即真相，恢复 = 将缓存覆盖为硬编码默认值。
+    /// 缓存即真相，恢复 = 将缓存覆盖为默认值。
     /// </summary>
     public class PromptPage : IConfigPage
     {

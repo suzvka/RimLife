@@ -38,6 +38,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <EmbeddedResource Include="Prompts\*.txt" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<!-- Core RimWorld & UnityEngine libraries -->
 		<PackageReference Include="JetBrains.Annotations" Version="2025.2.2" />
 		<PackageReference Include="Krafs.Rimworld.Ref" Version="$(GameVersion).*-*" PrivateAssets="All" />

@@ -4,8 +4,10 @@ using Verse;
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// RimWorld GameComponent 桥接。唯一职责：每帧清空主线程回调队列。
-    /// AgentLoop 通过事件池 OnThresholdReached 回调自动激活，不依赖 Tick。
+    /// RimWorld GameComponent 桥接。职责：
+    /// 1. 每帧清空主线程回调队列（MainThreadDispatcher）。
+    /// 2. 驱动导演/临时编剧的定时器脉冲（TickTimerPulses）。
+    /// AgentLoop 通过事件池 OnThresholdReached 回调自动激活。
     /// </summary>
     public class RimWorldAgentDriver : GameComponent
     {
@@ -16,6 +18,7 @@ namespace RimLife.Infrastructure
         public override void GameComponentUpdate()
         {
             MainThreadDispatcher.DrainQueue();
+            RimLifeCore.TickTimerPulses();
         }
     }
 }
