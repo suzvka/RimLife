@@ -507,6 +507,24 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>
+        /// 根据工作空间角色创建对应类型的 Agent。
+        /// Director 工作空间 → Director Agent；Freelancer → Freelancer Agent；其他 → Screenwriter。
+        /// </summary>
+        private static void EnsureAgentForWorkspace(string workspaceId)
+        {
+            if (string.IsNullOrEmpty(workspaceId)) return;
+            var ws = Workspaces?.Get(workspaceId);
+            if (ws == null) return;
+
+            if (ws.CreatedByRole == Workspace.WorkspaceRole.Director)
+                GetDirectorAgent();
+            else if (ws.CreatedByRole == Workspace.WorkspaceRole.Freelancer)
+                GetFreelancerAgent();
+            else
+                GetScreenwriter(workspaceId);
+        }
+
+        /// <summary>
         /// 获取或创建指定工作空间的编剧 Agent。
         /// 由 WorkspaceManager 的 onWorkspaceReady 回调触发。
         /// </summary>
@@ -801,7 +819,15 @@ namespace RimLife.Infrastructure
                         {
                             _workspaces = new Workspace.WorkspaceManager(SaveStore, Logger,
                                 () => TimeProvider?.Invoke() ?? "", DriverConfig,
-                                onWorkspaceReady: wsId => GetScreenwriter(wsId));
+                                onWorkspaceReady: wsId => EnsureAgentForWorkspace(wsId));
+
+                            // 为存档中已加载的活跃工作空间补齐对应 Agent
+                            // （LoadFromStore 期间 _workspaces 尚未赋值，回调无法生效，此处补调）
+                            var actives = _workspaces.GetActive();
+                            foreach (var ws in actives)
+                            {
+                                EnsureAgentForWorkspace(ws.Id);
+                            }
                         }
                     }
                 }
