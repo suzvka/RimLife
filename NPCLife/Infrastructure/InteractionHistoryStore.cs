@@ -94,7 +94,7 @@ namespace NPCLife.Infrastructure
         // 持久化
         // ================================================================
 
-        internal void SaveToStore()
+        public void Persist()
         {
             try
             {

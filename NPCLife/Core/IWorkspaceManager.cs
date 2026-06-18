@@ -45,5 +45,13 @@ namespace NPCLife.Core
         /// 管理器只做转发，实际写入由工作空间的 EventPool 组件处理。
         /// </summary>
         bool RouteEvents(string workspaceId, IReadOnlyList<IGameEvent> events);
+
+        // --- 持久化（1 方法） ---
+
+        /// <summary>
+        /// 将当前内存中的所有工作空间状态刷入持久化存储。
+        /// 由宿主（RimLife）在 RimWorld 存档钩子中调用。
+        /// </summary>
+        void Persist();
     }
 }

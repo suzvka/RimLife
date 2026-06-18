@@ -42,5 +42,11 @@ namespace NPCLife.Core
         /// 累计追加的交互记录总数。
         /// </summary>
         int TotalAppended { get; }
+
+        /// <summary>
+        /// 将当前内存中的所有交互记录刷入持久化存储。
+        /// 由宿主（RimLife）在 RimWorld 存档钩子中调用。
+        /// </summary>
+        void Persist();
     }
 }

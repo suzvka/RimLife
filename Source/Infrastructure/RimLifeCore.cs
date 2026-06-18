@@ -415,8 +415,8 @@ namespace RimLife.Infrastructure
 
             try
             {
-                (_workspaces as NPCLife.Workspace.WorkspaceManager)?.SaveToStore();
-                (_interactionStore as InteractionHistoryStore)?.SaveToStore();
+                _workspaces?.Persist();
+                _interactionStore?.Persist();
             }
             catch (Exception e)
             {

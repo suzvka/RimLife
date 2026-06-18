@@ -47,7 +47,7 @@ namespace NPCLife.Workspace
                 EventArg.WithPayload(("workspaceId", workspaceId ?? "")));
         }
 
-        internal void SaveToStore()
+        public void Persist()
         {
             _rwLock.EnterReadLock();
             try
@@ -605,7 +605,7 @@ namespace NPCLife.Workspace
 
         public void Dispose()
         {
-            try { SaveToStore(); } catch { }
+            try { Persist(); } catch { }
             _rwLock.EnterWriteLock();
             try { _workspaces.Clear(); }
             finally { _rwLock.ExitWriteLock(); }
