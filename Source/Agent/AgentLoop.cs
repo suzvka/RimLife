@@ -24,6 +24,7 @@ namespace RimLife.Agent
     {
         private readonly IEventLog _pool;
         private readonly ILlmService _llm;
+        private readonly ICredentialRegistry _credentialRegistry;
         private readonly ILogger _logger;
         private readonly string _systemPrompt;
         private readonly string[] _skillIds;
@@ -33,6 +34,7 @@ namespace RimLife.Agent
         private readonly Func<string> _contextProvider;
         private readonly IKnowledgeBase _knowledgeBase;
         private readonly float _temperature;
+        private readonly string _modelAlias; // 关联的模型代号
 
         private bool _isProcessing;
         private int _round;
@@ -43,7 +45,8 @@ namespace RimLife.Agent
         /// 创建 AgentLoop 并自动订阅池子的 OnThresholdReached 事件。
         /// </summary>
         /// <param name="pool">事件池。Agent 从该池 drain 事件。</param>
-        /// <param name="llm">LLM 异步对话服务。</param>
+        /// <param name="llm">LLM 异步对话服务（无状态）。</param>
+        /// <param name="credentialRegistry">凭证注册表。提供当前可用的 API 凭证列表。</param>
         /// <param name="systemPrompt">系统提示词。</param>
         /// <param name="skillIds">激活的 Skill ID 列表（MCP 工具集）。</param>
         /// <param name="maxRounds">最大工具调用轮数（防死循环）。</param>
@@ -52,9 +55,11 @@ namespace RimLife.Agent
         /// <param name="contextProvider">动态上下文提供者（可选）。每次激活时调用，返回值追加到用户消息末尾。</param>
         /// <param name="knowledgeBase">知识库（可选）。Agent 激活时收集事件关键词去重后批量查询，命中结果注入提示词。</param>
         /// <param name="temperature">LLM 采样温度（0~2），默认 0.7。</param>
+        /// <param name="modelAlias">关联的模型代号（如 "primary"），用于从 Registry 解析凭证。默认 "primary"。</param>
         public AgentLoop(
             IEventLog pool,
             ILlmService llm,
+            ICredentialRegistry credentialRegistry,
             string systemPrompt,
             string[] skillIds,
             int maxRounds,
@@ -62,10 +67,12 @@ namespace RimLife.Agent
             ICardSerializer serializer = null,
             Func<string> contextProvider = null,
             IKnowledgeBase knowledgeBase = null,
-            float temperature = 0.7f)
+            float temperature = 0.7f,
+            string modelAlias = "primary")
         {
             _pool = pool ?? throw new ArgumentNullException(nameof(pool));
             _llm = llm ?? throw new ArgumentNullException(nameof(llm));
+            _credentialRegistry = credentialRegistry ?? throw new ArgumentNullException(nameof(credentialRegistry));
             _systemPrompt = systemPrompt ?? "";
             _skillIds = skillIds ?? Array.Empty<string>();
             _maxRounds = maxRounds;
@@ -74,6 +81,7 @@ namespace RimLife.Agent
             _contextProvider = contextProvider;
             _knowledgeBase = knowledgeBase;
             _temperature = temperature;
+            _modelAlias = modelAlias ?? "primary";
 
             // 订阅池子事件——唯一激活路径
             _pool.OnThresholdReached += OnPoolChanged;
@@ -130,6 +138,14 @@ namespace RimLife.Agent
         {
             try
             {
+                // 从注册表获取当前激活的凭证列表（用于 fallback）
+                var credentials = _credentialRegistry.GetActiveCredentials();
+                if (credentials.Count == 0)
+                {
+                    OnError("No active credentials configured");
+                    return;
+                }
+
                 var request = new LlmRequest
                 {
                     Messages = new List<LlmMessage>(_messages),
@@ -148,7 +164,7 @@ namespace RimLife.Agent
 
                 try
                 {
-                    var response = await _llm.ChatAsync(llmCtx.Request);
+                    var response = await _llm.ChatAsync(llmCtx.Request, credentials);
                     OnSuccess(response);
                 }
                 catch (Exception e)

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using RimLife.Core;
 using RimLife.Framework.Llm;
 using RimLife.Infrastructure;
-using RimLife.UI.Models;
+using RimLife.Infrastructure.Llm;
 using UnityEngine;
 using Verse;
 using static RimLife.UI.UIHelper;
@@ -15,7 +15,8 @@ namespace RimLife.UI.Pages
 {
     /// <summary>
     /// LLM 连接配置页面。
-    /// 信息架构：状态摘要 → 凭证管理 → 模型选择。
+    /// 信息架构：状态摘要 → 代号管理 → 模型发现。
+    /// 基于 ICredentialRegistry，管理"模型代号 → 凭证三元组"映射。
     /// </summary>
     public class ConnectionPage : IConfigPage
     {
@@ -28,28 +29,28 @@ namespace RimLife.UI.Pages
         // UI 状态
         // ================================================================
 
-        private enum PageMode { ViewCards, EditCard, AddCard }
-        private PageMode _mode = PageMode.ViewCards;
+        private enum PageMode { ViewAliases, EditAlias, AddAlias }
+        private PageMode _mode = PageMode.ViewAliases;
 
         // 编辑/新增表单字段
-        private string _editCardId;
-        private string _editLabel = "";
+        private string _editAliasName = "";
         private string _editBaseUrl = "";
         private string _editApiKey = "";
+        private string _editModelName = "";
         private LlmProviderType _editProviderType = LlmProviderType.OpenAI;
 
         // 模型发现状态
         private bool _isDiscovering;
         private string _discoveryStatus = "";
-        private bool _discoveryComplete;
         private string _discoveryError;
+        private Dictionary<string, string[]> _discoveredModels;
 
         // 操作反馈
         private string _statusMessage;
         private float _statusMessageTime;
 
         // 删除确认（两步确认）
-        private string _pendingDeleteCardId;
+        private string _pendingDeleteAlias;
 
         // API Key 显示切换
         private bool _showApiKey;
@@ -60,7 +61,7 @@ namespace RimLife.UI.Pages
         private CancellationTokenSource _discoveryCts;
 
         // 缓存
-        private LlmCredentialManager Mgr => LlmCredentialManager.Instance;
+        private ICredentialRegistry Registry => RimLifeCore.CredentialRegistry;
 
         // ================================================================
         // Draw
@@ -68,26 +69,33 @@ namespace RimLife.UI.Pages
 
         public void Draw(Rect rect, Listing_Standard listing)
         {
+            if (Registry == null)
+            {
+                Widgets.Label(listing.GetRect(22f), "<color=#FF6666><size=12>凭证注册表未初始化</size></color>");
+                return;
+            }
+
             DrawStatusMessage(listing);
 
             switch (_mode)
             {
-                case PageMode.ViewCards:
+                case PageMode.ViewAliases:
                     DrawStatusSummary(listing);
-                    DrawCredentialSection(listing);
+                    DrawAliasSection(listing);
+                    DrawActiveOrderSection(listing);
                     DrawModelSection(listing);
                     break;
-                case PageMode.EditCard:
-                    DrawCardEditForm(listing, isNew: false);
+                case PageMode.EditAlias:
+                    DrawAliasEditForm(listing, isNew: false);
                     break;
-                case PageMode.AddCard:
-                    DrawCardEditForm(listing, isNew: true);
+                case PageMode.AddAlias:
+                    DrawAliasEditForm(listing, isNew: true);
                     break;
             }
         }
 
         // ================================================================
-        // 状态消息（临时反馈，5 秒淡出）
+        // 状态消息
         // ================================================================
 
         private void DrawStatusMessage(Listing_Standard listing)
@@ -126,13 +134,10 @@ namespace RimLife.UI.Pages
 
         private void DrawStatusSummary(Listing_Standard listing)
         {
-            var cards = Mgr.Cards;
-            var models = Mgr.DiscoveredModels;
-            var order = Mgr.ActiveModelOrder;
-
-            var activeCards = cards.Count(c => c.IsActive && c.IsValid());
-            var selectedModels = models.Count(m => m.IsSelected);
-            var isReady = activeCards > 0 && order.Count > 0;
+            var aliases = Registry.GetAllAliases();
+            var activeAliases = Registry.GetActiveAliases();
+            var isReady = activeAliases.Count > 0;
+            var totalAliases = aliases.Count;
 
             // 状态栏背景
             var summaryRect = listing.GetRect(52f);
@@ -142,102 +147,92 @@ namespace RimLife.UI.Pages
             Widgets.DrawBoxSolid(summaryRect, bgColor);
             Widgets.DrawBox(summaryRect, 1);
 
-            // 第一行：状态指示 + 当前模型
+            // 第一行：状态指示 + 当前代号
             var row1Rect = new Rect(summaryRect.x + GapMedium, summaryRect.y + 6f, summaryRect.width - GapMedium * 2, 20f);
             var statusIcon = isReady ? "<color=#88FF88>●</color>" : "<color=#FF8844>○</color>";
             var statusText = isReady ? "已就绪" : "未就绪";
-
-            string currentModelInfo = "";
-            if (order.Count > 0)
-            {
-                var currentModel = order[Mgr.CurrentModelIndex % order.Count];
-                var sourceCard = models.FirstOrDefault(m => m.ModelName == currentModel);
-                var cardLabel = cards.FirstOrDefault(c => c.Id == sourceCard?.SourceCardId)?.Label ?? "";
-                currentModelInfo = $"  当前模型: <b>{currentModel}</b>" +
-                    (string.IsNullOrEmpty(cardLabel) ? "" : $"  (来源: {cardLabel})");
-            }
-
-            Widgets.Label(row1Rect, $"<size=13>{statusIcon} {statusText}{currentModelInfo}</size>");
+            string currentAliasInfo = isReady ? $"  当前: <b>{activeAliases[0]}</b>" : "";
+            Widgets.Label(row1Rect, $"<size=13>{statusIcon} {statusText}{currentAliasInfo}</size>");
 
             // 第二行：统计信息
             var row2Rect = new Rect(summaryRect.x + GapMedium, summaryRect.y + 28f, summaryRect.width - GapMedium * 2, 18f);
-            Widgets.Label(row2Rect, $"<color=#AAAAAA><size=11>活跃凭证: {activeCards} 张  |  已选模型: {selectedModels} 个  |  运行时队列: {order.Count} 个</size></color>");
+            Widgets.Label(row2Rect, $"<color=#AAAAAA><size=11>代号总数: {totalAliases}  |  激活: {activeAliases.Count} 个  |  顺序: [{string.Join(", ", activeAliases)}]</size></color>");
 
             listing.Gap(GapMedium);
         }
 
         // ================================================================
-        // 凭证管理区
+        // 代号管理区
         // ================================================================
 
-        private void DrawCredentialSection(Listing_Standard listing)
+        private void DrawAliasSection(Listing_Standard listing)
         {
-            BeginSection(listing, "凭证");
+            BeginSection(listing, "凭证代号");
 
-            var cards = Mgr.Cards;
-            if (cards.Count == 0)
+            var aliases = Registry.GetAllAliases();
+            if (aliases.Count == 0)
             {
-                Widgets.Label(listing.GetRect(22f), "<color=#888888><size=12>尚无凭证，点击下方按钮添加。</size></color>");
+                Widgets.Label(listing.GetRect(22f), "<color=#888888><size=12>尚无凭证代号，点击下方按钮添加。</size></color>");
                 listing.Gap(GapSmall);
             }
             else
             {
-                foreach (var card in cards.ToList())
+                foreach (var alias in aliases.ToList())
                 {
-                    DrawCredentialRow(listing, card);
+                    if (Registry.TryGetCredential(alias, out var cred))
+                    {
+                        DrawAliasRow(listing, alias, cred);
+                    }
                 }
                 listing.Gap(GapSmall);
             }
 
-            // 添加凭证按钮
+            // 添加按钮
             var addResults = DrawButtonRow(listing,
-                new[] { "+ 添加凭证" },
+                new[] { "+ 添加代号" },
                 new[] { BtnWidthMedium });
             if (addResults[0])
             {
-                _pendingDeleteCardId = null;
-                StartAddCard();
+                _pendingDeleteAlias = null;
+                StartAddAlias();
             }
 
             EndSection(listing);
         }
 
-        private void DrawCredentialRow(Listing_Standard listing, ApiCredentialCard card)
+        private void DrawAliasRow(Listing_Standard listing, string alias, LlmCredential cred)
         {
             var rowHeight = 32f;
             var rowRect = listing.GetRect(rowHeight);
 
-            // 激活态背景
-            if (card.IsActive)
+            // 背景
+            var activeAliases = Registry.GetActiveAliases();
+            var isActive = activeAliases.Contains(alias);
+            if (isActive)
             {
                 Widgets.DrawBoxSolid(rowRect, new Color(0.18f, 0.22f, 0.18f, 1f));
             }
 
-            // hover 效果
             DrawHoverBackground(rowRect, new Color(0.25f, 0.25f, 0.25f, 0.5f));
 
             var pad = GapSmall;
             var leftX = rowRect.x + pad;
             var contentWidth = rowRect.width - pad * 2;
 
-            // 复选框 + 标签（左侧）
-            var checkWidth = Mathf.Min(140f, contentWidth * 0.25f);
-            var checkRect = new Rect(leftX, rowRect.y + 3f, checkWidth, 26f);
-            bool isActive = card.IsActive;
-            Widgets.CheckboxLabeled(checkRect, $"<size=12>{card.Label}</size>", ref isActive);
-            if (isActive != card.IsActive)
-            {
-                Mgr.SetCardActive(card.Id, isActive);
-            }
+            // 代号名（左侧）
+            var labelWidth = Mathf.Min(120f, contentWidth * 0.22f);
+            var labelRect = new Rect(leftX, rowRect.y + 4f, labelWidth, 24f);
+            var activeMark = isActive ? "● " : "○ ";
+            Widgets.Label(labelRect, $"<size=12>{activeMark}<b>{alias}</b></size>");
 
-            // URL + Key 摘要（中间）
-            var infoX = leftX + checkWidth + GapSmall;
-            var infoWidth = contentWidth - checkWidth - BtnWidthSmall * 2 - BtnGap * 2 - GapSmall;
+            // 凭证摘要（中间）
+            var infoX = leftX + labelWidth + GapSmall;
+            var infoWidth = contentWidth - labelWidth - BtnWidthSmall * 2 - BtnGap * 2 - GapSmall;
             var infoRect = new Rect(infoX, rowRect.y + 7f, infoWidth, 18f);
 
-            var displayUrl = card.BaseUrl.Length > 30 ? card.BaseUrl.Substring(0, 27) + "..." : card.BaseUrl;
-            var maskedKey = MaskApiKey(card.ApiKey);
-            Widgets.Label(infoRect, $"<color=#AAAAAA><size=11>{displayUrl}  {maskedKey}  {card.ProviderType}</size></color>");
+            var displayUrl = cred.BaseUrl?.Length > 25 ? cred.BaseUrl.Substring(0, 22) + "..." : (cred.BaseUrl ?? "");
+            var maskedKey = MaskApiKey(cred.ApiKey);
+            Widgets.Label(infoRect, $"<color=#AAAAAA><size=11>{cred.ModelName}  {displayUrl}  {maskedKey}  {cred.ProviderType}</size></color>");
 
             // 操作按钮（右侧）
             var btnY = rowRect.y + 3f;
@@ -246,22 +241,22 @@ namespace RimLife.UI.Pages
             // 删除按钮（两步确认）
             var delWidth = BtnWidthSmall;
             var delRect = new Rect(btnRight - delWidth, btnY, delWidth, 26f);
-            var isPendingDelete = _pendingDeleteCardId == card.Id;
+            var isPendingDelete = _pendingDeleteAlias == alias;
             if (isPendingDelete)
             {
                 Widgets.DrawBoxSolid(delRect, ColorDangerBg);
                 if (Widgets.ButtonText(delRect, "确认删除"))
                 {
-                    Mgr.RemoveCard(card.Id);
-                    SetStatus($"已删除: {card.Label}");
-                    _pendingDeleteCardId = null;
+                    Registry.RemoveAlias(alias);
+                    SetStatus($"已删除: {alias}");
+                    _pendingDeleteAlias = null;
                 }
             }
             else
             {
                 if (Widgets.ButtonText(delRect, "×"))
                 {
-                    _pendingDeleteCardId = card.Id;
+                    _pendingDeleteAlias = alias;
                 }
             }
 
@@ -269,46 +264,53 @@ namespace RimLife.UI.Pages
             var editRect = new Rect(delRect.x - BtnWidthSmall - BtnGap, btnY, BtnWidthSmall, 26f);
             if (Widgets.ButtonText(editRect, "编辑"))
             {
-                _pendingDeleteCardId = null;
-                StartEditCard(card);
+                _pendingDeleteAlias = null;
+                StartEditAlias(alias, cred);
             }
 
             listing.Gap(GapTiny);
         }
 
         // ================================================================
-        // 卡片编辑/新增表单
+        // 代号编辑/新增表单
         // ================================================================
 
-        private void StartEditCard(ApiCredentialCard card)
+        private void StartEditAlias(string alias, LlmCredential cred)
         {
-            _editCardId = card.Id;
-            _editLabel = card.Label;
-            _editBaseUrl = card.BaseUrl;
-            _editApiKey = card.ApiKey;
-            _editProviderType = card.ProviderType;
-            _mode = PageMode.EditCard;
+            _editAliasName = alias;
+            _editBaseUrl = cred.BaseUrl ?? "";
+            _editApiKey = cred.ApiKey ?? "";
+            _editModelName = cred.ModelName ?? "";
+            _editProviderType = cred.ProviderType;
+            _mode = PageMode.EditAlias;
         }
 
-        private void StartAddCard()
+        private void StartAddAlias()
         {
-            _editCardId = null;
-            _editLabel = "";
+            _editAliasName = "";
             _editBaseUrl = "";
             _editApiKey = "";
+            _editModelName = "";
             _editProviderType = LlmProviderType.OpenAI;
-            _mode = PageMode.AddCard;
+            _mode = PageMode.AddAlias;
         }
 
-        private void DrawCardEditForm(Listing_Standard listing, bool isNew)
+        private void DrawAliasEditForm(Listing_Standard listing, bool isNew)
         {
-            var title = isNew ? "新增凭证" : "编辑凭证";
+            var title = isNew ? "新增凭证代号" : "编辑凭证代号";
             BeginSection(listing, title);
 
-            // 标签
-            Widgets.Label(listing.GetRect(20f), "<size=12>卡片标签</size>");
-            var labelRect = listing.GetRect(28f);
-            _editLabel = Widgets.TextField(labelRect, _editLabel);
+            // 代号
+            Widgets.Label(listing.GetRect(20f), "<size=12>模型代号</size>");
+            var aliasRect = listing.GetRect(28f);
+            if (isNew)
+            {
+                _editAliasName = Widgets.TextField(aliasRect, _editAliasName);
+            }
+            else
+            {
+                Widgets.Label(aliasRect, $"<size=12><b>{_editAliasName}</b></size>");
+            }
             listing.Gap(GapTiny);
 
             // Base URL
@@ -317,7 +319,7 @@ namespace RimLife.UI.Pages
             _editBaseUrl = Widgets.TextField(urlRect, _editBaseUrl);
             listing.Gap(GapTiny);
 
-            // API Key（带显示/隐藏切换）
+            // API Key
             Widgets.Label(listing.GetRect(20f), "<size=12>API 密钥</size>");
             var keyRowRect = listing.GetRect(28f);
             var keyFieldWidth = keyRowRect.width - BtnWidthSmall - BtnGap;
@@ -338,6 +340,12 @@ namespace RimLife.UI.Pages
             {
                 _showApiKey = !_showApiKey;
             }
+            listing.Gap(GapTiny);
+
+            // 模型名称
+            Widgets.Label(listing.GetRect(20f), "<size=12>模型名称</size>");
+            var modelRect = listing.GetRect(28f);
+            _editModelName = Widgets.TextField(modelRect, _editModelName);
             listing.Gap(GapTiny);
 
             // Provider Type
@@ -361,85 +369,141 @@ namespace RimLife.UI.Pages
                 new[] { BtnWidthMedium, BtnWidthSmall });
             if (btnResults[0])
             {
-                SaveCardEdit(isNew);
+                SaveAliasEdit(isNew);
             }
             if (btnResults[1])
             {
                 _showApiKey = false;
-                _mode = PageMode.ViewCards;
+                _mode = PageMode.ViewAliases;
             }
 
             EndSection(listing);
         }
 
-        private void SaveCardEdit(bool isNew)
+        private void SaveAliasEdit(bool isNew)
         {
+            if (string.IsNullOrWhiteSpace(_editAliasName))
+            {
+                SetStatus("[错误] 代号不能为空");
+                return;
+            }
             if (string.IsNullOrWhiteSpace(_editBaseUrl))
             {
                 SetStatus("[错误] Base URL 不能为空");
                 return;
             }
 
+            var cred = new LlmCredential
+            {
+                BaseUrl = _editBaseUrl,
+                ApiKey = _editApiKey,
+                ModelName = _editModelName,
+                ProviderType = _editProviderType
+            };
+
+            Registry.SetAlias(_editAliasName, cred);
+
+            // 如果是新增，自动加入激活列表
             if (isNew)
             {
-                var card = Mgr.AddCard(_editLabel, _editBaseUrl, _editApiKey, _editProviderType);
-                SetStatus($"已添加: {card.Label}");
-            }
-            else
-            {
-                var cards = Mgr.Cards;
-                var existing = cards.FirstOrDefault(c => c.Id == _editCardId);
-                if (existing != null)
+                var currentActive = Registry.GetActiveAliases();
+                if (!currentActive.Contains(_editAliasName))
                 {
-                    existing.Label = _editLabel;
-                    existing.BaseUrl = _editBaseUrl;
-                    existing.ApiKey = _editApiKey;
-                    existing.ProviderType = _editProviderType;
-                    Mgr.UpdateCard(existing);
-                    SetStatus($"已更新: {existing.Label}");
+                    var newActive = currentActive.ToList();
+                    newActive.Add(_editAliasName);
+                    Registry.SetActiveAliases(newActive);
                 }
             }
 
-            _mode = PageMode.ViewCards;
+            SetStatus(isNew ? $"已添加: {_editAliasName}" : $"已更新: {_editAliasName}");
+            _mode = PageMode.ViewAliases;
         }
 
         // ================================================================
-        // 模型选择区
+        // 激活顺序管理
+        // ================================================================
+
+        private void DrawActiveOrderSection(Listing_Standard listing)
+        {
+            var activeAliases = Registry.GetActiveAliases();
+            var allAliases = Registry.GetAllAliases();
+
+            BeginSection(listing, "激活顺序（Fallback 链路）");
+
+            if (allAliases.Count == 0)
+            {
+                Widgets.Label(listing.GetRect(20f), "<color=#888888><size=11>请先添加凭证代号。</size></color>");
+                EndSection(listing);
+                return;
+            }
+
+            // 每个代号显示复选框
+            var newActive = activeAliases.ToList();
+            foreach (var alias in allAliases)
+            {
+                var rowRect = listing.GetRect(22f);
+                bool isActive = newActive.Contains(alias);
+                Widgets.CheckboxLabeled(rowRect, $" {alias}", ref isActive);
+
+                if (isActive && !newActive.Contains(alias))
+                {
+                    newActive.Add(alias);
+                }
+                else if (!isActive && newActive.Contains(alias))
+                {
+                    newActive.Remove(alias);
+                }
+            }
+
+            listing.Gap(GapSmall);
+
+            // 应用按钮
+            var applyResults = DrawButtonRow(listing,
+                new[] { $"应用激活 ({newActive.Count})" },
+                new[] { BtnWidthMedium });
+            if (applyResults[0])
+            {
+                Registry.SetActiveAliases(newActive);
+                SetStatus($"已应用: {newActive.Count} 个代号激活");
+            }
+
+            // 说明
+            if (activeAliases.Count > 0)
+            {
+                var infoRect = listing.GetRect(22f);
+                Widgets.Label(infoRect,
+                    $"<color=#888888><size=11>运行时按顺序尝试，失败自动切换下一个 | 顺序: [{string.Join(" → ", activeAliases)}]</size></color>");
+            }
+
+            EndSection(listing);
+        }
+
+        // ================================================================
+        // 模型发现区
         // ================================================================
 
         private void DrawModelSection(Listing_Standard listing)
         {
-            var models = Mgr.DiscoveredModels;
-            var cards = Mgr.Cards;
+            var aliases = Registry.GetAllAliases();
+            if (aliases.Count == 0) return;
 
-            BeginSection(listing, "模型");
+            BeginSection(listing, "模型发现");
 
             // 获取模型列表按钮
-            var btnLabel = _isDiscovering ? "正在获取..." : "获取模型列表";
-            var hasActiveCard = cards.Any(c => c.IsActive && c.IsValid());
+            var btnLabel = _isDiscovering ? "正在获取..." : "获取所有模型列表";
             var btnResults = DrawButtonRow(listing,
                 new[] { btnLabel },
                 new[] { BtnWidthLarge });
 
-            if (btnResults[0] && !_isDiscovering && hasActiveCard)
+            if (btnResults[0] && !_isDiscovering)
             {
                 StartModelDiscovery();
             }
 
-            if (!hasActiveCard)
-            {
-                Widgets.Label(listing.GetRect(20f), "<color=#888888><size=11>请先添加并激活至少一张凭证。</size></color>");
-            }
-
-            // 发现进度
+            // 进度/结果
             if (_isDiscovering && !string.IsNullOrEmpty(_discoveryStatus))
             {
                 Widgets.Label(listing.GetRect(22f), $"<color=#88AAFF><size=12>{_discoveryStatus}</size></color>");
-            }
-
-            if (_discoveryComplete)
-            {
-                Widgets.Label(listing.GetRect(22f), "<color=#88FF88><size=12>模型发现完成</size></color>");
             }
 
             if (!string.IsNullOrEmpty(_discoveryError))
@@ -447,115 +511,94 @@ namespace RimLife.UI.Pages
                 Widgets.Label(listing.GetRect(22f), $"<color=#FF6666><size=12>{_discoveryError}</size></color>");
             }
 
-            listing.Gap(GapSmall);
-
-            // 模型列表（按来源分组）
-            if (models.Count > 0)
+            // 发现结果列表
+            if (_discoveredModels != null && _discoveredModels.Count > 0)
             {
-                DrawModelList(listing, models, cards);
+                listing.Gap(GapSmall);
+                foreach (var kv in _discoveredModels)
+                {
+                    var alias = kv.Key;
+                    var models = kv.Value;
+
+                    var headerRect = listing.GetRect(22f);
+                    Widgets.Label(headerRect, $"<size=12><b>{alias}</b></size>");
+
+                    if (models.Length == 0)
+                    {
+                        var emptyRect = listing.GetRect(20f);
+                        Widgets.Label(emptyRect, "<color=#888888><size=11>未发现模型（或不支持列表查询）</size></color>");
+                    }
+                    else
+                    {
+                        // 紧凑排列，每行多个
+                        var modelsPerRow = 2;
+                        var modelWidth = (listing.ColumnWidth - GapSmall) / modelsPerRow;
+
+                        for (int i = 0; i < models.Length; i += modelsPerRow)
+                        {
+                            var rowRect = listing.GetRect(26f);
+                            for (int j = 0; j < modelsPerRow && i + j < models.Length; j++)
+                            {
+                                var modelName = models[i + j];
+                                var modelRect = new Rect(rowRect.x + j * (modelWidth + GapSmall), rowRect.y, modelWidth, 26f);
+
+                                if (Widgets.ButtonText(modelRect, modelName))
+                                {
+                                    // 点击模型名：设置为该代号的模型
+                                    if (Registry.TryGetCredential(alias, out var cred))
+                                    {
+                                        cred.ModelName = modelName;
+                                        Registry.SetAlias(alias, cred);
+                                        SetStatus($"{alias} → {modelName}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    listing.Gap(GapTiny);
+                }
             }
 
             // 手动添加模型
-            DrawManualModelEntry(listing, cards);
-
-            listing.Gap(GapSmall);
-
-            // 应用按钮 + 运行时信息
-            int selectedCount = models.Count(m => m.IsSelected);
-            var applyResults = DrawButtonRow(listing,
-                new[] { $"应用选择 ({selectedCount})" },
-                new[] { BtnWidthMedium });
-            if (applyResults[0])
-            {
-                Mgr.BuildActiveModelOrder();
-                SetStatus($"已应用: {selectedCount} 个模型就绪");
-            }
-
-            // 运行时策略说明
-            var order = Mgr.ActiveModelOrder;
-            if (order.Count > 0)
-            {
-                var infoRect = listing.GetRect(22f);
-                Widgets.Label(infoRect,
-                    $"<color=#888888><size=11>运行时策略: 按顺序尝试，失败自动切换下一个 | 队列: {order.Count} 个</size></color>");
-            }
+            DrawManualModelEntry(listing);
 
             EndSection(listing);
         }
 
-        private void DrawModelList(Listing_Standard listing, List<ModelEntry> models, List<ApiCredentialCard> cards)
+        private void DrawManualModelEntry(Listing_Standard listing)
         {
-            var grouped = models.GroupBy(m => m.SourceCardId);
-
-            foreach (var group in grouped)
-            {
-                var card = cards.FirstOrDefault(c => c.Id == group.Key);
-                var cardLabel = card?.Label ?? "未知来源";
-                var cardActive = card?.IsActive ?? false;
-
-                // 分组标题
-                var headerRect = listing.GetRect(22f);
-                var activeTag = cardActive ? "<color=#88FF88>●</color>" : "<color=#666666>○</color>";
-                Widgets.Label(headerRect, $"<size=12>{activeTag} {cardLabel}</size>");
-
-                // 模型列表（紧凑排列，每行多个）
-                var modelList = group.ToList();
-                var modelsPerRow = 2;
-                var modelWidth = (listing.ColumnWidth - GapSmall) / modelsPerRow;
-
-                for (int i = 0; i < modelList.Count; i += modelsPerRow)
-                {
-                    var rowRect = listing.GetRect(22f);
-                    for (int j = 0; j < modelsPerRow && i + j < modelList.Count; j++)
-                    {
-                        var model = modelList[i + j];
-                        var modelRect = new Rect(rowRect.x + j * (modelWidth + GapSmall), rowRect.y, modelWidth, 22f);
-                        bool selected = model.IsSelected;
-                        Widgets.CheckboxLabeled(modelRect, $" {model.ModelName}", ref selected);
-                        if (selected != model.IsSelected)
-                        {
-                            Mgr.SetModelSelected(model.ModelName, selected);
-                        }
-                    }
-                }
-
-                listing.Gap(GapTiny);
-            }
-        }
-
-        private void DrawManualModelEntry(Listing_Standard listing, List<ApiCredentialCard> cards)
-        {
-            var activeCards = cards.Where(c => c.IsActive).ToList();
-            if (activeCards.Count == 0) return;
+            var aliases = Registry.GetAllAliases();
+            if (aliases.Count == 0) return;
 
             listing.Gap(GapSmall);
-            Widgets.Label(listing.GetRect(20f), "<color=#888888><size=11>手动添加模型（用于不支持列表查询的 API）:</size></color>");
+            Widgets.Label(listing.GetRect(20f), "<color=#888888><size=11>手动设置模型（用于不支持列表查询的 API）:</size></color>");
             listing.Gap(GapTiny);
 
-            foreach (var card in activeCards)
+            foreach (var alias in aliases)
             {
-                // 输入框 + 添加按钮
                 var rowRect = listing.GetRect(28f);
                 var inputWidth = rowRect.width - BtnWidthMedium - BtnGap;
                 var inputRect = new Rect(rowRect.x, rowRect.y, inputWidth, 28f);
                 var btnRect = new Rect(rowRect.x + inputWidth + BtnGap, rowRect.y, BtnWidthMedium, 28f);
 
-                // 确保输入状态存在
-                if (!_manualModelInputs.ContainsKey(card.Id))
-                {
-                    _manualModelInputs[card.Id] = "";
-                }
+                if (!_manualModelInputs.ContainsKey(alias))
+                    _manualModelInputs[alias] = "";
 
-                _manualModelInputs[card.Id] = Widgets.TextField(inputRect, _manualModelInputs[card.Id]);
+                _manualModelInputs[alias] = Widgets.TextField(inputRect, _manualModelInputs[alias]);
 
-                if (Widgets.ButtonText(btnRect, $"添加到 {card.Label}"))
+                if (Widgets.ButtonText(btnRect, $"设置 {alias}"))
                 {
-                    var modelName = _manualModelInputs[card.Id]?.Trim();
+                    var modelName = _manualModelInputs[alias]?.Trim();
                     if (!string.IsNullOrEmpty(modelName))
                     {
-                        Mgr.AddManualModel(modelName, card.Id);
-                        SetStatus($"已添加: {modelName} → {card.Label}");
-                        _manualModelInputs[card.Id] = "";
+                        if (Registry.TryGetCredential(alias, out var cred))
+                        {
+                            cred.ModelName = modelName;
+                            Registry.SetAlias(alias, cred);
+                            SetStatus($"{alias} → {modelName}");
+                            _manualModelInputs[alias] = "";
+                        }
                     }
                     else
                     {
@@ -579,27 +622,27 @@ namespace RimLife.UI.Pages
             }
 
             _isDiscovering = true;
-            _discoveryComplete = false;
             _discoveryError = null;
             _discoveryStatus = "正在查询模型列表...";
             _discoveryCts = new CancellationTokenSource();
 
             try
             {
-                var models = await Mgr.DiscoverModelsAsync(
+                var models = await Registry.DiscoverModelsAsync(
                     llmService,
-                    (current, total, label, modelCount) =>
+                    (current, total, alias, modelCount) =>
                     {
                         if (modelCount >= 0)
-                            _discoveryStatus = $"[{current}/{total}] {label}: 发现 {modelCount} 个模型";
+                            _discoveryStatus = $"[{current}/{total}] {alias}: 发现 {modelCount} 个模型";
                         else
-                            _discoveryStatus = $"[{current}/{total}] {label}: 查询失败";
+                            _discoveryStatus = $"[{current}/{total}] {alias}: 查询失败";
                     },
                     _discoveryCts.Token);
 
-                _discoveryComplete = true;
-                _discoveryStatus = "";
-                SetStatus($"共发现 {models.Count} 个模型（来自 {models.Select(m => m.SourceCardId).Distinct().Count()} 个端点）");
+                _discoveredModels = models.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+                int totalModels = models.Values.Sum(v => v.Length);
+                SetStatus($"共发现 {totalModels} 个模型（来自 {models.Count} 个代号）");
             }
             catch (OperationCanceledException)
             {
@@ -629,3 +672,4 @@ namespace RimLife.UI.Pages
         }
     }
 }
+

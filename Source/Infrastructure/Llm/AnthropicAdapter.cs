@@ -22,13 +22,13 @@ namespace RimLife.Infrastructure.Llm
     /// </summary>
     internal class AnthropicAdapter : ILlmApiProvider
     {
-        private readonly LlmConfig _config;
+        private readonly LlmCredential _config;
         private readonly HttpClient _httpClient;
 
         /// <summary>Anthropic API 版本 header。</summary>
         private const string AnthropicVersion = "2023-06-01";
 
-        public AnthropicAdapter(LlmConfig config)
+        public AnthropicAdapter(LlmCredential config)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _httpClient = CreateHttpClient(config);
@@ -101,7 +101,7 @@ namespace RimLife.Infrastructure.Llm
         // 内部：HTTP
         // ================================================================
 
-        private HttpClient CreateHttpClient(LlmConfig config)
+        private HttpClient CreateHttpClient(LlmCredential config)
         {
             var handler = new HttpClientHandler();
             var client = new HttpClient(handler)

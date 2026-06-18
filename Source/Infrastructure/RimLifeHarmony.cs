@@ -1,6 +1,5 @@
 using HarmonyLib;
 using RimLife.Framework;
-using RimLife.UI.Models;
 using Verse;
 
 namespace RimLife.Infrastructure
@@ -43,8 +42,8 @@ namespace RimLife.Infrastructure
                 // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
                 RimLifeCore.EnsureSkillRegistryInitialized();
 
-                // 初始化 LLM 凭证管理器（从 ModSettings 全局加载，不绑定存档）
-                LlmCredentialManager.Instance.Initialize();
+                // 触发凭证注册表延迟加载（从 ModSettings 加载持久化状态）
+                var _ = RimLifeCore.CredentialRegistry;
 
                 logger.Message("[RimLife.Infrastructure] Startup complete.");
             }

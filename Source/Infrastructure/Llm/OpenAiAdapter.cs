@@ -17,10 +17,10 @@ namespace RimLife.Infrastructure.Llm
     /// </summary>
     internal class OpenAiAdapter : ILlmApiProvider
     {
-        private readonly LlmConfig _config;
+        private readonly LlmCredential _config;
         private readonly HttpClient _httpClient;
 
-        public OpenAiAdapter(LlmConfig config)
+        public OpenAiAdapter(LlmCredential config)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _httpClient = CreateHttpClient(config);
@@ -144,7 +144,7 @@ namespace RimLife.Infrastructure.Llm
         // 内部：HTTP
         // ================================================================
 
-        private HttpClient CreateHttpClient(LlmConfig config)
+        private HttpClient CreateHttpClient(LlmCredential config)
         {
             var handler = new HttpClientHandler();
             var client = new HttpClient(handler)

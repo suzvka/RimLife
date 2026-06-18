@@ -14,8 +14,8 @@ namespace RimLife.Settings
         public static RimLifeModSettings Instance { get; private set; }
 
         /// <summary>
-        /// LLM 凭证管理器完整状态的 JSON 序列化字符串。
-        /// 前端 LlmCredentialManager 负责读写，后端 LlmAccessor 不存储密钥。
+        /// 凭证注册表完整状态的 JSON 序列化字符串。
+        /// 由 CredentialRegistry (Infrastructure/Llm) 负责读写。
         /// </summary>
         public string LlmCredentialsJson;
 

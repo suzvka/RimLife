@@ -184,9 +184,10 @@ namespace RimLife.UI
             var leftRect = new Rect(rect.x + padding, rect.y + 4f, rect.width * 0.65f, rect.height - 8f);
             var rightRect = new Rect(rect.x + rect.width * 0.65f, rect.y + 4f, rect.width * 0.35f - padding, rect.height - 8f);
 
-            var accessor = RimLifeCore.LlmAccessor;
-            bool configured = accessor != null && accessor.IsConfigured;
-            string modelInfo = configured ? accessor.Config?.ModelName ?? "?" : "";
+            var registry = RimLifeCore.CredentialRegistry;
+            bool configured = registry != null && registry.HasAnyCredential;
+            var activeAliases = configured ? registry.GetActiveAliases() : null;
+            string modelInfo = (activeAliases != null && activeAliases.Count > 0) ? activeAliases[0] : "?";
             string statusColor = configured ? "#88FF88" : "#888888";
             string statusIcon = configured ? "●" : "○";
             string statusText = configured ? $"已配置 ({modelInfo})" : "未配置";

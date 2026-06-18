@@ -168,6 +168,11 @@ namespace RimLife.Infrastructure
             _promptConfig = null;
             _skillRegistryInitialized = false;
 
+            // 清理 LLM 组件
+            _llmAccessor?.Dispose();
+            _llmAccessor = null;
+            _credentialRegistry = null;
+
             // 清理台词推送服务
             _scriptDeliveryService?.Dispose();
             _scriptDeliveryService = null;
@@ -304,8 +309,8 @@ namespace RimLife.Infrastructure
             FrameworkStatus.RegisterReporter("Llm", () => new ComponentStatus
             {
                 Name = "Llm",
-                IsAvailable = _llmAccessor != null && _llmAccessor.IsConfigured,
-                Detail = _llmAccessor != null ? $"{_llmAccessor.AdapterTypeName}" : "not initialized"
+                IsAvailable = _credentialRegistry != null && _credentialRegistry.HasAnyCredential,
+                Detail = _credentialRegistry != null ? $"{_credentialRegistry.GetActiveAliases().Count} active" : "not initialized"
             });
 
             FrameworkStatus.RegisterReporter("Workspace", () => new ComponentStatus
@@ -594,6 +599,7 @@ namespace RimLife.Infrastructure
                             _freelancerAgent = new AgentLoop(
                                 pool: freelancerWs.EventPool,
                                 llm: LlmAccessor,
+                                credentialRegistry: CredentialRegistry,
                                 systemPrompt: BuildFreelancerSystemPrompt(freelancerWs),
                                 skillIds: new[] { "workspace_freelancer", "character_query", "event_query" },
                                 maxRounds: DriverConfig.MaxAgentRounds,
@@ -626,6 +632,7 @@ namespace RimLife.Infrastructure
                             _directorAgent = new AgentLoop(
                                 pool: directorWs.EventPool,
                                 llm: LlmAccessor,
+                                credentialRegistry: CredentialRegistry,
                                 systemPrompt: BuildDirectorSystemPrompt(),
                                 skillIds: new[] { "workspace_direction", "colony_overview", "character_query", "event_query", "knowledge_management" },
                                 maxRounds: DriverConfig.MaxAgentRounds,
@@ -683,6 +690,7 @@ namespace RimLife.Infrastructure
                 var agent = new AgentLoop(
                     pool: ws.EventPool,
                     llm: LlmAccessor,
+                    credentialRegistry: CredentialRegistry,
                     systemPrompt: BuildScreenwriterSystemPrompt(ws),
                     skillIds: skillIds.ToArray(),
                     maxRounds: DriverConfig.MaxAgentRounds,
@@ -978,8 +986,8 @@ namespace RimLife.Infrastructure
         private static readonly object _llmAccessorLock = new object();
 
         /// <summary>
-        /// LLM API 访问器实例。首次访问时延迟创建（纯内存，不持久化密钥）。
-        /// 配置由前端 LlmCredentialManager 在 Initialize 时注入。
+        /// LLM API 访问器实例（无状态，纯函数）。
+        /// 首次访问时延迟创建。凭证由 CredentialRegistry 管理。
         /// </summary>
         public static LlmAccessor LlmAccessor
         {
@@ -996,6 +1004,58 @@ namespace RimLife.Infrastructure
                     }
                 }
                 return _llmAccessor;
+            }
+        }
+
+        private static CredentialRegistry _credentialRegistry;
+        private static readonly object _credentialRegistryLock = new object();
+
+        /// <summary>
+        /// 凭证注册表实例。管理模型代号 → 凭证三元组的映射。
+        /// 首次访问时延迟创建，从 RimLifeModSettings 加载持久化状态。
+        /// </summary>
+        public static CredentialRegistry CredentialRegistry
+        {
+            get
+            {
+                if (_credentialRegistry == null)
+                {
+                    lock (_credentialRegistryLock)
+                    {
+                        if (_credentialRegistry == null)
+                        {
+                            string initialJson = null;
+                            try
+                            {
+                                var settings = Settings.RimLifeModSettings.Instance;
+                                initialJson = settings?.LlmCredentialsJson;
+                            }
+                            catch { }
+
+                            _credentialRegistry = new CredentialRegistry(
+                                serializeState: () =>
+                                {
+                                    // 序列化由 CredentialRegistry 内部处理
+                                    return null;
+                                },
+                                persistAction: json =>
+                                {
+                                    try
+                                    {
+                                        var settings = Settings.RimLifeModSettings.Instance;
+                                        if (settings != null)
+                                        {
+                                            settings.LlmCredentialsJson = json;
+                                            settings.SaveNow();
+                                        }
+                                    }
+                                    catch { }
+                                },
+                                initialJson: initialJson);
+                        }
+                    }
+                }
+                return _credentialRegistry;
             }
         }
 
