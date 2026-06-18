@@ -1,7 +1,7 @@
-using RimLife.Cards;
-using RimLife.Core;
-using RimLife.Framework;
-using RimLife.Framework.Mcp;
+﻿using NPCLife.Cards;
+using NPCLife.Core;
+using NPCLife.Framework;
+using NPCLife.Framework.Mcp;
 using RimWorld;
 using System;
 using System.Collections.Generic;
@@ -100,7 +100,7 @@ namespace RimLife.Infrastructure.Mcp
                     if (!string.IsNullOrEmpty(moodTier))
                     {
                         float mood = p.needs?.mood?.CurLevelPercentage ?? 0.5f;
-                        string tier = Framework.SemanticLabels.MapMoodTier(mood);
+                        string tier = NPCLife.Framework.SemanticLabels.MapMoodTier(mood);
                         if (!string.Equals(tier, moodTier, StringComparison.OrdinalIgnoreCase))
                             continue;
                     }
@@ -242,7 +242,7 @@ namespace RimLife.Infrastructure.Mcp
             else if (p.RaceProps.Humanlike) pawnType = "Guest";
             else pawnType = "Other";
 
-            var w = new Framework.JsonWriter(128);
+            var w = new NPCLife.Framework.JsonWriter(128);
             w.Prop("id", p.ThingID ?? "");
             w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
             w.Prop("pawnType", pawnType);

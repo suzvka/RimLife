@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using RimLife.Framework.Llm;
+using NPCLife.Framework.Llm;
 
 namespace RimLife.UI.Models
 {

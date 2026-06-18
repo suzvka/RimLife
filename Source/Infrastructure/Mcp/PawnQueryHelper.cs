@@ -1,4 +1,4 @@
-using RimLife.Cards;
+using NPCLife.Cards;
 using System;
 using System.Collections.Generic;
 using System.Linq;

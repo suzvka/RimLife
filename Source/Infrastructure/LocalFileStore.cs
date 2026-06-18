@@ -1,8 +1,8 @@
-using RimLife.Framework;
+using NPCLife.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using RimLife.Core;
+using NPCLife.Core;
 using Verse;
 
 namespace RimLife.Infrastructure

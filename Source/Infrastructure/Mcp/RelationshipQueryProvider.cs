@@ -1,6 +1,6 @@
-using RimLife.Cards;
-using RimLife.Core;
-using RimLife.Framework.Mcp;
+using NPCLife.Cards;
+using NPCLife.Core;
+using NPCLife.Framework.Mcp;
 using System;
 using System.Collections.Generic;
 using Verse;

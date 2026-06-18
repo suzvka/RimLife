@@ -1,9 +1,9 @@
-using RimLife.Framework;
+﻿using NPCLife.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using RimLife.Cards;
+using NPCLife.Cards;
 using RimWorld;
 using Verse;
 
@@ -30,8 +30,8 @@ namespace RimLife.Mappers
             float temperature = GenTemperature.GetTemperatureForCell(pos, map);
             float lightLevel = map.glowGrid.GroundGlowAt(pos);
 
-            string thermalComfort = Framework.SemanticLabels.MapThermalComfort(temperature);
-            string lightLabel = Framework.SemanticLabels.MapLightLevel(lightLevel);
+            string thermalComfort = NPCLife.Framework.SemanticLabels.MapThermalComfort(temperature);
+            string lightLabel = NPCLife.Framework.SemanticLabels.MapLightLevel(lightLevel);
 
             EnvironmentCard card;
 
@@ -79,9 +79,9 @@ namespace RimLife.Mappers
         // 子映射
         // ================================================================
 
-        private static WeatherInfo MapWeather(Map map)
+        private static NPCLife.Cards.WeatherInfo MapWeather(Map map)
         {
-            return new WeatherInfo
+            return new NPCLife.Cards.WeatherInfo
             {
                 Label = map.weatherManager.CurWeatherPerceived.LabelCap,
                 Description = map.weatherManager.CurWeatherPerceived.description,

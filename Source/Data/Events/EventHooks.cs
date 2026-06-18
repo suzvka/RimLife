@@ -1,5 +1,5 @@
 using HarmonyLib;
-using RimLife.Cards;
+using NPCLife.Cards;
 using RimLife.Infrastructure;
 using RimLife.Mappers;
 using RimWorld;
@@ -53,7 +53,7 @@ namespace RimLife
                 // 并由 MCP 工具 get_interaction_history 按需拉取，无需主动推送。
 
                 // 写入 InteractionHistoryStore（流水记录）
-                RimLifeCore.InteractionStore?.Append(new Cards.InteractionRecord
+                RimLifeCore.InteractionStore?.Append(new NPCLife.Cards.InteractionRecord
                 {
                     Tick = Find.TickManager?.TicksGame ?? 0,
                     InitiatorID = initiator.ThingID ?? "?",

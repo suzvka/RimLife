@@ -1,6 +1,6 @@
 using RimLife;
-using RimLife.Framework;
-using RimLife.Framework.Mcp;
+using NPCLife.Framework;
+using NPCLife.Framework.Mcp;
 using System;
 using System.Collections.Generic;
 using Verse;

@@ -1,5 +1,5 @@
 using HarmonyLib;
-using RimLife.Framework;
+using NPCLife.Framework;
 using Verse;
 
 namespace RimLife.Infrastructure

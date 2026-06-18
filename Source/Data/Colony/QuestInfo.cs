@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Verse;
-using RimLife.Framework;
+using NPCLife.Framework;
 
 namespace RimLife
 {

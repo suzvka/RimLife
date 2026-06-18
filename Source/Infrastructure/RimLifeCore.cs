@@ -1,12 +1,15 @@
-using RimLife.Agent;
-using RimLife.Core;
-using RimLife.Driver;
-using RimLife.Framework;
-using RimLife.Framework.Script;
-using RimLife.Framework.Mcp;
-using RimLife.Infrastructure.Llm;
+using NPCLife.Agent;
+using NPCLife.Core;
+using NPCLife.Driver;
+using NPCLife.Framework;
+using NPCLife.Framework.Script;
+using NPCLife.Framework.Mcp;
+using NPCLife.Infrastructure;
+using NPCLife.Infrastructure.Knowledge;
+using NPCLife.Infrastructure.Llm;
+using NPCLife.Infrastructure.Mcp;
+using NPCLife.Workspace;
 using RimLife.Mappers;
-using RimLife.Workspace;
 using System;
 using System.Collections.Generic;
 using Verse;
@@ -197,18 +200,18 @@ namespace RimLife.Infrastructure
 
                 McpSkillRegistry.InitializeDefaults();
 
-                int count = McpSkillRegistry.RegisterFromType(typeof(Mcp.SystemMcpTools));
-                count += McpSkillRegistry.RegisterFromType(typeof(Mcp.KnowledgeMcpTools));
-                count += RegisterHookProvider(new Workspace.DirectionMcpProvider(() => Workspaces, Logger));
-                count += RegisterHookProvider(new Workspace.WritingMcpProvider(() => Workspaces, Logger));
-                count += RegisterHookProvider(new Workspace.FreelancerMcpProvider(() => Workspaces, Logger));
+                int count = RegisterHookProvider(new SystemMcpProvider(() => Workspaces, TimeProvider, Logger));
+                count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeBase, Logger));
+                count += RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
+                count += RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
+                count += RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
 
                 // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
-                count += RegisterHookProvider(new Mcp.ColonyOverviewProvider());
-                count += RegisterHookProvider(new Mcp.CharacterQueryProvider());
-                count += RegisterHookProvider(new Mcp.RelationshipQueryProvider());
-                count += RegisterHookProvider(new Mcp.EnvironmentQueryProvider());
-                count += RegisterHookProvider(new Mcp.PawnMemoryProvider());
+                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
+                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.CharacterQueryProvider());
+                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.RelationshipQueryProvider());
+                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.EnvironmentQueryProvider());
+                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.PawnMemoryProvider());
 
                 Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
 
@@ -245,21 +248,21 @@ namespace RimLife.Infrastructure
                 if (Config.Features?.EnableRuntimeMetrics ?? true)
                 {
                     // 注册度量查询 MCP 工具
-                    McpSkillRegistry.RegisterFromType(typeof(Framework.Mcp.MetricsMcpTools));
+                    McpSkillRegistry.RegisterFromType(typeof(NPCLife.Framework.Mcp.MetricsMcpTools));
 
                     // 为三种 Agent 角色分别注册 MetricsInterceptor
                     AgentPipeline.AddInterceptor(
-                        new Framework.MetricsInterceptor(Framework.AgentRole.Director), priority: 100);
+                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Director), priority: 100);
                     AgentPipeline.AddInterceptor(
-                        new Framework.MetricsInterceptor(Framework.AgentRole.Screenwriter), priority: 100);
+                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Screenwriter), priority: 100);
                     AgentPipeline.AddInterceptor(
-                        new Framework.MetricsInterceptor(Framework.AgentRole.Freelancer), priority: 100);
+                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Freelancer), priority: 100);
 
                     // 订阅 LLM 响应事件，采集 Token 消耗
                     EventBus.Subscribe(FrameworkEvents.LlmResponseReceived, args =>
                     {
                         if (args?.Payload == null) return;
-                        var sessionId = Framework.MetricsInterceptor.CurrentSessionId;
+                        var sessionId = NPCLife.Framework.MetricsInterceptor.CurrentSessionId;
                         if (sessionId == null) return;
 
                         args.Payload.TryGetValue("inputTokens", out var itStr);
@@ -412,7 +415,7 @@ namespace RimLife.Infrastructure
 
             try
             {
-                (_workspaces as Workspace.WorkspaceManager)?.SaveToStore();
+                (_workspaces as NPCLife.Workspace.WorkspaceManager)?.SaveToStore();
                 (_interactionStore as InteractionHistoryStore)?.SaveToStore();
             }
             catch (Exception e)
@@ -451,7 +454,7 @@ namespace RimLife.Infrastructure
                 _driverConfig = config;
                 try
                 {
-                    var w = new Framework.JsonWriter(256);
+                    var w = new NPCLife.Framework.JsonWriter(256);
                     w.Prop("directorCountThreshold", config.DirectorCountThreshold);
                     w.Prop("directorImportanceThreshold", config.DirectorImportanceThreshold, "F2");
                     w.Prop("freelancerCountThreshold", config.FreelancerCountThreshold);
@@ -496,27 +499,27 @@ namespace RimLife.Infrastructure
             if (dc == null) return;
 
             // 导演定时器：间隔 > 0 且全局时钟整除间隔时触发
-            int directorInterval = dc.GetTimerInterval(Workspace.WorkspaceRole.Director);
+            int directorInterval = dc.GetTimerInterval(NPCLife.Workspace.WorkspaceRole.Director);
             if (directorInterval > 0 && _globalTimerTick % directorInterval == 0)
             {
                 var directorWs = GetDirectorWorkspace();
                 if (directorWs != null)
                 {
                     int tick = _globalTimerTick;
-                    var pulseEvt = EventCardMapper.CreateTimerPulse(Workspace.WorkspaceRole.Director, tick);
+                    var pulseEvt = EventCardMapper.CreateTimerPulse(NPCLife.Workspace.WorkspaceRole.Director, tick);
                     directorWs.EventPool.Append(pulseEvt);
                 }
             }
 
             // Freelancer 定时器：间隔 > 0 且全局时钟整除间隔时触发
-            int freelancerInterval = dc.GetTimerInterval(Workspace.WorkspaceRole.Freelancer);
+            int freelancerInterval = dc.GetTimerInterval(NPCLife.Workspace.WorkspaceRole.Freelancer);
             if (freelancerInterval > 0 && _globalTimerTick % freelancerInterval == 0)
             {
                 var freelancerWs = GetFreelancerWorkspace();
                 if (freelancerWs != null)
                 {
                     int tick = _globalTimerTick;
-                    var pulseEvt = EventCardMapper.CreateTimerPulse(Workspace.WorkspaceRole.Freelancer, tick);
+                    var pulseEvt = EventCardMapper.CreateTimerPulse(NPCLife.Workspace.WorkspaceRole.Freelancer, tick);
                     freelancerWs.EventPool.Append(pulseEvt);
                 }
             }
@@ -533,7 +536,7 @@ namespace RimLife.Infrastructure
         /// <summary>
         /// 获取指定角色的定时器脉冲间隔（ticks）。0 表示禁用。
         /// </summary>
-        public static int GetTimerPulseInterval(Workspace.WorkspaceRole role)
+        public static int GetTimerPulseInterval(NPCLife.Workspace.WorkspaceRole role)
         {
             return DriverConfig?.GetTimerInterval(role) ?? 0;
         }
@@ -549,36 +552,36 @@ namespace RimLife.Infrastructure
         /// 获取导演所在工作空间。
         /// 按 CreatedByRole == Director &amp;&amp; Status == Active 查找，不存在时自动创建。
         /// </summary>
-        public static Workspace.IWorkspace GetDirectorWorkspace()
+        public static NPCLife.Workspace.IWorkspace GetDirectorWorkspace()
         {
             if (Workspaces == null) return null;
 
             var actives = Workspaces.GetActive();
             foreach (var ws in actives)
             {
-                if (ws.CreatedByRole == Workspace.WorkspaceRole.Director)
+                if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Director)
                     return ws;
             }
 
-            return Workspaces.Create("Director", null, null, Workspace.WorkspaceRole.Director);
+            return Workspaces.Create("Director", null, null, NPCLife.Workspace.WorkspaceRole.Director);
         }
 
         /// <summary>
         /// 获取 Freelancer 所在工作空间。
         /// 按 CreatedByRole == Freelancer &amp;&amp; Status == Active 查找，不存在时自动创建。
         /// </summary>
-        public static Workspace.IWorkspace GetFreelancerWorkspace()
+        public static NPCLife.Workspace.IWorkspace GetFreelancerWorkspace()
         {
             if (Workspaces == null) return null;
 
             var actives = Workspaces.GetActive();
             foreach (var ws in actives)
             {
-                if (ws.CreatedByRole == Workspace.WorkspaceRole.Freelancer)
+                if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Freelancer)
                     return ws;
             }
 
-            return Workspaces.Create("Freelancer", null, null, Workspace.WorkspaceRole.Freelancer);
+            return Workspaces.Create("Freelancer", null, null, NPCLife.Workspace.WorkspaceRole.Freelancer);
         }
 
         /// <summary>
@@ -658,9 +661,9 @@ namespace RimLife.Infrastructure
             var ws = Workspaces?.Get(workspaceId);
             if (ws == null) return;
 
-            if (ws.CreatedByRole == Workspace.WorkspaceRole.Director)
+            if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Director)
                 GetDirectorAgent();
-            else if (ws.CreatedByRole == Workspace.WorkspaceRole.Freelancer)
+            else if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Freelancer)
                 GetFreelancerAgent();
             else
                 GetScreenwriter(workspaceId);
@@ -725,7 +728,7 @@ namespace RimLife.Infrastructure
         private static string BuildDirectorSystemPrompt()
         {
             var pc = PromptConfig;
-            var sb = new System.Text.StringBuilder(pc.DirectorPrompt ?? Driver.PromptConfig.DefaultDirectorPrompt);
+            var sb = new System.Text.StringBuilder(pc.DirectorPrompt ?? NPCLife.Driver.PromptConfig.DefaultDirectorPrompt);
             AppendStyleInstruction(sb, pc);
             return sb.ToString();
         }
@@ -758,10 +761,10 @@ namespace RimLife.Infrastructure
             return text.Length <= maxLen ? text : text.Substring(0, maxLen) + "...";
         }
 
-        private static string BuildScreenwriterSystemPrompt(Workspace.IWorkspace ws)
+        private static string BuildScreenwriterSystemPrompt(NPCLife.Workspace.IWorkspace ws)
         {
             var pc = PromptConfig;
-            var sb = new System.Text.StringBuilder(pc.ScreenwriterPrompt ?? Driver.PromptConfig.DefaultScreenwriterPrompt);
+            var sb = new System.Text.StringBuilder(pc.ScreenwriterPrompt ?? NPCLife.Driver.PromptConfig.DefaultScreenwriterPrompt);
 
             // 运行时动态上下文追加
             sb.AppendLine();
@@ -782,10 +785,10 @@ namespace RimLife.Infrastructure
             return sb.ToString();
         }
 
-        private static string BuildFreelancerSystemPrompt(Workspace.IWorkspace ws)
+        private static string BuildFreelancerSystemPrompt(NPCLife.Workspace.IWorkspace ws)
         {
             var pc = PromptConfig;
-            var sb = new System.Text.StringBuilder(pc.FreelancerPrompt ?? Driver.PromptConfig.DefaultFreelancerPrompt);
+            var sb = new System.Text.StringBuilder(pc.FreelancerPrompt ?? NPCLife.Driver.PromptConfig.DefaultFreelancerPrompt);
 
             // 运行时动态上下文追加
             sb.AppendLine();
@@ -822,7 +825,7 @@ namespace RimLife.Infrastructure
                 var json = CacheStore?.FetchCache<string>("rimlife_driver_config", null);
                 if (!string.IsNullOrEmpty(json) && json.StartsWith("{"))
                 {
-                    var dict = Framework.JsonParser.ParseDict(json);
+                    var dict = NPCLife.Framework.JsonParser.ParseDict(json);
                     var dc = DriverConfig.CreateDefault();
                     if (dict.TryGetValue("directorCountThreshold", out var dct) && int.TryParse(dct, out var dctv))
                         dc.DirectorCountThreshold = dctv;
@@ -962,16 +965,16 @@ namespace RimLife.Infrastructure
                     {
                         if (_knowledgeBase == null && CacheStore != null)
                         {
-                            var builtIn = new Knowledge.BuiltInKnowledgeBase(CacheStore, Logger);
+                            var builtIn = new NPCLife.Infrastructure.Knowledge.BuiltInKnowledgeBase(CacheStore, Logger);
                             var gameDef = new Knowledge.GameDefKnowledgeBase();
-                            var chain = new Framework.KnowledgeBaseChain(builtIn, gameDef);
+                            var chain = new NPCLife.Framework.KnowledgeBaseChain(builtIn, gameDef);
 
                             // 连接知识库查询回调到运行时度量
                             chain.OnLookupResult = (term, hitLayer, isHit) =>
                             {
                                 RuntimeMetrics.RecordKnowledgeLookup(
                                     term, hitLayer,
-                                    Framework.MetricsInterceptor.CurrentSessionId);
+                                    NPCLife.Framework.MetricsInterceptor.CurrentSessionId);
                             };
 
                             _knowledgeBase = chain;
@@ -1076,7 +1079,7 @@ namespace RimLife.Infrastructure
                     {
                         if (_workspaces == null && SaveStore != null)
                         {
-                            _workspaces = new Workspace.WorkspaceManager(SaveStore, Logger,
+                            _workspaces = new NPCLife.Workspace.WorkspaceManager(SaveStore, Logger,
                                 () => TimeProvider?.Invoke() ?? "", DriverConfig,
                                 onWorkspaceReady: wsId => EnsureAgentForWorkspace(wsId));
 

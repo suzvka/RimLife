@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using NPCLife.Cards;
+using NPCLife.Framework;
 using RimLife.Cards;
-using RimLife.Framework;
 using Verse;
 
 namespace RimLife

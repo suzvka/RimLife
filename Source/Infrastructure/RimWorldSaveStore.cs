@@ -1,7 +1,7 @@
-using RimLife.Framework;
+using NPCLife.Framework;
 using System;
 using System.Collections.Generic;
-using RimLife.Core;
+using NPCLife.Core;
 using RimWorld.Planet;
 using Verse;
 

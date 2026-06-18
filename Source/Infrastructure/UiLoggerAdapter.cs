@@ -1,4 +1,4 @@
-using RimLife.Framework;
+using NPCLife.Framework;
 using RimLife.UI;
 
 namespace RimLife.Infrastructure

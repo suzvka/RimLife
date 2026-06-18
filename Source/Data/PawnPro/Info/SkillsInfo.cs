@@ -1,8 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using RimWorld;
 using Verse;
-using RimLife.Framework;
+using NPCLife.Framework;
 
 namespace RimLife
 {

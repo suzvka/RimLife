@@ -1,7 +1,7 @@
-using RimLife.Cards;
-using RimLife.Core;
-using RimLife.Framework;
-using RimLife.Framework.Mcp;
+﻿using NPCLife.Cards;
+using NPCLife.Core;
+using NPCLife.Framework;
+using NPCLife.Framework.Mcp;
 using RimLife.Mappers;
 using RimWorld;
 using System;
@@ -169,7 +169,7 @@ namespace RimLife.Infrastructure.Mcp
                 }
                 inventory["_totalFood"] = totalFood;
 
-                var w = new Framework.JsonWriter(256);
+                var w = new NPCLife.Framework.JsonWriter(256);
                 foreach (var kv in inventory)
                     w.Prop(kv.Key, kv.Value);
                 return w.Close();

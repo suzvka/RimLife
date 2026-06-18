@@ -2,9 +2,9 @@ using RimWorld;
 using System;
 using System.Collections.Generic;
 using Verse;
-using RimLife.Core;
-using RimLife.Framework;
-using RimLife.Infrastructure.Mcp;
+using NPCLife.Core;
+using NPCLife.Framework;
+using NPCLife.Infrastructure.Mcp;
 
 namespace RimLife
 {

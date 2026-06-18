@@ -1,9 +1,9 @@
-using RimLife.Framework;
+﻿using NPCLife.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using RimLife.Cards;
+using NPCLife.Cards;
 using RimLife.Infrastructure;
 using RimWorld;
 using UnityEngine;
@@ -107,7 +107,7 @@ namespace RimLife.Mappers
         private static void MapColonists(ColonyContext ctx)
         {
             var allColonists = PawnsFinder.AllMaps_FreeColonistsSpawned ?? new List<Pawn>();
-            var colonists = new List<ColonistSummary>();
+            var colonists = new List<NPCLife.Cards.ColonistSummary>();
             int alive = 0;
             float totalMood = 0f;
             int moodCount = 0;
@@ -121,9 +121,9 @@ namespace RimLife.Mappers
                 string painTier = "None";
                 string currentJob = "";
 
-                try { float mood = p.needs?.mood?.CurLevelPercentage ?? 0.5f; moodTier = Framework.SemanticLabels.MapMoodTier(mood); totalMood += mood; moodCount++; }
+                try { float mood = p.needs?.mood?.CurLevelPercentage ?? 0.5f; moodTier = NPCLife.Framework.SemanticLabels.MapMoodTier(mood); totalMood += mood; moodCount++; }
                     catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] mood {p.ThingID}: {e.Message}"); }
-                try { float pain = p.health?.hediffSet?.PainTotal ?? 0f; painTier = Framework.SemanticLabels.MapPainTier(pain); }
+                try { float pain = p.health?.hediffSet?.PainTotal ?? 0f; painTier = NPCLife.Framework.SemanticLabels.MapPainTier(pain); }
                     catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] pain {p.ThingID}: {e.Message}"); }
                 try { currentJob = p.CurJob?.def?.defName ?? ""; }
                     catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] job {p.ThingID}: {e.Message}"); }
@@ -138,7 +138,7 @@ namespace RimLife.Mappers
                 }
                 catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] research cache {p.ThingID}: {e.Message}"); }
 
-                colonists.Add(new ColonistSummary
+                colonists.Add(new NPCLife.Cards.ColonistSummary
                 {
                     ID = p.ThingID ?? "?",
                     Name = p.Name?.ToStringShort ?? p.LabelShortCap ?? "?",
@@ -153,12 +153,12 @@ namespace RimLife.Mappers
             ctx.PopulationAlive = alive;
             ctx.Colonists = colonists;
             ctx.MoraleAverage = moodCount > 0 ? totalMood / moodCount : 0.5f;
-            ctx.MoraleTier = Framework.SemanticLabels.MapMoodTier(ctx.MoraleAverage);
+            ctx.MoraleTier = NPCLife.Framework.SemanticLabels.MapMoodTier(ctx.MoraleAverage);
         }
 
         private static void MapFactionRelations(ColonyContext ctx)
         {
-            var factionRelations = new List<FactionStanding>();
+            var factionRelations = new List<NPCLife.Cards.FactionStanding>();
             try
             {
                 var playerFaction = Faction.OfPlayer;
@@ -169,11 +169,11 @@ namespace RimLife.Mappers
                         if (faction == null || faction == playerFaction) continue;
                         if (faction.def != null && faction.def.isPlayer) continue;
                         float goodwill = playerFaction.GoodwillWith(faction);
-                        factionRelations.Add(new FactionStanding
+                        factionRelations.Add(new NPCLife.Cards.FactionStanding
                         {
                             FactionName = faction.Name ?? faction.def?.label ?? "Unknown",
                             Goodwill = goodwill,
-                            RelationLabel = Framework.SemanticLabels.MapOpinionTier(goodwill)
+                            RelationLabel = NPCLife.Framework.SemanticLabels.MapOpinionTier(goodwill)
                         });
                     }
                 }
@@ -204,7 +204,7 @@ namespace RimLife.Mappers
                         }
                     }
                     float daysWorth = (foodCount * 0.25f) / (alive * 1.6f);
-                    foodStatus = Framework.SemanticLabels.MapFoodStatus(daysWorth);
+                    foodStatus = NPCLife.Framework.SemanticLabels.MapFoodStatus(daysWorth);
                 }
             }
             catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] food: {e.Message}"); }
@@ -225,7 +225,7 @@ namespace RimLife.Mappers
                             if (net == null) continue;
                             totalSurplus += net.CurrentStoredEnergy();
                         }
-                        powerStatus = Framework.SemanticLabels.MapPowerStatus(totalSurplus);
+                        powerStatus = NPCLife.Framework.SemanticLabels.MapPowerStatus(totalSurplus);
                     }
                 }
             }

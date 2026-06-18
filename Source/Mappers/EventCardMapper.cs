@@ -1,4 +1,5 @@
-using RimLife.Cards;
+using NPCLife.Cards;
+using NPCLife.Workspace;
 using RimWorld;
 using System;
 using System.Collections.Generic;
@@ -301,7 +302,7 @@ namespace RimLife.Mappers
         /// </summary>
         /// <param name="role">触发此脉冲的角色（Director 或 Freelancer）。</param>
         /// <param name="tick">当前游戏 tick。</param>
-        public static IGameEvent CreateTimerPulse(Workspace.WorkspaceRole role, int tick)
+        public static IGameEvent CreateTimerPulse(NPCLife.Workspace.WorkspaceRole role, int tick)
         {
             return new EventCardImpl
             {

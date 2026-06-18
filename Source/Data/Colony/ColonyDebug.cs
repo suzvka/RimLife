@@ -1,6 +1,6 @@
 using HarmonyLib;
-using RimLife.Cards;
-using RimLife.Core;
+using NPCLife.Cards;
+using NPCLife.Core;
 using RimLife.Infrastructure;
 using RimLife.Mappers;
 using RimWorld;

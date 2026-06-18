@@ -1,4 +1,5 @@
-using RimLife.Core;
+﻿using NPCLife.Core;
+using NPCLife.Infrastructure.Mcp;
 using RimLife.Infrastructure.Mcp;
 using RimWorld;
 using System.Linq;
