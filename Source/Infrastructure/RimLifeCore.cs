@@ -448,11 +448,11 @@ namespace RimLife.Infrastructure
                 {
                     var w = new Framework.JsonWriter(256);
                     w.Prop("directorCountThreshold", config.DirectorCountThreshold);
-                    w.Prop("directorImportanceThreshold", config.DirectorImportanceThreshold);
+                    w.Prop("directorImportanceThreshold", config.DirectorImportanceThreshold, "F2");
                     w.Prop("freelancerCountThreshold", config.FreelancerCountThreshold);
-                    w.Prop("freelancerImportanceThreshold", config.FreelancerImportanceThreshold);
+                    w.Prop("freelancerImportanceThreshold", config.FreelancerImportanceThreshold, "F2");
                     w.Prop("screenwriterCountThreshold", config.ScreenwriterCountThreshold);
-                    w.Prop("screenwriterImportanceThreshold", config.ScreenwriterImportanceThreshold);
+                    w.Prop("screenwriterImportanceThreshold", config.ScreenwriterImportanceThreshold, "F2");
                     w.Prop("directorTimerInterval", config.DirectorTimerInterval);
                     w.Prop("freelancerTimerInterval", config.FreelancerTimerInterval);
                     w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
@@ -818,15 +818,15 @@ namespace RimLife.Infrastructure
                     var dc = DriverConfig.CreateDefault();
                     if (dict.TryGetValue("directorCountThreshold", out var dct) && int.TryParse(dct, out var dctv))
                         dc.DirectorCountThreshold = dctv;
-                    if (dict.TryGetValue("directorImportanceThreshold", out var dit) && int.TryParse(dit, out var ditv))
+                    if (dict.TryGetValue("directorImportanceThreshold", out var dit) && float.TryParse(dit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ditv))
                         dc.DirectorImportanceThreshold = ditv;
                     if (dict.TryGetValue("freelancerCountThreshold", out var fct) && int.TryParse(fct, out var fctv))
                         dc.FreelancerCountThreshold = fctv;
-                    if (dict.TryGetValue("freelancerImportanceThreshold", out var fit) && int.TryParse(fit, out var fitv))
+                    if (dict.TryGetValue("freelancerImportanceThreshold", out var fit) && float.TryParse(fit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fitv))
                         dc.FreelancerImportanceThreshold = fitv;
                     if (dict.TryGetValue("screenwriterCountThreshold", out var sct) && int.TryParse(sct, out var sctv))
                         dc.ScreenwriterCountThreshold = sctv;
-                    if (dict.TryGetValue("screenwriterImportanceThreshold", out var sit) && int.TryParse(sit, out var sitv))
+                    if (dict.TryGetValue("screenwriterImportanceThreshold", out var sit) && float.TryParse(sit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sitv))
                         dc.ScreenwriterImportanceThreshold = sitv;
                     if (dict.TryGetValue("directorTimerInterval", out var dti) && int.TryParse(dti, out var dtiv))
                         dc.DirectorTimerInterval = dtiv;

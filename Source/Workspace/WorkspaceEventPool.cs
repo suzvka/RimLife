@@ -54,22 +54,22 @@ namespace RimLife.Workspace
             string eventJson = _serializer.SerializeEvent(evt);
             _ws.EventCache[evt.EventID] = eventJson;
             _ws.PendingEventIds.Add(evt.EventID);
-            _ws.PendingImportance += _config.GetSeverityWeight(evt.Severity);
+            _ws.PendingImportance += evt.Importance;
 
             // 写入 recent 历史缓冲（仅内存）
             _recent.Add(evt);
             while (_recent.Count > _config.RecentHistoryCapacity)
             {
-                int removeIdx = -1;
-                for (int i = 0; i < _recent.Count; i++)
+                int removeIdx = 0;
+                float minImportance = _recent[0].Importance;
+                for (int i = 1; i < _recent.Count; i++)
                 {
-                    if (_recent[i].Severity == "Minor")
+                    if (_recent[i].Importance < minImportance)
                     {
+                        minImportance = _recent[i].Importance;
                         removeIdx = i;
-                        break;
                     }
                 }
-                if (removeIdx < 0) removeIdx = 0;
                 _recent.RemoveAt(removeIdx);
             }
 
@@ -81,7 +81,7 @@ namespace RimLife.Workspace
         private void CheckThreshold()
         {
             int effectiveCount = _config.GetEffectiveCountThreshold(_ws.CreatedByRole);
-            int effectiveImportance = _config.GetEffectiveImportanceThreshold(_ws.CreatedByRole);
+            float effectiveImportance = _config.GetEffectiveImportanceThreshold(_ws.CreatedByRole);
             if (PendingCount >= effectiveCount
                 || TotalImportance >= effectiveImportance)
             {
@@ -109,8 +109,8 @@ namespace RimLife.Workspace
                 result = result.Where(e => e.Tick < query.UntilTick.Value);
             if (!string.IsNullOrEmpty(query.ActorId))
                 result = result.Where(e => e.Actors != null && e.Actors.Any(a => a.ID == query.ActorId));
-            if (!string.IsNullOrEmpty(query.Severity))
-                result = result.Where(e => e.Severity == query.Severity);
+            if (query.MinImportance.HasValue)
+                result = result.Where(e => e.Importance >= query.MinImportance.Value);
 
             result = result.OrderBy(e => e.Tick);
 
@@ -133,7 +133,7 @@ namespace RimLife.Workspace
                 SinceTick = query.SinceTick,
                 UntilTick = query.UntilTick,
                 ActorId = query.ActorId,
-                Severity = query.Severity,
+                MinImportance = query.MinImportance,
                 Limit = null,
                 Offset = null
             };
@@ -161,7 +161,7 @@ namespace RimLife.Workspace
 
         public int PendingCount => _ws.PendingEventIds?.Count ?? 0;
 
-        public int TotalImportance => _ws.PendingImportance;
+        public float TotalImportance => _ws.PendingImportance;
 
         public IReadOnlyList<IGameEvent> DrainPending()
         {

@@ -1,10 +1,8 @@
-using System.Collections.Generic;
-
 namespace RimLife.Driver
 {
     /// <summary>
     /// Agent 驱动配置。纯 POCO，零外部依赖。
-    /// 控制事件池的触发阈值、定时器脉冲、重要度权重等参数。
+    /// 控制事件池的触发阈值、定时器脉冲等参数。
     ///
     /// 每个角色拥有独立的事件数与重要度阈值，按工作空间的 CreatedByRole 匹配。
     /// </summary>
@@ -16,19 +14,19 @@ namespace RimLife.Driver
         public int DirectorCountThreshold = 5;
 
         /// <summary>导演专用重要度阈值：pending 事件总重要度达到此值时触发激活。</summary>
-        public int DirectorImportanceThreshold = 15;
+        public float DirectorImportanceThreshold = 15f;
 
         /// <summary>临时编剧专用事件数量阈值。</summary>
         public int FreelancerCountThreshold = 5;
 
         /// <summary>临时编剧专用重要度阈值。</summary>
-        public int FreelancerImportanceThreshold = 15;
+        public float FreelancerImportanceThreshold = 15f;
 
         /// <summary>剧情编剧专用事件数量阈值。</summary>
         public int ScreenwriterCountThreshold = 5;
 
         /// <summary>剧情编剧专用重要度阈值。</summary>
-        public int ScreenwriterImportanceThreshold = 15;
+        public float ScreenwriterImportanceThreshold = 15f;
 
         // ---- 定时器脉冲（ticks，0 = 禁用） ----
 
@@ -41,15 +39,6 @@ namespace RimLife.Driver
 
         // ---- 通用配置 ----
 
-        /// <summary>重要度权重映射。Severity 字符串 → 整数值。
-        /// 用于计算池中事件的总重要度。</summary>
-        public Dictionary<string, int> SeverityWeights = new Dictionary<string, int>
-        {
-            ["Minor"] = 1,
-            ["Major"] = 3,
-            ["Extreme"] = 5
-        };
-
         /// <summary>历史环形缓冲区容量。超出时裁剪最旧事件。</summary>
         public int RecentHistoryCapacity = 200;
 
@@ -57,15 +46,6 @@ namespace RimLife.Driver
         public int MaxAgentRounds = 10;
 
         // ---- 查询方法 ----
-
-        /// <summary>
-        /// 获取指定严重度的数值权重。
-        /// </summary>
-        public int GetSeverityWeight(string severity)
-        {
-            if (string.IsNullOrEmpty(severity)) return 0;
-            return SeverityWeights.TryGetValue(severity, out int w) ? w : 0;
-        }
 
         /// <summary>
         /// 获取指定角色的有效事件数量阈值。
@@ -89,7 +69,7 @@ namespace RimLife.Driver
         /// <summary>
         /// 获取指定角色的有效重要度阈值。
         /// </summary>
-        public int GetEffectiveImportanceThreshold(Workspace.WorkspaceRole role)
+        public float GetEffectiveImportanceThreshold(Workspace.WorkspaceRole role)
         {
             switch (role)
             {

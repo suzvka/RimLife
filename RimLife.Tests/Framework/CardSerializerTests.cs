@@ -27,7 +27,7 @@ namespace RimLife.Tests.Framework
                 DefName = "TestEvent",
                 Tags = new List<string> { "Test", "Combat" },
                 Tick = 5000,
-                Severity = "Major",
+                Importance = 3f,
                 MapHint = "Map:123",
                 Actors = new List<EventActorRef>
                 {
@@ -43,7 +43,7 @@ namespace RimLife.Tests.Framework
             Assert.Contains("\"Test\"", json);
             Assert.Contains("\"Combat\"", json);
             Assert.Contains("\"tick\":5000", json);
-            Assert.Contains("\"severity\":\"Major\"", json);
+            Assert.Contains("\"importance\":3", json);
             Assert.Contains("\"pawn_1\"", json);
             Assert.Contains("\"Alice\"", json);
             Assert.Contains("\"damage\":\"20\"", json);
@@ -444,7 +444,7 @@ namespace RimLife.Tests.Framework
             public IReadOnlyList<string> Tags { get; set; } = new List<string>();
             public IReadOnlyList<string> Keywords { get; set; } = new List<string>();
             public int Tick { get; set; }
-            public string Severity { get; set; } = "Minor";
+            public float Importance { get; set; } = 1f;
             public IReadOnlyList<EventActorRef> Actors { get; set; } = new List<EventActorRef>();
             public string MapHint { get; set; } = "";
             public IDictionary<string, string> Payload { get; set; } = new Dictionary<string, string>();

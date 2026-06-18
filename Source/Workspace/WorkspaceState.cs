@@ -140,7 +140,7 @@ namespace RimLife.Workspace
         public List<string> PendingEventIds;
 
         /// <summary>pending 事件的累积重要度值（避免反序列化重算）。</summary>
-        public int PendingImportance;
+        public float PendingImportance;
 
         /// <summary>结束原因描述（Completed / Abandoned 时填充）。</summary>
         public string Outcome;

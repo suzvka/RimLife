@@ -126,7 +126,6 @@ namespace RimLife.UI
                     ScreenwriterImportanceThreshold = _screenwriterImportanceThreshold,
                     RecentHistoryCapacity = _recentHistoryCapacity,
                     MaxAgentRounds = _maxAgentRounds,
-                    SeverityWeights = RimLifeCore.DriverConfig.SeverityWeights
                 };
                 RimLifeCore.SetDriverConfig(dc);
                 RimLifeCore.RebuildAgents();
@@ -138,13 +137,13 @@ namespace RimLife.UI
             {
                 var defaultDc = DriverConfig.CreateDefault();
                 _directorCountThreshold = defaultDc.DirectorCountThreshold;
-                _directorImportanceThreshold = defaultDc.DirectorImportanceThreshold;
+                _directorImportanceThreshold = (int)defaultDc.DirectorImportanceThreshold;
                 _directorTimerInterval = defaultDc.DirectorTimerInterval;
                 _freelancerCountThreshold = defaultDc.FreelancerCountThreshold;
-                _freelancerImportanceThreshold = defaultDc.FreelancerImportanceThreshold;
+                _freelancerImportanceThreshold = (int)defaultDc.FreelancerImportanceThreshold;
                 _freelancerTimerInterval = defaultDc.FreelancerTimerInterval;
                 _screenwriterCountThreshold = defaultDc.ScreenwriterCountThreshold;
-                _screenwriterImportanceThreshold = defaultDc.ScreenwriterImportanceThreshold;
+                _screenwriterImportanceThreshold = (int)defaultDc.ScreenwriterImportanceThreshold;
                 _recentHistoryCapacity = defaultDc.RecentHistoryCapacity;
                 _maxAgentRounds = defaultDc.MaxAgentRounds;
                 _statusMessage = "已重置（需保存生效）";
@@ -165,13 +164,13 @@ namespace RimLife.UI
             _initialized = true;
             var dc = RimLifeCore.DriverConfig;
             _directorCountThreshold = dc.DirectorCountThreshold;
-            _directorImportanceThreshold = dc.DirectorImportanceThreshold;
+            _directorImportanceThreshold = (int)dc.DirectorImportanceThreshold;
             _directorTimerInterval = dc.DirectorTimerInterval;
             _freelancerCountThreshold = dc.FreelancerCountThreshold;
-            _freelancerImportanceThreshold = dc.FreelancerImportanceThreshold;
+            _freelancerImportanceThreshold = (int)dc.FreelancerImportanceThreshold;
             _freelancerTimerInterval = dc.FreelancerTimerInterval;
             _screenwriterCountThreshold = dc.ScreenwriterCountThreshold;
-            _screenwriterImportanceThreshold = dc.ScreenwriterImportanceThreshold;
+            _screenwriterImportanceThreshold = (int)dc.ScreenwriterImportanceThreshold;
             _recentHistoryCapacity = dc.RecentHistoryCapacity;
             _maxAgentRounds = dc.MaxAgentRounds;
         }

@@ -483,7 +483,7 @@ namespace RimLife.Workspace
                 w.PropRaw("eventCache", _serializer.SerializeEventCache(ws.EventCache));
             if (ws.PendingEventIds != null && ws.PendingEventIds.Count > 0)
                 w.Array("pendingEventIds", ws.PendingEventIds);
-            w.Prop("pendingImportance", ws.PendingImportance);
+            w.Prop("pendingImportance", ws.PendingImportance, "F2");
             if (ws.Rounds != null && ws.Rounds.Count > 0)
             {
                 var roundJsons = new List<string>();
@@ -538,7 +538,7 @@ namespace RimLife.Workspace
                 ActiveSkillIds = DeserializeStringList(data.TryGetValue("activeSkillIds", out v) ? v : null),
                 EventCache = _serializer.DeserializeEventCache(data.TryGetValue("eventCache", out v) ? v : "{}"),
                 PendingEventIds = DeserializeStringList(data.TryGetValue("pendingEventIds", out v) ? v : null),
-                PendingImportance = data.TryGetValue("pendingImportance", out v) && int.TryParse(v, out var imp) ? imp : 0,
+                PendingImportance = data.TryGetValue("pendingImportance", out v) && float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var imp) ? imp : 0,
                 Outcome = data.TryGetValue("outcome", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null,
                 DirectorMessage = data.TryGetValue("directorMessage", out v) ? (string.IsNullOrEmpty(v) ? null : v) : null
             };

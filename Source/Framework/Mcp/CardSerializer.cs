@@ -28,7 +28,7 @@ namespace RimLife.Framework.Mcp
             if (evt.Keywords != null && evt.Keywords.Count > 0)
                 w.PropRaw("keywords", SerializeStringList(evt.Keywords));
             w.Prop("tick", evt.Tick);
-            w.Prop("severity", evt.Severity);
+            w.Prop("importance", evt.Importance, "F2");
             w.Prop("mapHint", evt.MapHint);
 
             if (evt.Actors != null && evt.Actors.Count > 0)
@@ -80,7 +80,7 @@ namespace RimLife.Framework.Mcp
                 Tags = DeserializeTagList(dict.TryGetValue("tags", out v) ? v : "[]"),
                 Keywords = DeserializeTagList(dict.TryGetValue("keywords", out v) ? v : "[]"),
                 Tick = dict.TryGetValue("tick", out v) && int.TryParse(v, out var tick) ? tick : 0,
-                Severity = dict.TryGetValue("severity", out v) ? v : "Minor",
+                Importance = dict.TryGetValue("importance", out v) && float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var imp) ? imp : 0f,
                 MapHint = dict.TryGetValue("mapHint", out v) ? v : "",
                 Actors = DeserializeActors(dict.TryGetValue("actors", out v) ? v : "[]"),
                 Payload = DeserializePayload(dict.TryGetValue("payload", out v) ? v : "{}")

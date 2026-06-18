@@ -20,7 +20,7 @@ namespace RimLife.Tests.Core
             Assert.Null(q.SinceTick);
             Assert.Null(q.UntilTick);
             Assert.Null(q.ActorId);
-            Assert.Null(q.Severity);
+            Assert.Null(q.MinImportance);
             Assert.Null(q.Limit);
             Assert.Null(q.Offset);
         }
@@ -34,7 +34,7 @@ namespace RimLife.Tests.Core
             Assert.Contains("Combat", q.TagsAny);
             Assert.Null(q.TagsAll);
             Assert.Null(q.SinceTick);
-            Assert.Null(q.Severity);
+            Assert.Null(q.MinImportance);
         }
 
         [Fact]
@@ -69,7 +69,7 @@ namespace RimLife.Tests.Core
             Assert.Null(q.SinceTick);
             Assert.Null(q.UntilTick);
             Assert.Null(q.ActorId);
-            Assert.Null(q.Severity);
+            Assert.Null(q.MinImportance);
             Assert.Null(q.Limit);
             Assert.Null(q.Offset);
         }
@@ -84,7 +84,7 @@ namespace RimLife.Tests.Core
                 SinceTick = 5000,
                 UntilTick = 10000,
                 ActorId = "pawn_001",
-                Severity = "Major",
+                MinImportance = 3f,
                 Limit = 20,
                 Offset = 5
             };
@@ -96,7 +96,7 @@ namespace RimLife.Tests.Core
             Assert.Equal(5000, q.SinceTick);
             Assert.Equal(10000, q.UntilTick);
             Assert.Equal("pawn_001", q.ActorId);
-            Assert.Equal("Major", q.Severity);
+            Assert.Equal(3f, q.MinImportance);
             Assert.Equal(20, q.Limit);
             Assert.Equal(5, q.Offset);
         }

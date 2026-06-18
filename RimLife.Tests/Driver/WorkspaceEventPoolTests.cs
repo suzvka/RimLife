@@ -21,16 +21,16 @@ namespace RimLife.Tests.Driver
             return new DriverConfig
             {
                 DirectorCountThreshold = 3,
-                DirectorImportanceThreshold = 10,
+                DirectorImportanceThreshold = 10f,
                 ScreenwriterCountThreshold = 3,
-                ScreenwriterImportanceThreshold = 10,
+                ScreenwriterImportanceThreshold = 10f,
                 FreelancerCountThreshold = 3,
-                FreelancerImportanceThreshold = 10,
+                FreelancerImportanceThreshold = 10f,
                 RecentHistoryCapacity = 20
             };
         }
 
-        private static IGameEvent MakeEvent(string id, string severity, int tick = 0,
+        private static IGameEvent MakeEvent(string id, float importance, int tick = 0,
             IReadOnlyList<string> tags = null, IReadOnlyList<EventActorRef> actors = null)
         {
             return new TestGameEvent
@@ -39,7 +39,7 @@ namespace RimLife.Tests.Driver
                 DefName = "TestEvent",
                 Tags = tags ?? new List<string> { "Test" },
                 Tick = tick,
-                Severity = severity,
+                Importance = importance,
                 Actors = actors ?? new List<EventActorRef>(),
                 MapHint = "",
                 Payload = new Dictionary<string, string>()
@@ -75,7 +75,7 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool();
             Assert.Equal(0, pool.PendingCount);
-            Assert.Equal(0, pool.TotalImportance);
+            Assert.Equal(0f, pool.TotalImportance);
             Assert.Equal(0, pool.TotalAppended);
         }
 
@@ -88,10 +88,10 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool();
 
-            pool.Append(MakeEvent("e1", "Minor"));
+            pool.Append(MakeEvent("e1", 1f));
             Assert.Equal(1, pool.PendingCount);
 
-            pool.Append(MakeEvent("e2", "Major"));
+            pool.Append(MakeEvent("e2", 3f));
             Assert.Equal(2, pool.PendingCount);
         }
 
@@ -100,11 +100,11 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool();
 
-            pool.Append(MakeEvent("e1", "Minor"));   // weight 1
-            pool.Append(MakeEvent("e2", "Major"));   // weight 3
-            pool.Append(MakeEvent("e3", "Extreme"));  // weight 5
+            pool.Append(MakeEvent("e1", 1f));
+            pool.Append(MakeEvent("e2", 3f));
+            pool.Append(MakeEvent("e3", 5f));
 
-            Assert.Equal(9, pool.TotalImportance);
+            Assert.Equal(9f, pool.TotalImportance);
         }
 
         [Fact]
@@ -121,14 +121,14 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool();
 
-            pool.Append(MakeEvent("e1", "Minor"));
-            pool.Append(MakeEvent("e2", "Major"));
+            pool.Append(MakeEvent("e1", 1f));
+            pool.Append(MakeEvent("e2", 3f));
 
             var drained = pool.DrainPending();
 
             Assert.Equal(2, drained.Count);
             Assert.Equal(0, pool.PendingCount);
-            Assert.Equal(0, pool.TotalImportance);
+            Assert.Equal(0f, pool.TotalImportance);
         }
 
         // ================================================================
@@ -140,9 +140,9 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool();
             // 无订阅者时，Append 不应抛异常
-            pool.Append(MakeEvent("e1", "Major"));
-            pool.Append(MakeEvent("e2", "Major"));
-            pool.Append(MakeEvent("e3", "Major"));
+            pool.Append(MakeEvent("e1", 3f));
+            pool.Append(MakeEvent("e2", 3f));
+            pool.Append(MakeEvent("e3", 3f));
             Assert.Equal(3, pool.PendingCount);
         }
 
@@ -153,11 +153,11 @@ namespace RimLife.Tests.Driver
             int fireCount = 0;
             pool.OnThresholdReached += () => fireCount++;
 
-            pool.Append(MakeEvent("e1", "Minor"));
-            pool.Append(MakeEvent("e2", "Minor"));
+            pool.Append(MakeEvent("e1", 1f));
+            pool.Append(MakeEvent("e2", 1f));
             Assert.Equal(0, fireCount); // 未达阈值
 
-            pool.Append(MakeEvent("e3", "Minor"));
+            pool.Append(MakeEvent("e3", 1f));
             Assert.Equal(1, fireCount); // 达到 count=3
         }
 
@@ -168,9 +168,9 @@ namespace RimLife.Tests.Driver
             int fireCount = 0;
             pool.OnThresholdReached += () => fireCount++;
 
-            // 2 Extreme = weight 10 → 达阈值
-            pool.Append(MakeEvent("e1", "Extreme"));
-            pool.Append(MakeEvent("e2", "Extreme"));
+            // 2 events with importance=5 → total 10 → 达阈值
+            pool.Append(MakeEvent("e1", 5f));
+            pool.Append(MakeEvent("e2", 5f));
             Assert.Equal(1, fireCount);
         }
 
@@ -182,17 +182,17 @@ namespace RimLife.Tests.Driver
             pool.OnThresholdReached += () => fireCount++;
 
             // 第一轮触发
-            pool.Append(MakeEvent("e1", "Major"));
-            pool.Append(MakeEvent("e2", "Major"));
-            pool.Append(MakeEvent("e3", "Major"));
+            pool.Append(MakeEvent("e1", 4f));
+            pool.Append(MakeEvent("e2", 4f));
+            pool.Append(MakeEvent("e3", 4f));
             Assert.Equal(1, fireCount);
 
             pool.DrainPending();
 
             // 第二轮触发
-            pool.Append(MakeEvent("e4", "Major"));
-            pool.Append(MakeEvent("e5", "Major"));
-            pool.Append(MakeEvent("e6", "Major"));
+            pool.Append(MakeEvent("e4", 4f));
+            pool.Append(MakeEvent("e5", 4f));
+            pool.Append(MakeEvent("e6", 4f));
             Assert.Equal(2, fireCount);
         }
 
@@ -205,9 +205,9 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool(); // threshold=3
 
-            pool.Append(MakeEvent("e1", "Minor"));
-            pool.Append(MakeEvent("e2", "Minor"));
-            pool.Append(MakeEvent("e3", "Minor"));
+            pool.Append(MakeEvent("e1", 1f));
+            pool.Append(MakeEvent("e2", 1f));
+            pool.Append(MakeEvent("e3", 1f));
 
             Assert.True(pool.PendingCount >= 3);
         }
@@ -217,8 +217,8 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool(); // threshold=3
 
-            pool.Append(MakeEvent("e1", "Minor"));
-            pool.Append(MakeEvent("e2", "Minor"));
+            pool.Append(MakeEvent("e1", 1f));
+            pool.Append(MakeEvent("e2", 1f));
 
             Assert.False(pool.PendingCount >= 3);
         }
@@ -228,10 +228,10 @@ namespace RimLife.Tests.Driver
         {
             var pool = CreatePool(); // imp threshold=10
 
-            // 2 Major(6) + 1 Extreme(5) = 11
-            pool.Append(MakeEvent("e1", "Major"));
-            pool.Append(MakeEvent("e2", "Major"));
-            pool.Append(MakeEvent("e3", "Extreme"));
+            // 3+3+5 = 11
+            pool.Append(MakeEvent("e1", 3f));
+            pool.Append(MakeEvent("e2", 3f));
+            pool.Append(MakeEvent("e3", 5f));
 
             Assert.True(pool.TotalImportance >= 10);
         }
@@ -242,9 +242,9 @@ namespace RimLife.Tests.Driver
             var pool = CreatePool(); // imp threshold=10
 
             // 3 Major = 9
-            pool.Append(MakeEvent("e1", "Major"));
-            pool.Append(MakeEvent("e2", "Major"));
-            pool.Append(MakeEvent("e3", "Major"));
+            pool.Append(MakeEvent("e1", 3f));
+            pool.Append(MakeEvent("e2", 3f));
+            pool.Append(MakeEvent("e3", 3f));
 
             Assert.False(pool.TotalImportance >= 10);
         }
@@ -255,8 +255,8 @@ namespace RimLife.Tests.Driver
             var pool = CreatePool(); // count=3, imp=10
 
             // Count 不够，但 Importance 够了
-            pool.Append(MakeEvent("e1", "Extreme")); // weight 5
-            pool.Append(MakeEvent("e2", "Extreme")); // weight 5
+            pool.Append(MakeEvent("e1", 5f));
+            pool.Append(MakeEvent("e2", 5f));
 
             Assert.False(pool.PendingCount >= 3);   // count not met
             Assert.True(pool.TotalImportance >= 10);  // imp met
@@ -265,9 +265,9 @@ namespace RimLife.Tests.Driver
             pool.DrainPending();
 
             // Importance 不够，但 Count 够了
-            pool.Append(MakeEvent("e1", "Minor"));
-            pool.Append(MakeEvent("e2", "Minor"));
-            pool.Append(MakeEvent("e3", "Minor"));
+            pool.Append(MakeEvent("e1", 1f));
+            pool.Append(MakeEvent("e2", 1f));
+            pool.Append(MakeEvent("e3", 1f));
 
             Assert.True(pool.PendingCount >= 3);    // count met
             Assert.False(pool.TotalImportance >= 10); // imp not met
@@ -283,9 +283,9 @@ namespace RimLife.Tests.Driver
             var poolA = CreatePool("ws-a");
             var poolB = CreatePool("ws-b");
 
-            poolA.Append(MakeEvent("e1", "Major"));
-            poolA.Append(MakeEvent("e2", "Major"));
-            poolB.Append(MakeEvent("e3", "Extreme"));
+            poolA.Append(MakeEvent("e1", 3f));
+            poolA.Append(MakeEvent("e2", 3f));
+            poolB.Append(MakeEvent("e3", 5f));
 
             Assert.Equal(2, poolA.PendingCount);
             Assert.Equal(1, poolB.PendingCount);
@@ -302,9 +302,9 @@ namespace RimLife.Tests.Driver
             poolB.OnThresholdReached += () => fireB++;
 
             // 仅触发 A
-            poolA.Append(MakeEvent("e1", "Major"));
-            poolA.Append(MakeEvent("e2", "Major"));
-            poolA.Append(MakeEvent("e3", "Major"));
+            poolA.Append(MakeEvent("e1", 4f));
+            poolA.Append(MakeEvent("e2", 4f));
+            poolA.Append(MakeEvent("e3", 4f));
 
             Assert.Equal(1, fireA);
             Assert.Equal(0, fireB);
@@ -324,9 +324,9 @@ namespace RimLife.Tests.Driver
             poolB.OnThresholdReached += () => fireB++;
 
             // 填满 poolA，但 poolB 回调不应触发
-            poolA.Append(MakeEvent("e1", "Major"));
-            poolA.Append(MakeEvent("e2", "Major"));
-            poolA.Append(MakeEvent("e3", "Major"));
+            poolA.Append(MakeEvent("e1", 4f));
+            poolA.Append(MakeEvent("e2", 4f));
+            poolA.Append(MakeEvent("e3", 4f));
 
             Assert.Equal(0, fireB);
         }
@@ -342,7 +342,7 @@ namespace RimLife.Tests.Driver
             public IReadOnlyList<string> Tags { get; set; }
             public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
-            public string Severity { get; set; }
+            public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }

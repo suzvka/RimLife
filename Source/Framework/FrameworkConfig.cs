@@ -61,7 +61,7 @@ namespace RimLife.Framework
             else
             {
                 if (Driver.DirectorCountThreshold < 1) errors.Add("Driver.DirectorCountThreshold must be >= 1.");
-                if (Driver.DirectorImportanceThreshold < 1) errors.Add("Driver.DirectorImportanceThreshold must be >= 1.");
+                if (Driver.DirectorImportanceThreshold < 1f) errors.Add("Driver.DirectorImportanceThreshold must be >= 1.");
                 if (Driver.RecentHistoryCapacity < 10) errors.Add("Driver.RecentHistoryCapacity must be >= 10.");
                 if (Driver.MaxAgentRounds < 1 || Driver.MaxAgentRounds > 100)
                     errors.Add("Driver.MaxAgentRounds must be between 1 and 100.");
@@ -87,22 +87,15 @@ namespace RimLife.Framework
             var dw = new JsonWriter(256);
             var d = Driver ?? DriverConfig.CreateDefault();
             dw.Prop("directorCountThreshold", d.DirectorCountThreshold);
-            dw.Prop("directorImportanceThreshold", d.DirectorImportanceThreshold);
+            dw.Prop("directorImportanceThreshold", d.DirectorImportanceThreshold, "F2");
             dw.Prop("freelancerCountThreshold", d.FreelancerCountThreshold);
-            dw.Prop("freelancerImportanceThreshold", d.FreelancerImportanceThreshold);
+            dw.Prop("freelancerImportanceThreshold", d.FreelancerImportanceThreshold, "F2");
             dw.Prop("screenwriterCountThreshold", d.ScreenwriterCountThreshold);
-            dw.Prop("screenwriterImportanceThreshold", d.ScreenwriterImportanceThreshold);
+            dw.Prop("screenwriterImportanceThreshold", d.ScreenwriterImportanceThreshold, "F2");
             dw.Prop("directorTimerInterval", d.DirectorTimerInterval);
             dw.Prop("freelancerTimerInterval", d.FreelancerTimerInterval);
             dw.Prop("recentHistoryCapacity", d.RecentHistoryCapacity);
             dw.Prop("maxAgentRounds", d.MaxAgentRounds);
-            if (d.SeverityWeights != null && d.SeverityWeights.Count > 0)
-            {
-                var sw = new JsonWriter(64);
-                foreach (var kv in d.SeverityWeights)
-                    sw.Prop(kv.Key, kv.Value);
-                dw.PropRaw("severityWeights", sw.Close());
-            }
             w.PropRaw("driver", dw.Close());
 
             // Diagnostics
@@ -143,15 +136,15 @@ namespace RimLife.Framework
                     var dc = DriverConfig.CreateDefault();
                     if (dd.TryGetValue("directorCountThreshold", out string dct) && int.TryParse(dct, out int dctv))
                         dc.DirectorCountThreshold = dctv;
-                    if (dd.TryGetValue("directorImportanceThreshold", out string dit) && int.TryParse(dit, out int ditv))
+                    if (dd.TryGetValue("directorImportanceThreshold", out string dit) && float.TryParse(dit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float ditv))
                         dc.DirectorImportanceThreshold = ditv;
                     if (dd.TryGetValue("freelancerCountThreshold", out string fct) && int.TryParse(fct, out int fctv))
                         dc.FreelancerCountThreshold = fctv;
-                    if (dd.TryGetValue("freelancerImportanceThreshold", out string fit) && int.TryParse(fit, out int fitv))
+                    if (dd.TryGetValue("freelancerImportanceThreshold", out string fit) && float.TryParse(fit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float fitv))
                         dc.FreelancerImportanceThreshold = fitv;
                     if (dd.TryGetValue("screenwriterCountThreshold", out string sct) && int.TryParse(sct, out int sctv))
                         dc.ScreenwriterCountThreshold = sctv;
-                    if (dd.TryGetValue("screenwriterImportanceThreshold", out string sit) && int.TryParse(sit, out int sitv))
+                    if (dd.TryGetValue("screenwriterImportanceThreshold", out string sit) && float.TryParse(sit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float sitv))
                         dc.ScreenwriterImportanceThreshold = sitv;
                     if (dd.TryGetValue("directorTimerInterval", out string dti) && int.TryParse(dti, out int dtiv))
                         dc.DirectorTimerInterval = dtiv;
@@ -161,19 +154,6 @@ namespace RimLife.Framework
                         dc.RecentHistoryCapacity = rhcv;
                     if (dd.TryGetValue("maxAgentRounds", out string mar) && int.TryParse(mar, out int marv))
                         dc.MaxAgentRounds = marv;
-                    if (dd.TryGetValue("severityWeights", out string swJson))
-                    {
-                        var swDict = JsonParser.ParseDict(swJson);
-                        if (swDict.Count > 0)
-                        {
-                            dc.SeverityWeights = new System.Collections.Generic.Dictionary<string, int>();
-                            foreach (var kv in swDict)
-                            {
-                                if (int.TryParse(kv.Value, out int w))
-                                    dc.SeverityWeights[kv.Key] = w;
-                            }
-                        }
-                    }
                     config.Driver = dc;
                 }
 

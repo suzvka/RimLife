@@ -23,8 +23,8 @@ namespace RimLife.Core
         /// <summary>匹配参与 Actor 的 ID。null 表示不限。</summary>
         public string ActorId;
 
-        /// <summary>严重程度："Minor"/"Major"/"Extreme"。null 表示不限。</summary>
-        public string Severity;
+        /// <summary>最小重要度过滤。null 表示不限。</summary>
+        public float? MinImportance;
 
         /// <summary>最大返回数。null 表示不限。</summary>
         public int? Limit;

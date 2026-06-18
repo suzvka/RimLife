@@ -16,7 +16,7 @@ namespace RimLife.Mappers
         /// <summary>
         /// 从 Incident 创建事件卡。
         /// </summary>
-        public static IGameEvent FromIncident(IncidentDef def, IncidentParms parms)
+        public static IGameEvent FromIncident(IncidentDef def, IncidentParms parms, float importance)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
             float threat = parms?.points ?? 0f;
@@ -38,7 +38,7 @@ namespace RimLife.Mappers
                 DefName = def?.defName ?? "Unknown",
                 Tags = BuildIncidentTags(def),
                 Tick = tick,
-                Severity = threat > 2000f ? "Extreme" : threat > 800f ? "Major" : "Minor",
+                Importance = importance,
                 Actors = actors,
                 MapHint = parms?.spawnCenter.IsValid ?? false
                     ? $"Map position ({parms.spawnCenter.x},{parms.spawnCenter.z})"
@@ -50,7 +50,7 @@ namespace RimLife.Mappers
         /// <summary>
         /// 从 Pawn 死亡创建事件卡。
         /// </summary>
-        public static IGameEvent FromDeath(Pawn victim, DamageInfo? dinfo)
+        public static IGameEvent FromDeath(Pawn victim, DamageInfo? dinfo, float importance)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
@@ -85,7 +85,7 @@ namespace RimLife.Mappers
                 DefName = "PawnDeath",
                 Tags = deathTags,
                 Tick = tick,
-                Severity = "Major",
+                Importance = importance,
                 Actors = actors,
                 MapHint = victim?.Map != null ? $"Map:{victim.Map.uniqueID}" : "",
                 Payload = payload
@@ -95,7 +95,7 @@ namespace RimLife.Mappers
         /// <summary>
         /// 从精神崩溃创建事件卡。
         /// </summary>
-        public static IGameEvent FromMentalBreak(Pawn pawn, string reason, MentalBreakDef breakDef)
+        public static IGameEvent FromMentalBreak(Pawn pawn, string reason, MentalBreakDef breakDef, float importance)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
@@ -126,7 +126,7 @@ namespace RimLife.Mappers
                 DefName = breakDef?.defName ?? "MentalBreak",
                 Tags = new List<string> { "MentalBreak", "Health" },
                 Tick = tick,
-                Severity = "Major",
+                Importance = importance,
                 Actors = actors,
                 MapHint = pawn?.Map != null ? $"Map:{pawn.Map.uniqueID}" : "",
                 Payload = payload
@@ -136,7 +136,7 @@ namespace RimLife.Mappers
         /// <summary>
         /// 从社交互动创建事件卡。
         /// </summary>
-        public static IGameEvent FromSocialInteraction(Pawn initiator, Pawn recipient, InteractionDef intDef)
+        public static IGameEvent FromSocialInteraction(Pawn initiator, Pawn recipient, InteractionDef intDef, float importance)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
@@ -162,7 +162,7 @@ namespace RimLife.Mappers
                 DefName = intDef?.defName ?? "SocialInteraction",
                 Tags = new List<string> { "SocialInteraction", "Social" },
                 Tick = tick,
-                Severity = "Minor",
+                Importance = importance,
                 Actors = actors,
                 MapHint = initiator?.Map != null ? $"Map:{initiator.Map.uniqueID}" : "",
                 Payload = payload
@@ -172,7 +172,7 @@ namespace RimLife.Mappers
         /// <summary>
         /// 从 Quest 状态变化创建事件卡。
         /// </summary>
-        public static IGameEvent FromQuest(Quest quest, string stateChange)
+        public static IGameEvent FromQuest(Quest quest, string stateChange, float importance)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
@@ -190,7 +190,7 @@ namespace RimLife.Mappers
                 DefName = "Quest",
                 Tags = new List<string> { "Quest", stateChange ?? "Unknown" },
                 Tick = tick,
-                Severity = "Major",
+                Importance = importance,
                 Actors = new List<EventActorRef>(),
                 MapHint = "",
                 Payload = payload
@@ -200,30 +200,20 @@ namespace RimLife.Mappers
         /// <summary>
         /// 从派系变更创建事件卡。
         /// </summary>
-        public static IGameEvent FromFactionChange(Pawn pawn, Faction newFaction)
+        public static IGameEvent FromFactionChange(Pawn pawn, Faction newFaction, float importance)
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
             var actors = new List<EventActorRef>();
-            string severity;
             string changeType;
 
             var playerFaction = Faction.OfPlayer;
             if (newFaction == playerFaction)
-            {
-                severity = "Major";
                 changeType = "Joined";
-            }
             else if (pawn?.Faction == playerFaction)
-            {
-                severity = "Major";
                 changeType = "Left";
-            }
             else
-            {
-                severity = "Minor";
                 changeType = "FactionSwitch";
-            }
 
             string role;
             var oldFaction = pawn?.Faction;
@@ -252,7 +242,7 @@ namespace RimLife.Mappers
                 DefName = "FactionChange",
                 Tags = new List<string> { "FactionChange", "Social", changeType },
                 Tick = tick,
-                Severity = severity,
+                Importance = importance,
                 Actors = actors,
                 MapHint = pawn?.Map != null ? $"Map:{pawn.Map.uniqueID}" : "",
                 Payload = payload
@@ -273,7 +263,7 @@ namespace RimLife.Mappers
             int tick = Find.TickManager?.TicksGame ?? 0;
 
             var tags = BuildLetterTags(letterDef);
-            string severity = MapLetterSeverity(letterDef);
+            float importance = MapLetterImportance(letterDef);
             var actors = ExtractActorsFromLookTargets(lookTargets, relatedFaction);
             string mapHint = ExtractMapHintFromLookTargets(lookTargets);
 
@@ -293,7 +283,7 @@ namespace RimLife.Mappers
                 DefName = letterDef?.defName ?? "Letter",
                 Tags = tags,
                 Tick = tick,
-                Severity = severity,
+                Importance = importance,
                 Actors = actors,
                 MapHint = mapHint,
                 Payload = payload
@@ -307,7 +297,7 @@ namespace RimLife.Mappers
         /// <summary>
         /// 创建定时器脉冲合成事件。由 RimWorldAgentDriver 定时器驱动，
         /// 向导演/临时编剧工作空间注入一条无外部依赖的系统事件。
-        /// 重要度固定为 Minor，避免单次脉冲就触发阈值（需配合 Count 累积）。
+        /// 重要度固定为 0.5f，避免单次脉冲就触发阈值（需配合 Count 累积）。
         /// </summary>
         /// <param name="role">触发此脉冲的角色（Director 或 Freelancer）。</param>
         /// <param name="tick">当前游戏 tick。</param>
@@ -319,7 +309,7 @@ namespace RimLife.Mappers
                 DefName = "TimerPulse",
                 Tags = new List<string> { "TimerPulse", "System" },
                 Tick = tick,
-                Severity = "Minor",
+                Importance = 0.5f,
                 Actors = new List<EventActorRef>(),
                 MapHint = "",
                 Payload = new Dictionary<string, string>
@@ -341,7 +331,7 @@ namespace RimLife.Mappers
             public IReadOnlyList<string> Tags { get; set; }
             public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
-            public string Severity { get; set; }
+            public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }
@@ -389,7 +379,7 @@ namespace RimLife.Mappers
         }
 
         // ================================================================
-        // 信封标签/严重度映射
+        // 信封标签/重要度映射
         // ================================================================
 
         /// <summary>
@@ -446,20 +436,20 @@ namespace RimLife.Mappers
         }
 
         /// <summary>
-        /// 从 LetterDef 推导事件严重度。
+        /// 从 LetterDef 查表返回固定重要度值。
         /// </summary>
-        private static string MapLetterSeverity(LetterDef letterDef)
+        private static float MapLetterImportance(LetterDef letterDef)
         {
-            if (letterDef == null) return "Minor";
+            if (letterDef == null) return 1f;
 
             string defName = letterDef.defName ?? "";
 
             if (defName == "ThreatBig" || defName == "Death" || defName == "BadUrgent")
-                return "Extreme";
+                return 5f;
             if (defName == "ThreatSmall" || defName == "PositiveEvent" || defName == "NegativeEvent")
-                return "Major";
+                return 3f;
 
-            return "Minor";
+            return 1f;
         }
 
         /// <summary>

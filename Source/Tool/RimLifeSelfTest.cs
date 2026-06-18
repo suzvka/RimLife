@@ -325,7 +325,7 @@ namespace RimLife.Tool
             DumpObject("当前 TotalAppended", log.TotalAppended);
             DumpObject("当前 _events 数量", log.Count(EventQuery.All));
 
-            var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", new List<string> { "Selftest", "Social" }, 9999, "Minor");
+            var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", new List<string> { "Selftest", "Social" }, 9999, 1f);
             if (testEvent == null)
             {
                 Fail("MakeTestEvent 返回 null");
@@ -386,7 +386,7 @@ namespace RimLife.Tool
                     DumpObject("DefName", latest.DefName);
                     DumpObject("Tags", string.Join(", ", latest.Tags ?? new List<string>()));
                     DumpObject("Tick", latest.Tick);
-                    DumpObject("Severity", latest.Severity);
+                    DumpObject("Importance", latest.Importance);
                     DumpObject("MapHint", latest.MapHint);
                     if (latest.Actors != null)
                         Log.Message($"    Actors: {latest.Actors.Count} 个");
@@ -505,13 +505,13 @@ namespace RimLife.Tool
                 var pawn = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.FirstOrDefault();
                 if (pawn != null)
                 {
-                    var evt = EventCardMapper.FromDeath(pawn, null);
+                    var evt = EventCardMapper.FromDeath(pawn, null, 3f);
                     if (evt != null && evt.DefName == "PawnDeath")
                     {
                         Pass("FromDeath 构造成功");
                         DumpObject("  EventID", evt.EventID);
                         DumpObject("  Tags", string.Join(", ", evt.Tags ?? new List<string>()));
-                        DumpObject("  Severity", evt.Severity);
+                        DumpObject("  Importance", evt.Importance);
                     }
                     else
                         Fail("FromDeath 返回异常");
@@ -528,7 +528,7 @@ namespace RimLife.Tool
                 {
                     var intDef = DefDatabase<InteractionDef>.GetNamedSilentFail("Chat")
                               ?? DefDatabase<InteractionDef>.AllDefs.FirstOrDefault();
-                    var evt = EventCardMapper.FromSocialInteraction(pawns[0], pawns[1], intDef);
+                    var evt = EventCardMapper.FromSocialInteraction(pawns[0], pawns[1], intDef, 1f);
                     if (evt != null)
                     {
                         Pass("FromSocialInteraction 构造成功");
@@ -549,7 +549,7 @@ namespace RimLife.Tool
                 var pawn = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.FirstOrDefault();
                 if (pawn != null)
                 {
-                    var evt = EventCardMapper.FromFactionChange(pawn, pawn.Faction ?? Faction.OfPlayer);
+                    var evt = EventCardMapper.FromFactionChange(pawn, pawn.Faction ?? Faction.OfPlayer, 3f);
                     if (evt != null && evt.DefName == "FactionChange")
                     {
                         Pass("FromFactionChange 构造成功");
@@ -569,7 +569,7 @@ namespace RimLife.Tool
                 var pawn = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.FirstOrDefault();
                 if (pawn != null)
                 {
-                    var evt = EventCardMapper.FromMentalBreak(pawn, "Selftest", null);
+                    var evt = EventCardMapper.FromMentalBreak(pawn, "Selftest", null, 3f);
                     if (evt != null)
                     {
                         Pass("FromMentalBreak 构造成功");
@@ -674,7 +674,7 @@ namespace RimLife.Tool
             // --- IGameEvent ---
             try
             {
-                var evt = MakeTestEvent("serializer_test", new List<string> { "Test" }, 10000, "Major");
+                var evt = MakeTestEvent("serializer_test", new List<string> { "Test" }, 10000, 3f);
                 var json = CardSerializer.Default.SerializeEvent(evt);
                 if (json.Contains("serializer_test") && json.Contains("Test"))
                 {
@@ -691,8 +691,8 @@ namespace RimLife.Tool
             {
                 var events = new List<IGameEvent>
                 {
-                    MakeTestEvent("list_1", new List<string>{"A"}, 1, "Minor"),
-                    MakeTestEvent("list_2", new List<string>{"B"}, 2, "Major")
+                    MakeTestEvent("list_1", new List<string>{"A"}, 1, 1f),
+                    MakeTestEvent("list_2", new List<string>{"B"}, 2, 3f)
                 };
                 var json = CardSerializer.Default.SerializeEventList(events);
                 if (json.StartsWith("[") && json.Contains("list_1") && json.Contains("list_2"))
@@ -1155,7 +1155,7 @@ namespace RimLife.Tool
                 int before = pool.PendingCount;
 
                 // 追加测试事件
-                var testEvt = MakeTestEvent("driver_test_1", new List<string> { "Test", "Driver" }, 99999, "Major");
+                var testEvt = MakeTestEvent("driver_test_1", new List<string> { "Test", "Driver" }, 99999, 3f);
                 pool.Append(testEvt);
 
                 int afterAppend = pool.PendingCount;
@@ -1187,22 +1187,15 @@ namespace RimLife.Tool
             // --- 11.3 重要度计算 ---
             try
             {
-                var config = RimLifeCore.DriverConfig;
-                Pass($"DriverConfig: Minor={config.GetSeverityWeight("Minor")}, " +
-                     $"Major={config.GetSeverityWeight("Major")}, " +
-                     $"Extreme={config.GetSeverityWeight("Extreme")}");
-
                 var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
                 if (pool == null) { Skip("EventPool 不可用"); return; }
 
                 pool.DrainPending();
-                pool.Append(MakeTestEvent("imp_1", new List<string> { "Test" }, 1, "Minor"));
-                pool.Append(MakeTestEvent("imp_2", new List<string> { "Test" }, 2, "Major"));
-                pool.Append(MakeTestEvent("imp_3", new List<string> { "Test" }, 3, "Extreme"));
+                pool.Append(MakeTestEvent("imp_1", new List<string> { "Test" }, 1, 1f));
+                pool.Append(MakeTestEvent("imp_2", new List<string> { "Test" }, 2, 3f));
+                pool.Append(MakeTestEvent("imp_3", new List<string> { "Test" }, 3, 5f));
 
-                int expected = config.GetSeverityWeight("Minor")
-                             + config.GetSeverityWeight("Major")
-                             + config.GetSeverityWeight("Extreme");
+                float expected = 1f + 3f + 5f;
 
                 if (pool.TotalImportance == expected)
                     Pass($"TotalImportance 计算正确: {pool.TotalImportance} (expected {expected})");
@@ -1227,7 +1220,7 @@ namespace RimLife.Tool
 
                 // 添加少量 Minor 事件：数量达标
                 for (int i = 0; i < 3; i++)
-                    pool.Append(MakeTestEvent($"cnt_{i}", new List<string> { "Test" }, i, "Minor"));
+                    pool.Append(MakeTestEvent($"cnt_{i}", new List<string> { "Test" }, i, 1f));
 
                 if (callbackFired)
                     Pass("OnThresholdReached: 数量达标触发回调");
@@ -1301,7 +1294,7 @@ namespace RimLife.Tool
 
                 var testWs = wsManager.Create("PushTest", null, null, WorkspaceRole.Director);
 
-                var evt = MakeTestEvent("ws_test_1", new List<string> { "Test", "Combat" }, 1000, "Major");
+                var evt = MakeTestEvent("ws_test_1", new List<string> { "Test", "Combat" }, 1000, 3f);
                 bool pushed = wsManager.RouteEvents(testWs.Id, new List<IGameEvent> { evt });
                 if (pushed && testWs.EventPool.PendingCount == 1)
                     Pass($"RouteEvents 后 PendingCount=1");
@@ -1309,12 +1302,10 @@ namespace RimLife.Tool
                     Fail($"RouteEvents 后 PendingCount={testWs.EventPool.PendingCount} (expected 1)");
 
                 // 验证重要度
-                var config = RimLifeCore.DriverConfig;
-                int weight = config.GetSeverityWeight("Major");
-                if (testWs.EventPool.TotalImportance == weight)
-                    Pass($"TotalImportance={weight} (Major权重正确)");
+                if (testWs.EventPool.TotalImportance == 3f)
+                    Pass($"TotalImportance=3 (重要度正确)");
                 else
-                    Fail($"TotalImportance={testWs.EventPool.TotalImportance} (expected {weight})");
+                    Fail($"TotalImportance={testWs.EventPool.TotalImportance} (expected 3)");
 
                 // Drain
                 var drained = testWs.EventPool.DrainPending();
@@ -1337,7 +1328,7 @@ namespace RimLife.Tool
                 // 填充事件到阈值
                 var events = new List<IGameEvent>();
                 for (int i = 0; i < config.DirectorCountThreshold; i++)
-                    events.Add(MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, "Major"));
+                    events.Add(MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, 3f));
 
                 wsManager.RouteEvents(testWs.Id, events);
 
@@ -1357,13 +1348,13 @@ namespace RimLife.Tool
                 var config = RimLifeCore.DriverConfig;
                 var testWs = wsManager.Create("ActivationTest", null, null, WorkspaceRole.Director);
 
-                // 填充极端事件：1个Extreme即可满足重要性
+                // 填充高重要度事件：1个 importance=20 的事件即可满足重要性阈值
                 wsManager.RouteEvents(testWs.Id, new List<IGameEvent> {
-                    MakeTestEvent("act_1", new List<string> { "Test" }, 1, "Extreme")
+                    MakeTestEvent("act_1", new List<string> { "Test" }, 1, 20f)
                 });
 
                 int count = testWs.EventPool.PendingCount;
-                int importance = testWs.EventPool.TotalImportance;
+                float importance = testWs.EventPool.TotalImportance;
                 bool countOk = count >= config.DirectorCountThreshold;
                 bool impOk = importance >= config.DirectorImportanceThreshold;
 
@@ -1435,7 +1426,7 @@ namespace RimLife.Tool
         // 辅助
         // ================================================================
 
-        private static IGameEvent MakeTestEvent(string id, IReadOnlyList<string> tags, int tick, string severity)
+        private static IGameEvent MakeTestEvent(string id, IReadOnlyList<string> tags, int tick, float importance)
         {
             return new TestGameEvent
             {
@@ -1443,7 +1434,7 @@ namespace RimLife.Tool
                 DefName = "SelftestEvent",
                 Tags = tags,
                 Tick = tick,
-                Severity = severity,
+                Importance = importance,
                 Actors = new List<EventActorRef>
                 {
                     EventActorRef.Pawn("test_pawn_001", "TestPawn", "Initiator")
@@ -1460,7 +1451,7 @@ namespace RimLife.Tool
             public IReadOnlyList<string> Tags { get; set; }
             public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
-            public string Severity { get; set; }
+            public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }

@@ -37,7 +37,7 @@ namespace RimLife.Core
         int PendingCount { get; }
 
         /// <summary>pending 缓冲区中所有事件的重要度总和。</summary>
-        int TotalImportance { get; }
+        float TotalImportance { get; }
 
         /// <summary>
         /// 取出所有 pending 事件并清空缓冲区。
