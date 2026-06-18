@@ -1,46 +1,94 @@
 ## 项目概述
 
-RimLife 是一个 RimWorld 游戏模组（Mod），基于 LLM 实现游戏内剧情设计与增强。通过预处理底层数据、结构化剧情模板，配合大语言模型生成叙事内容。
+RimLife 是一个 RimWorld 游戏模组（Mod），作为 [NPCLife](../NPCLife) 框架的**游戏侧适配层**，负责：
+- 通过 Harmony 补丁拦截 RimWorld 游戏事件（袭击、社交互动、死亡等）
+- 将原始游戏数据映射为 NPCLife 框架的标准 Card 结构
+- 提供 RimWorld 特定的 MCP 工具（角色查询、殖民地概览、记忆系统等）
+- 管理配置面板 UI 和 Mod 设置
+- 定义各 Agent 角色的系统提示词
+
+Agent 循环、LLM 通信、工作空间管理、MCP 协议、事件总线等框架机制均由 **NPCLife** 提供。
 
 ## 技术栈
 
 - 语言: C#
-- 运行时: .NET (RimWorld 1.6 / Unity)
+- 运行时: .NET Framework 4.8 (RimWorld 1.6 / Unity)
 - 构建: MSBuild (`RimLife.csproj`, `RimLife.sln`)
 - 测试: xUnit (`RimLife.Tests/`)
+- 框架依赖: **NPCLife** (NuGet 本地源 `C:\LocalNuGet\`)
+- Harmony: 运行时 IL 注入，拦截游戏方法
 - UI 框架: RimWorld IMGUI (Verse.Widgets / Listing_Standard)
-- LLM 集成: OpenAI 兼容 / Anthropic API
+- LLM 集成: 由 NPCLife 的 LlmAccessor 提供 (OpenAI 兼容 / Anthropic API)
 
 ## 目录结构
 
 ```
 Source/
-  UI/           - 配置面板 UI（ConfigPanelWindow, ConfigPanelLayout, Pages/, Helpers/, Models/）
-  Framework/    - 框架层（AgentPipeline, LLM, MCP, Script, EventBus 等）
-  Data/         - 数据层（PawnPro, EnvironmentPro, Colony, Events）
-  Infrastructure/ - 基础设施（LlmAccessor, Knowledge, MCP providers, SaveStore）
-  Core/         - 核心接口（ILlmService, IKnowledgeBase 等）
-  Agent/        - Agent 循环
-  Mappers/      - Card 映射器
-  Cards/        - 数据结构（EventCard, CharacterCard 等）
-  Settings/     - Mod 设置
-  Tool/         - 自检工具
-Defs/           - RimWorld XML 定义
-Patches/        - XML 补丁
-Languages/      - 多语言（ChineseSimplified）
-Libs/           - 外部依赖 DLL
-1.6/Assemblies/ - RimWorld 1.6 兼容 DLL
+  Data/           - RimWorld 数据提取
+    PawnPro/      - 角色数据（健康/心情/技能/需求/背景/社交/人格/视角/记忆）
+    EnvironmentPro/ - 环境数据
+    Colony/       - 殖民地快照
+    Events/       - Harmony 事件钩子（EventHooks.cs）
+  Infrastructure/ - 桥接与适配
+    RimLifeCore.cs       - 核心服务入口，组装 NPCLife 组件
+    RimLifeHarmony.cs    - Mod 初始化（注册 ContentProvider、启动 Harmony patch）
+    RimWorldAgentDriver.cs - 每帧驱动（定时器脉冲 + 主线程回调）
+    RimWorldSaveStore.cs - 存档读写适配
+    RimWorldLogger.cs    - 日志适配
+    Mcp/                 - RimWorld 特定 MCP 工具（角色/殖民地/关系/环境/记忆查询）
+    Knowledge/           - 游戏 Def 知识库
+  Mappers/        - RimWorld 对象 → NPCLife Card 映射
+    EventCardMapper.cs   - 事件卡映射（Incident/Death/MentalBreak/Social/Quest/Letter）
+    ColonyContextMapper.cs - 殖民地上下文映射
+    EnvironmentCardMapper.cs - 环境卡映射
+    ObjectiveCardMapper.cs   - 目标卡映射
+  UI/             - 配置面板
+    Pages/        - 各配置页面（Connection, Narrative, Knowledge, Advanced, Debug, Prompt）
+    Helpers/      - UI 绘制原语（UIHelper.cs）
+    Models/       - UI 数据模型
+  Settings/       - Mod 设置入口
+  Tool/           - 自检工具（RimLifeSelfTest.cs）
+
+Prompts/          - 三个 Agent 角色的系统提示词
+  DirectorPrompt.txt    - 导演 Agent
+  ScreenwriterPrompt.txt - 编剧 Agent
+  FreelancerPrompt.txt  - 临时工 Agent
+
+Defs/             - RimWorld XML 定义（Hediff 等）
+Patches/          - XML 补丁（Trait 扩展等）
+Languages/        - 多语言（ChineseSimplified）
+Libs/             - 外部依赖 DLL（Bubbles 等）
+1.6/Assemblies/   - RimWorld 1.6 编译产物 + NPCLife.dll
 ```
+
+## 框架依赖：NPCLife
+
+本项目的核心框架能力来自 **NPCLife**（`E:\NPCLife`），通过 NuGet 包（本地源 `C:\LocalNuGet\`）引用。NPCLife 提供：
+
+| 模块 | 路径 | 说明 |
+|---|---|---|
+| AgentLoop | `Agent/AgentLoop.cs` | Agent 循环引擎（Drain → Prompt → LLM → 工具调用） |
+| MCP 基础设施 | `Framework/Mcp/` | Skill 注册表、工具调用、序列化 |
+| Workspace 管理 | `Workspace/` | 工作空间生命周期、事件池、阈值触发 |
+| 三角色工具 | `Workspace/DirectionMcpTools.cs` | 导演工具（create_workspace, route_events 等） |
+|  | `Workspace/WritingMcpTools.cs` | 编剧工具（push_line, finish_round 等） |
+|  | `Workspace/FreelancerMcpTools.cs` | 临时工工具 |
+| LLM 适配 | `Infrastructure/Llm/` | OpenAI / Anthropic API 适配器 |
+| 事件系统 | `Framework/EventBus.cs` | 事件总线 |
+| 台词推送 | `Infrastructure/ScriptDeliveryService.cs` | 台词解析与投递 |
 
 ## 关键入口 / 核心模块
 
-- `Source/UI/ConfigPanelWindow.cs` - 浮动配置面板窗口入口
+- `Source/Infrastructure/RimLifeHarmony.cs` - Mod 启动入口，注册 ContentProvider、启动 Harmony patch
+- `Source/Infrastructure/RimLifeCore.cs` - 核心服务，组装 NPCLife 组件、管理 Agent 生命周期
+- `Source/Infrastructure/RimWorldAgentDriver.cs` - 每帧驱动，定时器脉冲 + 主线程回调
+- `Source/Data/Events/EventHooks.cs` - Harmony 补丁，拦截 RimWorld 事件注入事件池
+- `Source/Mappers/EventCardMapper.cs` - 将 RimWorld 事件转化为 NPCLife IGameEvent
+- `Source/Infrastructure/Mcp/` - RimWorld 特定 MCP 工具集
+- `Source/UI/ConfigPanelWindow.cs` - 配置面板入口
 - `Source/UI/ConfigPanelLayout.cs` - 三区布局（侧栏 + 内容区 + 状态栏）
-- `Source/UI/Helpers/UIHelper.cs` - UI 绘制辅助工具（间距/颜色/按钮/卡片/分段选择器等统一原语）
-- `Source/UI/Pages/` - 各配置页面（Connection, Narrative, Knowledge, Advanced, Debug）
-- `Source/UI/Models/LlmCredentialManager.cs` - LLM 凭证管理器（单例，全局持久化）
-- `Source/Infrastructure/RimLifeCore.cs` - 核心服务入口
-- `Source/Framework/AgentPipeline.cs` - Agent 管线
+- `Source/UI/Helpers/UIHelper.cs` - UI 绘制辅助（间距/颜色/按钮/卡片/分段选择器等统一原语）
+- `Prompts/` - 三个 Agent 角色的系统提示词
 
 ## 运行与预览
 
