@@ -29,34 +29,12 @@
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="NPCLife\**" />
 	  <Compile Remove="Source\RimLife\**" />
 	  <Compile Remove="RimLife.Tests\**" />
-	  <EmbeddedResource Remove="NPCLife\**" />
 	  <EmbeddedResource Remove="Source\RimLife\**" />
 	  <EmbeddedResource Remove="RimLife.Tests\**" />
-	  <None Remove="NPCLife\**" />
 	  <None Remove="Source\RimLife\**" />
 	  <None Remove="RimLife.Tests\**" />
-	</ItemGroup>
-
-	<!-- Exclude files migrated to NPCLife -->
-	<ItemGroup>
-	  <Compile Remove="Source\Agent\**" />
-	  <Compile Remove="Source\Cards\**" />
-	  <Compile Remove="Source\Core\**" />
-	  <Compile Remove="Source\Driver\**" />
-	  <Compile Remove="Source\Framework\**" />
-	  <Compile Remove="Source\Workspace\**" />
-	  <Compile Remove="Source\Infrastructure\InteractionHistoryStore.cs" />
-	  <Compile Remove="Source\Infrastructure\ScriptDeliveryService.cs" />
-	  <Compile Remove="Source\Infrastructure\Knowledge\BuiltInKnowledgeBase.cs" />
-	  <Compile Remove="Source\Infrastructure\Llm\AnthropicAdapter.cs" />
-	  <Compile Remove="Source\Infrastructure\Llm\CredentialRegistry.cs" />
-	  <Compile Remove="Source\Infrastructure\Llm\LlmAccessor.cs" />
-	  <Compile Remove="Source\Infrastructure\Llm\OpenAiAdapter.cs" />
-	  <Compile Remove="Source\Infrastructure\Mcp\SystemMcpTools.cs" />
-	  <Compile Remove="Source\Infrastructure\Mcp\KnowledgeMcpTools.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -65,7 +43,7 @@
 
 	<!-- Reference NPCLife framework -->
 	<ItemGroup>
-	  <ProjectReference Include="NPCLife\NPCLife.csproj" />
+	  <PackageReference Include="NPCLife" Version="1.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
