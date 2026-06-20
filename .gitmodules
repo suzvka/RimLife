@@ -1,0 +1,3 @@
+[submodule "ext/NPCLife"]
+	path = ext/NPCLife
+	url = https://github.com/suzvka/NPCLife.git

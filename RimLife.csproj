@@ -31,19 +31,22 @@
 	<ItemGroup>
 	  <Compile Remove="Source\RimLife\**" />
 	  <Compile Remove="RimLife.Tests\**" />
+	  <Compile Remove="ext\**" />
 	  <EmbeddedResource Remove="Source\RimLife\**" />
 	  <EmbeddedResource Remove="RimLife.Tests\**" />
+	  <EmbeddedResource Remove="ext\**" />
 	  <None Remove="Source\RimLife\**" />
 	  <None Remove="RimLife.Tests\**" />
+	  <None Remove="ext\**" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <EmbeddedResource Include="Prompts\*.txt" />
 	</ItemGroup>
 
-	<!-- Reference NPCLife framework -->
+	<!-- Reference NPCLife framework (submodule) -->
 	<ItemGroup>
-	  <PackageReference Include="NPCLife" Version="1.0.0" />
+	  <ProjectReference Include="ext\NPCLife\src\NPCLife\NPCLife.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
