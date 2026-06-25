@@ -1242,8 +1242,7 @@ namespace RimLife.Tool
                 if (director != null)
                 {
                     Pass("DirectorAgent 已创建");
-                    DumpObject("  IsProcessing", director.IsProcessing);
-                    DumpObject("  CurrentRound", director.CurrentRound);
+                    DumpObject("  State", director.State);
                 }
                 else
                     Skip("DirectorAgent 未创建 (SaveStore 未就绪或 LLM 未配置)");
