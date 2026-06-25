@@ -1,3 +1,4 @@
+using NPCLife.Framework;
 using RimLife.UI;
 using UnityEngine;
 using Verse;
@@ -55,6 +56,13 @@ namespace RimLife.Settings
 
         public override string SettingsCategory() => "RimLife";
 
-        public override void DoSettingsWindowContents(Rect inRect) => _layout.Draw(inRect);
+        public override void DoSettingsWindowContents(Rect inRect)
+        {
+            // 主页没有 GameComponent，不会触发 RimWorldAgentDriver.GameComponentUpdate，
+            // 因此 MainThreadDispatcher 队列无人消费。此处每帧手动 Drain，
+            // 确保异步操作（如模型发现、凭证测试）的回调能在主页执行。
+            MainThreadDispatcher.DrainQueue();
+            _layout.Draw(inRect);
+        }
     }
 }

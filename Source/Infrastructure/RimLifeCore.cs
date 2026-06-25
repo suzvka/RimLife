@@ -175,7 +175,7 @@ namespace RimLife.Infrastructure
             // 清理 LLM 组件
             _llmAccessor?.Dispose();
             _llmAccessor = null;
-            _credentialRegistry = null;
+            _credentialManager = null;
 
             // 清理台词推送服务
             _scriptDeliveryService?.Dispose();
@@ -313,8 +313,8 @@ namespace RimLife.Infrastructure
             FrameworkStatus.RegisterReporter("Llm", () => new ComponentStatus
             {
                 Name = "Llm",
-                IsAvailable = _credentialRegistry != null && _credentialRegistry.HasAnyCredential,
-                Detail = _credentialRegistry != null ? $"{_credentialRegistry.GetActiveAliases().Count} active" : "not initialized"
+                IsAvailable = _credentialManager != null && _credentialManager.HasCredentials,
+                Detail = _credentialManager != null ? $"{_credentialManager.GetActivationOrder().Count} active" : "not initialized"
             });
 
             FrameworkStatus.RegisterReporter("Workspace", () => new ComponentStatus
@@ -603,14 +603,16 @@ namespace RimLife.Infrastructure
                             _freelancerAgent = new AgentLoop(
                                 pool: freelancerWs.EventPool,
                                 llm: LlmAccessor,
-                                credentialRegistry: CredentialRegistry,
+                                credentialStore: CredentialManager,
                                 systemPrompt: BuildFreelancerSystemPrompt(freelancerWs),
                                 skillIds: new[] { "workspace_freelancer", "character_query", "event_query" },
                                 maxRounds: DriverConfig.MaxAgentRounds,
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
                                 knowledgeService: KnowledgeService,
-                                temperature: PromptConfig.Temperature);
+                                temperature: PromptConfig.Temperature,
+                                modelRefsJson: freelancerWs.ModelRefs,
+                                currentModel: freelancerWs.CurrentModel);
                         }
                     }
                 }
@@ -636,7 +638,7 @@ namespace RimLife.Infrastructure
                             _directorAgent = new AgentLoop(
                                 pool: directorWs.EventPool,
                                 llm: LlmAccessor,
-                                credentialRegistry: CredentialRegistry,
+                                credentialStore: CredentialManager,
                                 systemPrompt: BuildDirectorSystemPrompt(),
                                 skillIds: new[] { "workspace_direction", "colony_overview", "character_query", "event_query", "knowledge_management" },
                                 maxRounds: DriverConfig.MaxAgentRounds,
@@ -644,7 +646,9 @@ namespace RimLife.Infrastructure
                                 serializer: CardSerializer.Default,
                                 contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
                                 knowledgeService: KnowledgeService,
-                                temperature: PromptConfig.Temperature);
+                                temperature: PromptConfig.Temperature,
+                                modelRefsJson: directorWs.ModelRefs,
+                                currentModel: directorWs.CurrentModel);
                         }
                     }
                 }
@@ -694,14 +698,16 @@ namespace RimLife.Infrastructure
                 var agent = new AgentLoop(
                     pool: ws.EventPool,
                     llm: LlmAccessor,
-                    credentialRegistry: CredentialRegistry,
+                    credentialStore: CredentialManager,
                     systemPrompt: BuildScreenwriterSystemPrompt(ws),
                     skillIds: skillIds.ToArray(),
                     maxRounds: DriverConfig.MaxAgentRounds,
                     logger: Logger,
                     serializer: CardSerializer.Default,
                     knowledgeService: KnowledgeService,
-                    temperature: PromptConfig.Temperature);
+                    temperature: PromptConfig.Temperature,
+                    modelRefsJson: ws.ModelRefs,
+                    currentModel: ws.CurrentModel);
 
                 _screenwriters[workspaceId] = agent;
                 Logger?.Message($"[RimLife.Core] ScreenwriterAgent created for workspace '{ws.Label}' ({workspaceId})");
@@ -1003,22 +1009,22 @@ namespace RimLife.Infrastructure
             }
         }
 
-        private static CredentialRegistry _credentialRegistry;
-        private static readonly object _credentialRegistryLock = new object();
+        private static CredentialRegistry _credentialManager;
+        private static readonly object _credentialManagerLock = new object();
 
         /// <summary>
-        /// 凭证注册表实例。管理模型代号 → 凭证三元组的映射。
+        /// 凭证管理器实例。管理凭证名 → 凭证的映射。
         /// 首次访问时延迟创建，从 RimLifeModSettings 加载持久化状态。
         /// </summary>
-        public static CredentialRegistry CredentialRegistry
+        public static ICredentialManager CredentialManager
         {
             get
             {
-                if (_credentialRegistry == null)
+                if (_credentialManager == null)
                 {
-                    lock (_credentialRegistryLock)
+                    lock (_credentialManagerLock)
                     {
-                        if (_credentialRegistry == null)
+                        if (_credentialManager == null)
                         {
                             string initialJson = null;
                             try
@@ -1028,12 +1034,7 @@ namespace RimLife.Infrastructure
                             }
                             catch { }
 
-                            _credentialRegistry = new CredentialRegistry(
-                                serializeState: () =>
-                                {
-                                    // 序列化由 CredentialRegistry 内部处理
-                                    return null;
-                                },
+                            _credentialManager = new CredentialRegistry(
                                 persistAction: json =>
                                 {
                                     try
@@ -1051,7 +1052,7 @@ namespace RimLife.Infrastructure
                         }
                     }
                 }
-                return _credentialRegistry;
+                return _credentialManager;
             }
         }
 

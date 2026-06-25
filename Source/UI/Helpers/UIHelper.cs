@@ -95,6 +95,7 @@ namespace RimLife.UI
 
         /// <summary>
         /// 绘制一个卡片式容器。为逻辑分组提供视觉边界。
+        /// 注意：对于需要自适应高度的卡片，请使用 LayoutHelper.AdaptiveCardTracker。
         /// </summary>
         /// <param name="listing">Listing 实例。</param>
         /// <param name="title">卡片标题（可为 null，null 时不绘制标题）。</param>

@@ -31,7 +31,7 @@ namespace RimLife.UI
         public readonly List<IConfigPage> Pages;
         public IConfigPage CurrentPage { get; private set; }
         private Vector2 _scrollPosition;
-        private float _measuredContentHeight = 800f;
+        private readonly LayoutHelper.ScrollHeightTracker _scrollTracker = new LayoutHelper.ScrollHeightTracker();
 
         // ================================================================
         // 构造
@@ -133,6 +133,8 @@ namespace RimLife.UI
 
                 if (Widgets.ButtonInvisible(itemRect))
                 {
+                    if (CurrentPage != page)
+                        _scrollTracker.Reset(); // 切换页面时重置高度追踪
                     CurrentPage = page;
                     _scrollPosition = Vector2.zero;
                 }
@@ -158,9 +160,8 @@ namespace RimLife.UI
                 rect.height - ContentPadding * 2
             );
 
-            // 使用上一帧测量的实际内容高度设定滚动区，保证所有绘制内容可滚动
-            // 下限为可见区域的 3 倍，避免小页面出现无意义的短滚动
-            var scrollHeight = Mathf.Max(innerRect.height * 3f, _measuredContentHeight);
+            // 使用 LayoutHelper 统一计算滚动高度（含过估算因子，消除内容截断）
+            var scrollHeight = _scrollTracker.GetScrollHeight(innerRect.height);
             var viewRect = new Rect(innerRect.x, innerRect.y, innerRect.width - 16f, scrollHeight);
             Widgets.BeginScrollView(innerRect, ref _scrollPosition, viewRect);
 
@@ -179,9 +180,7 @@ namespace RimLife.UI
             // 测量实际内容高度，供下一帧使用（IMGUI 双帧收敛）
             // 使用 GetRect(0) 获取当前位置而不推进游标
             var endMarker = listing.GetRect(0f);
-            var actualHeight = endMarker.y + ContentPadding;
-            if (actualHeight > 100f) // 过滤异常值
-                _measuredContentHeight = actualHeight;
+            _scrollTracker.UpdateMeasurement(endMarker.y + ContentPadding);
 
             listing.End();
             Widgets.EndScrollView();
@@ -202,10 +201,10 @@ namespace RimLife.UI
             var leftRect = new Rect(rect.x + padding, rect.y + 4f, rect.width * 0.65f, rect.height - 8f);
             var rightRect = new Rect(rect.x + rect.width * 0.65f, rect.y + 4f, rect.width * 0.35f - padding, rect.height - 8f);
 
-            var registry = RimLifeCore.CredentialRegistry;
-            bool configured = registry != null && registry.HasAnyCredential;
-            var activeAliases = configured ? registry.GetActiveAliases() : null;
-            string modelInfo = (activeAliases != null && activeAliases.Count > 0) ? activeAliases[0] : "?";
+            var manager = RimLifeCore.CredentialManager;
+            bool configured = manager != null && manager.HasCredentials;
+            var activeOrder = configured ? manager.GetActivationOrder() : null;
+            string modelInfo = (activeOrder != null && activeOrder.Count > 0) ? activeOrder[0] : "?";
             string statusColor = configured ? "#88FF88" : "#888888";
             string statusIcon = configured ? "●" : "○";
             string statusText = configured ? $"已配置 ({modelInfo})" : "未配置";

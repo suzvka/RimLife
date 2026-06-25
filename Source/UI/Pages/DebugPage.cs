@@ -21,14 +21,61 @@ namespace RimLife.UI.Pages
         private Vector2 _logScrollPosition;
         private bool _autoScroll = true;
 
+        /// <summary>日志区固定高度。独立滚动需要固定尺寸。</summary>
+        private const float LogAreaHeight = 420f;
+
         public void Draw(Rect rect, Listing_Standard listing)
         {
             // 控制栏
             DrawControlBar(listing);
             listing.Gap(GapSmall);
 
-            // 日志显示区
-            DrawLogWindow(listing.GetRect(420f));
+            // 使用 LayoutHelper 从父 listing 分配固定高度子区域，
+            // 父 ScrollView 的 viewRect 会正确包含此高度，避免截断。
+            var outerRect = LayoutHelper.AllocateSubScrollRegion(listing, LogAreaHeight, out var innerRect);
+
+            // 终端窗口背景
+            Widgets.DrawBoxSolid(outerRect, new Color(0.05f, 0.05f, 0.05f, 1f));
+
+            // 日志内容区（减去底部状态行空间）
+            var contentRect = new Rect(innerRect.x, innerRect.y, innerRect.width, innerRect.height - 28f);
+
+            // 直接从增量文本缓冲区读取（无过滤、无重建）
+            var logText = LogBuffer.GetText();
+            if (string.IsNullOrEmpty(logText))
+                logText = "<color=#555555>（暂无日志）</color>";
+
+            var count = LogBuffer.Count;
+
+            // 计算换行后的实际文本高度
+            var textWidth = contentRect.width - 16f; // 留出滚动条空间
+            var textHeight = Text.CalcHeight(logText, textWidth);
+            var totalHeight = Mathf.Max(contentRect.height, textHeight + 10f);
+            var viewRect = new Rect(contentRect.x, contentRect.y, textWidth, totalHeight);
+
+            // 内层独立 ScrollView（在父 ScrollView 分配的固定高度区域内）
+            Widgets.BeginScrollView(contentRect, ref _logScrollPosition, viewRect);
+
+            var textRect = new Rect(viewRect.x, viewRect.y, textWidth, textHeight);
+            var originalAnchor = Text.Anchor;
+            Text.Anchor = TextAnchor.UpperLeft;
+            Widgets.Label(textRect, logText);
+            Text.Anchor = originalAnchor;
+
+            Widgets.EndScrollView();
+
+            // 智能自动滚动：仅在用户处于底部附近时强制滚动到底部
+            if (_autoScroll && count > 0)
+            {
+                var maxScrollY = totalHeight - contentRect.height;
+                var nearBottomThreshold = 30f;
+                if (maxScrollY <= 0 || _logScrollPosition.y >= maxScrollY - nearBottomThreshold)
+                    _logScrollPosition.y = maxScrollY;
+            }
+
+            // 底部状态行
+            var statusRect = new Rect(innerRect.x, innerRect.y + innerRect.height - 24f, innerRect.width, 20f);
+            Widgets.Label(statusRect, $"<color=#888888><size=11>共 {count} 条日志 | 缓冲区: {count}/{500}</size></color>");
         }
 
         private void DrawControlBar(Listing_Standard listing)
@@ -55,57 +102,6 @@ namespace RimLife.UI.Pages
             {
                 ExportLogs();
             }
-        }
-
-        private void DrawLogWindow(Rect rect)
-        {
-            // 终端窗口背景
-            Widgets.DrawBoxSolid(rect, new Color(0.05f, 0.05f, 0.05f, 1f));
-
-            // 内边距
-            var innerRect = new Rect(rect.x + GapSmall, rect.y + GapSmall, rect.width - GapSmall * 2, rect.height - 40f);
-
-            // 直接从增量文本缓冲区读取（无过滤、无重建）
-            var logText = LogBuffer.GetText();
-            if (string.IsNullOrEmpty(logText))
-                logText = "<color=#555555>（暂无日志）</color>";
-
-            var count = LogBuffer.Count;
-
-            // 计算换行后的实际文本高度
-            var textWidth = innerRect.width - 16f; // 留出滚动条空间
-            var textHeight = Text.CalcHeight(logText, textWidth);
-            var totalHeight = Mathf.Max(innerRect.height, textHeight + 10f);
-            var viewRect = new Rect(innerRect.x, innerRect.y, textWidth, totalHeight);
-
-            // 滚动视图
-            Widgets.BeginScrollView(innerRect, ref _logScrollPosition, viewRect);
-
-            // 以单个 Label 绘制整个文本块，Unity GUI 自动处理换行
-            var textRect = new Rect(viewRect.x, viewRect.y, textWidth, textHeight);
-            var originalAnchor = Text.Anchor;
-            Text.Anchor = TextAnchor.UpperLeft;
-            Widgets.Label(textRect, logText);
-            Text.Anchor = originalAnchor;
-
-            Widgets.EndScrollView();
-
-            // 智能自动滚动：仅在用户处于底部附近时强制滚动到底部
-            // 如果用户手动向上翻阅（距底部超过阈值），不干扰其阅读位置
-            if (_autoScroll && count > 0)
-            {
-                var maxScrollY = totalHeight - innerRect.height;
-                var nearBottomThreshold = 30f;
-
-                if (maxScrollY <= 0 || _logScrollPosition.y >= maxScrollY - nearBottomThreshold)
-                {
-                    _logScrollPosition.y = maxScrollY;
-                }
-            }
-
-            // 底部状态行
-            var statusRect = new Rect(rect.x + GapSmall, rect.y + rect.height - 28f, rect.width - GapSmall * 2, 20f);
-            Widgets.Label(statusRect, $"<color=#888888><size=11>共 {count} 条日志 | 缓冲区: {count}/{500}</size></color>");
         }
 
         private void CopyAllLogs()

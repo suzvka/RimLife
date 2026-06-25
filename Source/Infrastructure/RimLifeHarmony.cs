@@ -42,8 +42,8 @@ namespace RimLife.Infrastructure
                 // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
                 RimLifeCore.EnsureSkillRegistryInitialized();
 
-                // 触发凭证注册表延迟加载（从 ModSettings 加载持久化状态）
-                var _ = RimLifeCore.CredentialRegistry;
+                // 触发凭证管理器延迟加载（从 ModSettings 加载持久化状态）
+                var _ = RimLifeCore.CredentialManager;
 
                 logger.Message("[RimLife.Infrastructure] Startup complete.");
             }
