@@ -349,7 +349,7 @@ namespace RimLife.Mappers
 
             string name = def.defName ?? "";
 
-            // 首标签：具体事件类型（从 defName 提取关键词）
+            // 从事件 defName 推导叙事标签，供 LLM 按主题分流事件。
             if (name.StartsWith("Raid") || name.Contains("Raid") || name.Contains("Attack"))
                 tags.Add("Combat");
             else if (name.Contains("Trade") || name.Contains("Trader"))
@@ -419,7 +419,7 @@ namespace RimLife.Mappers
             }
             else
             {
-                // 尝试从 defName 推断
+                // 未知 defName 的回退推断：从名称中检测已知领域关键词。
                 string lower = defName.ToLowerInvariant();
                 if (lower.Contains("threat") || lower.Contains("raid") || lower.Contains("attack"))
                     tags.Add("Combat");

@@ -8,8 +8,8 @@ namespace RimLife
 {
 	/// <summary>
 	/// 表示 Pawn 技能的快照，包括等级和热情。
-	/// 注意：此数据为快照，不保证其时序一致性。
 	/// </summary>
+	/// <remarks>此数据为快照，不保证时序一致性。</remarks>
 	public class SkillsInfo
 	{
 		/// <summary>

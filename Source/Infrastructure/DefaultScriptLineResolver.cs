@@ -40,7 +40,7 @@ namespace RimLife.Infrastructure
                     }
                     else
                     {
-                        // Pawn 未找到（可能已死亡或离开），保留原始 ID 以便调试
+                        // Pawn 已死亡或离开地图，保留原始 ID 供调试追溯。
                         line.SpeakerName = $"?{line.SpeakerId}";
                     }
                 }

@@ -10,8 +10,8 @@ namespace RimLife
 {
     /// <summary>
     /// 表示单个任务 (Quest) 的快照。
-    /// 注意：此数据为快照，不保证其时序一致性。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class QuestInfo
     {
         /// <summary>任务唯一标识。</summary>

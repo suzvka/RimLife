@@ -196,7 +196,7 @@ namespace RimLife.Infrastructure
             {
                 if (_skillRegistryInitialized) return;
 
-                // 先标记为初始化中，防止 RegisterHookProvider 递归调用
+                // 提前置位以阻断重入：RegisterHookProvider 可能回调本方法。
                 _skillRegistryInitialized = true;
 
                 McpSkillRegistry.InitializeDefaults();
@@ -767,7 +767,7 @@ namespace RimLife.Infrastructure
             var pc = PromptConfig;
             var sb = new System.Text.StringBuilder(pc.ScreenwriterPrompt ?? NPCLife.Driver.PromptConfig.DefaultScreenwriterPrompt);
 
-            // 运行时动态上下文追加
+            // 将工作空间上下文（ID、关联角色、格式规范）注入系统提示词。
             sb.AppendLine();
             sb.AppendLine();
             sb.AppendLine($"工作空间 ID：{ws.Id}");
@@ -791,7 +791,7 @@ namespace RimLife.Infrastructure
             var pc = PromptConfig;
             var sb = new System.Text.StringBuilder(pc.FreelancerPrompt ?? NPCLife.Driver.PromptConfig.DefaultFreelancerPrompt);
 
-            // 运行时动态上下文追加
+            // 将工作空间上下文（ID、关联角色、格式规范）注入系统提示词。
             sb.AppendLine();
             sb.AppendLine();
             sb.AppendLine($"工作空间 ID：{ws.Id}");

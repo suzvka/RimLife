@@ -10,8 +10,8 @@ namespace RimLife
 {
     /// <summary>
     /// 表示Pawn背景故事信息的快照。
-    /// 注意：此数据是快照，其时间一致性无法保证。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class BackstoryInfo
     {
         /// <summary>

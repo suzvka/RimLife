@@ -13,8 +13,8 @@ namespace RimLife
 {
     /// <summary>
     /// 表示 Pawn 当前活动的快照。
-    /// 注意：此数据是快照，其时间一致性不能得到保证。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class ActivityInfo
     {
         public string Posture { get; }             // 姿态

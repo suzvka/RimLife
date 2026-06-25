@@ -99,9 +99,10 @@ namespace RimLife.Infrastructure.Knowledge
             var results = new List<KnowledgeEntry>();
             var collected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+            // 渐进匹配策略：defName 精确 → label 精确 → label 包含 → description 包含，从严格到宽松逐级回退。
             foreach (var resolver in Resolvers)
             {
-                // 1. defName 精确匹配（DefDatabase O(1) 查找）
+                // defName 精确匹配 — 最严格，O(1) DefDatabase 查找
                 var def = resolver.Lookup(term);
                 if (def != null)
                 {
@@ -113,7 +114,7 @@ namespace RimLife.Infrastructure.Knowledge
                 var allDefs = resolver.AllDefs();
                 if (allDefs == null) continue;
 
-                // 2. label 精确匹配
+                // label 精确匹配 — 次严格
                 foreach (var d in allDefs)
                 {
                     if (d == null) continue;
@@ -128,7 +129,7 @@ namespace RimLife.Infrastructure.Knowledge
                     }
                 }
 
-                // 3. label 包含匹配
+                // label 包含匹配 — 宽松
                 foreach (var d in allDefs)
                 {
                     if (d == null) continue;
@@ -143,7 +144,7 @@ namespace RimLife.Infrastructure.Knowledge
                     }
                 }
 
-                // 4. description 包含匹配（兜底，最宽松）
+                // description 包含匹配 — 兜底，最宽松
                 foreach (var d in allDefs)
                 {
                     if (d == null) continue;

@@ -95,13 +95,12 @@ namespace RimLife.UI
 
         /// <summary>
         /// 绘制一个卡片式容器。为逻辑分组提供视觉边界。
-        /// 返回卡片内部可用区域的起始 Y（调用方自行管理 listing 游标）。
-        /// 注意：此方法绘制背景和标题，调用方需在返回后继续绘制内容。
         /// </summary>
         /// <param name="listing">Listing 实例。</param>
         /// <param name="title">卡片标题（可为 null，null 时不绘制标题）。</param>
         /// <param name="contentHeight">卡片内容区估算高度（用于绘制背景）。</param>
         /// <returns>卡片背景 Rect，供调用方参考。</returns>
+        /// <remarks>此方法绘制背景和标题，调用方需在返回后继续绘制内容。</remarks>
         public static Rect BeginCard(Listing_Standard listing, string title, float contentHeight)
         {
             listing.Gap(GapTiny);

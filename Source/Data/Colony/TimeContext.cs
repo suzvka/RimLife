@@ -10,8 +10,8 @@ namespace RimLife
 {
     /// <summary>
     /// 时间上下文快照。轻量级值类型，不需要 Pawn 参数。
-    /// 注意：此数据为快照，不保证其时序一致性。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public struct TimeContext
     {
         /// <summary>当前游戏 tick。</summary>

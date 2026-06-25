@@ -10,8 +10,8 @@ namespace RimLife
 {
     /// <summary>
     /// 表示 Pawn 的社交关系网快照（独立模块，双向查询）。
-    /// 注意：此数据为快照，不保证其时序一致性。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class SocialInfo
     {
         /// <summary>所有直接社交关系。</summary>

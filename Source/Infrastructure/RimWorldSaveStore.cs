@@ -108,6 +108,5 @@ namespace RimLife.Infrastructure
             RimLifeCore.SaveStore = this;
         }
 
-        // JSON 序列化已统一至 Framework.JsonParser
     }
 }

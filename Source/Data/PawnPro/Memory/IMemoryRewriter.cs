@@ -40,8 +40,8 @@ namespace RimLife
 
     /// <summary>
     /// 记忆重写结果：包含更新后的 LTM 列表和新的短期回顾。
-    /// 注意：即时心境不在此结果中，它由 LLM 通过独立 MCP 工具主动写入。
     /// </summary>
+    /// <remarks>即时心境不在此结果中，它由 LLM 通过独立 MCP 工具主动写入。</remarks>
     public class MemoryRewriteResult
     {
         /// <summary>重写后的完整 LTM 列表（替换旧列表）。</summary>

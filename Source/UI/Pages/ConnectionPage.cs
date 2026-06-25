@@ -55,12 +55,12 @@ namespace RimLife.UI.Pages
         // API Key 显示切换
         private bool _showApiKey;
 
-        // 手动添加模型输入
+        // 用户手动输入的模型名称缓存（编辑器内临时输入，尚未持久化到凭证）。
         private Dictionary<string, string> _manualModelInputs = new Dictionary<string, string>();
 
         private CancellationTokenSource _discoveryCts;
 
-        // 缓存
+        // 凭证注册表快捷访问器
         private ICredentialRegistry Registry => RimLifeCore.CredentialRegistry;
 
         // ================================================================

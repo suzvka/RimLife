@@ -10,14 +10,14 @@ namespace RimLife
 {
     /// <summary>
     /// 表示 Pawn 能看到的内容快照。
-    /// 注意：该数据仅为快照，其时间一致性无法保证。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class Perspective
     {
         public const float RecognizableRange = 13f; // 识别详细个体信息的有效距离阈值
         public const float VisualRange = 26f;       // 最大视野范围 (用于初步捕获)
 
-        // 统一的可见 Pawn 快照列表：所有在视野与视线(LineOfSight)内的 Pawn（不再拆分）
+        // 视野与视线内的所有可见 Pawn 快照列表。
         public IReadOnlyList<PawnRelationSnapshot> VisiblePawnSnapshots { get; }
 
         private Perspective()

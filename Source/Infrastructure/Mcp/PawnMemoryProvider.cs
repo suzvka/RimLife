@@ -9,7 +9,7 @@ namespace RimLife.Infrastructure.Mcp
 {
     /// <summary>
     /// Pawn 个体记忆 Skill 的 Hook Provider。
-    /// 提供记忆追加、心境写入两个工具。记忆查询已统一纳入 get_character_card 的 memory section。
+    /// 提供记忆追加、心境写入两个工具。记忆查询通过 get_character_card 的 memory section 提供，此处仅负责写入。
     /// </summary>
     public class PawnMemoryProvider : IMcpHookProvider
     {

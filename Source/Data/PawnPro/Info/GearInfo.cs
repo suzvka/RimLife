@@ -11,8 +11,8 @@ namespace RimLife
 {
     /// <summary>
     /// 表示 Pawn 装备和库存信息的快照。
-    /// 注意：此数据为快照，其时序一致性不被保证。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class GearInfo
     {
         /// <summary>

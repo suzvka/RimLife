@@ -12,8 +12,8 @@ namespace RimLife
 {
     /// <summary>
     /// 收集并格式化 Pawn 的心情信息。
-    /// 注意：此数据为快照，不保证其时序一致性。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class MoodInfo
     {
         public float MoodLevel { get; }            // 当前心情 (0-1)

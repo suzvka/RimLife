@@ -140,6 +140,5 @@ namespace RimLife.Infrastructure
             }
         }
 
-        // JSON 序列化已统一至 Framework.JsonParser
     }
 }

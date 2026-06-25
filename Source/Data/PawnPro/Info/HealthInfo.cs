@@ -12,8 +12,7 @@ namespace RimLife
 {
     /// <summary>
     /// 表示 Pawn 健康信息的快照。
-    /// 注意：此数据为快照，不保证其时序一致性。
-    /// 已统一为单个类（移除了之前的只读结构体版本）。
+    /// <remarks>快照语义：创建时截取数据，之后不再更新。适用于叙事/描述场景。</remarks>
     /// </summary>
     public class HealthInfo
     {

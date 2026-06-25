@@ -5,8 +5,8 @@ namespace RimLife
     /// <summary>
     /// 长期记忆条目：由 LLM 在旧存档基础上重写的叙述性记忆。
     /// 纯 DTO，零外部依赖。序列化由 HediffComp_PawnMemory 处理。
-    /// 重要度通过篇幅自然体现，不再显式打分。
     /// </summary>
+    /// <remarks>重要度通过篇幅自然体现，无需显式打分字段。</remarks>
     public class LongTermMemory
     {
         /// <summary>最后重写时刻 (游戏 tick)。</summary>

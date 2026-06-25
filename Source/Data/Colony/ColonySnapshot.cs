@@ -10,8 +10,8 @@ namespace RimLife
 {
     /// <summary>
     /// 殖民地宏观状态快照。
-    /// 注意：此数据为快照，不保证其时序一致性。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class ColonySnapshot
     {
         /// <summary>时间上下文。</summary>

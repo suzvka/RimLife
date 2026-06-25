@@ -11,11 +11,11 @@ namespace RimLife
 {
     /// <summary>
     /// 表示 Pawn 需求的快照。
-    /// 注意：此数据为快照，其时序一致性不被保证。
     /// </summary>
+    /// <remarks>此数据为快照，不保证时序一致性。</remarks>
     public class NeedsInfo
     {
-        // 所有的需求都放入这个列表，不再区分 Food/Rest
+        /// <summary>所有需求的统一列表，含紧急度语义标签。</summary>
         public IReadOnlyList<NeedEntry> AllNeeds { get; }
 
         private NeedsInfo()
@@ -43,13 +43,12 @@ namespace RimLife
                     {
                         float cur = need.CurLevelPercentage;
 
-                        // 从 NeedDef 读取阈值：baseLevel 是该需求的自然平衡点，
-                        // 低于此值意味着 pawn 处于匮乏状态。
+                        // baseLevel 是该需求的自然平衡点，低于此值表示匮乏状态。
                         float thresholdLow = need.def?.baseLevel > 0f
                             ? need.def.baseLevel
                             : 0.3f;
 
-                        // 紧急判定：低于阈值的一半，或绝对值极低。
+                        // 紧急条件：严重低于平衡点，或濒临耗尽。
                         bool critical = cur < thresholdLow * 0.5f || cur < 0.1f;
 
                         var entry = new NeedEntry
@@ -100,11 +99,17 @@ namespace RimLife
 
     public struct NeedEntry
     {
-        public string DefName;      // 需求ID (例如 "Food", "Beauty")
-        public string Label;        // 显示名
-        public float CurLevel;      // 当前值 (0-1)
-        public float ThresholdLow;  // 低于此值视为匮乏 (优先读取 NeedDef.baseLevel，无则回退 0.3)
-        public bool IsCritical;     // 是否处于极低状态 (Extractor 预判)
-        public string NeedUrgency;  // 语义紧急标签 (例如 "Starving" / "Rested")
+        /// <summary>需求 defName，如 "Food"、"Beauty"。</summary>
+        public string DefName;
+        /// <summary>显示名称。</summary>
+        public string Label;
+        /// <summary>当前值 (0-1)。</summary>
+        public float CurLevel;
+        /// <summary>匮乏阈值：优先读取 NeedDef.baseLevel，无则回退 0.3。</summary>
+        public float ThresholdLow;
+        /// <summary>是否处于极低状态（创建快照时预判）。</summary>
+        public bool IsCritical;
+        /// <summary>语义紧急标签，如 "Starving"、"Rested"。</summary>
+        public string NeedUrgency;
     }
 }

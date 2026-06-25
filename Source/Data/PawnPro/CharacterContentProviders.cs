@@ -121,8 +121,8 @@ namespace RimLife
 
     /// <summary>
     /// 人格 section：大五人格特质计算。
-    /// 注意：依赖 Patches/Traits_Spectrum_CorrectedPatch.xml 的 Trait 扩展。
     /// </summary>
+    /// <remarks>依赖 Patches/Traits_Spectrum_CorrectedPatch.xml 的 Trait 扩展。</remarks>
     public class PsychologyContentProvider : ICharacterContentProvider
     {
         public string SectionName => "psychology";
@@ -130,8 +130,7 @@ namespace RimLife
         {
             var pawn = PawnQueryHelper.FindPawnById(pawnId);
             if (pawn == null) return null;
-            // 通过 PawnPro 访问内部序列化方法：使用无参构造+反射，避免暴露 internal 方法
-            // 简化为直接内联人格计算
+            // 直接内联计算角色人格数据，避免跨程序集反射调用。
             return SerializePsychology(pawn);
         }
 
