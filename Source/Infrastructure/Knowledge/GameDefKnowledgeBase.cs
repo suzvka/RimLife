@@ -8,11 +8,11 @@ using Verse;
 namespace RimLife.Infrastructure.Knowledge
 {
     /// <summary>
-    /// GameDef 知识库（L2 层）。通过注册制从任意 RimWorld Def 数据库查询官方定义。
+    /// GameDef 知识源（只读外部源）。通过注册制从任意 RimWorld Def 数据库查询官方定义。
     /// 核心 static 构造注册原版 Def 类型，DLC 可通过 Register&lt;T&gt;() 在 Data 层追加。
-    /// 只读实现：Store/Delete 为 no-op，ListByPrefix/ListAll 不枚举全部 Def（量太大）。
+    /// 接入 KnowledgeService 的外部源列表，作为 GameDef 只读知识来源。
     /// </summary>
-    public class GameDefKnowledgeBase : IKnowledgeBase
+    public class GameDefKnowledgeBase : IExternalKnowledgeSource
     {
         /// <summary>解析器注册表。核心注册原版类型，DLC 通过 Register&lt;T&gt; 追加。</summary>
         internal static readonly List<DefResolver> Resolvers = new List<DefResolver>();
@@ -80,17 +80,24 @@ namespace RimLife.Infrastructure.Knowledge
         }
 
         // ================================================================
-        // IKnowledgeBase
+        // IExternalKnowledgeSource
         // ================================================================
+
+        /// <summary>知识来源名称，用于标注查询结果的出处。</summary>
+        public string SourceName => "GameDef";
 
         /// <summary>
         /// 遍历所有已注册的 Def 类型解析器查询词条。
         /// 每个解析器内匹配优先级：defName 精确 → label 精确 → label 包含 → description 包含。
+        /// 返回所有匹配结果（跨解析器、跨匹配层）。
         /// </summary>
-        public bool TryLookup(string term, out KnowledgeEntry entry)
+        public IReadOnlyList<KnowledgeEntry> QueryExact(string term)
         {
-            entry = null;
-            if (string.IsNullOrEmpty(term)) return false;
+            if (string.IsNullOrEmpty(term))
+                return Array.Empty<KnowledgeEntry>();
+
+            var results = new List<KnowledgeEntry>();
+            var collected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var resolver in Resolvers)
             {
@@ -98,33 +105,26 @@ namespace RimLife.Infrastructure.Knowledge
                 var def = resolver.Lookup(term);
                 if (def != null)
                 {
-                    entry = BuildEntry(def, resolver);
-                    if (!string.IsNullOrEmpty(entry.Definition))
-                        return true;
+                    var entry = BuildEntry(def, resolver);
+                    if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
+                        results.Add(entry);
                 }
 
                 var allDefs = resolver.AllDefs();
                 if (allDefs == null) continue;
 
-                // 收集 defName set 用于跳过已精确匹配的
-                var matchedDefNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                if (def != null)
-                    matchedDefNames.Add(def.defName);
-
                 // 2. label 精确匹配
                 foreach (var d in allDefs)
                 {
                     if (d == null) continue;
-                    if (matchedDefNames.Contains(d.defName)) continue;
+                    if (collected.Contains(d.defName)) continue;
 
                     string labelStr = (d.label != null) ? d.label.ToString() : null;
                     if (labelStr != null && string.Equals(labelStr, term, StringComparison.OrdinalIgnoreCase))
                     {
-                        entry = BuildEntry(d, resolver);
-                        if (!string.IsNullOrEmpty(entry.Definition))
-                            return true;
-
-                        matchedDefNames.Add(d.defName);
+                        var entry = BuildEntry(d, resolver);
+                        if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
+                            results.Add(entry);
                     }
                 }
 
@@ -132,16 +132,14 @@ namespace RimLife.Infrastructure.Knowledge
                 foreach (var d in allDefs)
                 {
                     if (d == null) continue;
-                    if (matchedDefNames.Contains(d.defName)) continue;
+                    if (collected.Contains(d.defName)) continue;
 
                     string labelStr = (d.label != null) ? d.label.ToString() : null;
                     if (labelStr != null && labelStr.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        entry = BuildEntry(d, resolver);
-                        if (!string.IsNullOrEmpty(entry.Definition))
-                            return true;
-
-                        matchedDefNames.Add(d.defName);
+                        var entry = BuildEntry(d, resolver);
+                        if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
+                            results.Add(entry);
                     }
                 }
 
@@ -149,36 +147,20 @@ namespace RimLife.Infrastructure.Knowledge
                 foreach (var d in allDefs)
                 {
                     if (d == null) continue;
-                    if (matchedDefNames.Contains(d.defName)) continue;
+                    if (collected.Contains(d.defName)) continue;
 
                     if (d.description != null
                         && d.description.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
                     {
-                        entry = BuildEntry(d, resolver);
-                        if (!string.IsNullOrEmpty(entry.Definition))
-                            return true;
-
-                        matchedDefNames.Add(d.defName);
+                        var entry = BuildEntry(d, resolver);
+                        if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
+                            results.Add(entry);
                     }
                 }
             }
 
-            return false;
+            return results;
         }
-
-        // ================================================================
-        // 只读方法（no-op）
-        // ================================================================
-
-        public void Store(KnowledgeEntry entry) { /* no-op: 只读层 */ }
-        public void Delete(string term) { /* no-op: 只读层 */ }
-        public IReadOnlyList<KnowledgeEntry> ListByPrefix(string prefix)
-            => new List<KnowledgeEntry>();
-        public IReadOnlyList<KnowledgeEntry> ListByTags(IReadOnlyList<string> tags)
-            => new List<KnowledgeEntry>();
-        public IReadOnlyList<KnowledgeEntry> ListAll()
-            => new List<KnowledgeEntry>();
-        public int Count => 0;
 
         // ================================================================
         // 内部：词条构建
@@ -199,12 +181,9 @@ namespace RimLife.Infrastructure.Knowledge
             {
                 Term = def.defName ?? defLabel,
                 Definition = defDescription,
-                Source = KnowledgeSource.GameDef,
+                Source = "GameDef",
                 Confidence = 1.0f,
-                ContextTags = tags,
-                CreatedSeq = 0,
-                LastAccessedSeq = 0,
-                AccessCount = 0
+                ContextTags = tags
             };
         }
 

@@ -9,6 +9,7 @@ using NPCLife.Infrastructure.Knowledge;
 using NPCLife.Infrastructure.Llm;
 using NPCLife.Infrastructure.Mcp;
 using NPCLife.Workspace;
+using RimLife.Infrastructure.Knowledge;
 using RimLife.Mappers;
 using System;
 using System.Collections.Generic;
@@ -201,7 +202,7 @@ namespace RimLife.Infrastructure
                 McpSkillRegistry.InitializeDefaults();
 
                 int count = RegisterHookProvider(new SystemMcpProvider(() => Workspaces, TimeProvider, Logger));
-                count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeBase, Logger));
+                count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeService, Logger));
                 count += RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
                 count += RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
                 count += RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
@@ -326,8 +327,8 @@ namespace RimLife.Infrastructure
             FrameworkStatus.RegisterReporter("KnowledgeBase", () => new ComponentStatus
             {
                 Name = "KnowledgeBase",
-                IsAvailable = _knowledgeBase != null,
-                Detail = _knowledgeBase != null ? $"{_knowledgeBase.Count} entries" : "not initialized"
+                IsAvailable = _knowledgeService != null,
+                Detail = _knowledgeService != null ? $"{_knowledgeService.ListAll().Count} entries" : "not initialized"
             });
         }
 
@@ -390,7 +391,7 @@ namespace RimLife.Infrastructure
 
                     _saveStore = value;
                     _workspaces = null;
-                    _knowledgeBase = null;
+                    _knowledgeService = null;
                     _interactionStore = null;
 
                     if (_saveStore != null)
@@ -608,7 +609,7 @@ namespace RimLife.Infrastructure
                                 maxRounds: DriverConfig.MaxAgentRounds,
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
-                                knowledgeBase: KnowledgeBase,
+                                knowledgeService: KnowledgeService,
                                 temperature: PromptConfig.Temperature);
                         }
                     }
@@ -642,7 +643,7 @@ namespace RimLife.Infrastructure
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
                                 contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
-                                knowledgeBase: KnowledgeBase,
+                                knowledgeService: KnowledgeService,
                                 temperature: PromptConfig.Temperature);
                         }
                     }
@@ -699,7 +700,7 @@ namespace RimLife.Infrastructure
                     maxRounds: DriverConfig.MaxAgentRounds,
                     logger: Logger,
                     serializer: CardSerializer.Default,
-                    knowledgeBase: KnowledgeBase,
+                    knowledgeService: KnowledgeService,
                     temperature: PromptConfig.Temperature);
 
                 _screenwriters[workspaceId] = agent;
@@ -947,41 +948,33 @@ namespace RimLife.Infrastructure
             }
         }
 
-        private static IKnowledgeBase _knowledgeBase;
-        private static readonly object _knowledgeBaseLock = new object();
+        private static IKnowledgeService _knowledgeService;
+        private static readonly object _knowledgeServiceLock = new object();
 
         /// <summary>
-        /// 知识库实例。首次访问时从 CacheStore 延迟创建 BuiltInKnowledgeBase，
-        /// 并包装在 KnowledgeBaseChain 中（默认仅 L1，后续可追加 L2/L3）。
+        /// 知识服务实例。首次访问时从 CacheStore 延迟创建 BuiltInKnowledgeBase，
+        /// 并与 GameDefKnowledgeBase 外部源组装为 KnowledgeService，外层包裹指标装饰器。
         /// CacheStore 不可用时返回 null。
         /// </summary>
-        public static IKnowledgeBase KnowledgeBase
+        public static IKnowledgeService KnowledgeService
         {
             get
             {
-                if (_knowledgeBase == null)
+                if (_knowledgeService == null)
                 {
-                    lock (_knowledgeBaseLock)
+                    lock (_knowledgeServiceLock)
                     {
-                        if (_knowledgeBase == null && CacheStore != null)
+                        if (_knowledgeService == null && CacheStore != null)
                         {
                             var builtIn = new NPCLife.Infrastructure.Knowledge.BuiltInKnowledgeBase(CacheStore, Logger);
                             var gameDef = new Knowledge.GameDefKnowledgeBase();
-                            var chain = new NPCLife.Framework.KnowledgeBaseChain(builtIn, gameDef);
-
-                            // 连接知识库查询回调到运行时度量
-                            chain.OnLookupResult = (term, hitLayer, isHit) =>
-                            {
-                                RuntimeMetrics.RecordKnowledgeLookup(
-                                    term, hitLayer,
-                                    NPCLife.Framework.MetricsInterceptor.CurrentSessionId);
-                            };
-
-                            _knowledgeBase = chain;
+                            var externals = new List<IExternalKnowledgeSource> { gameDef };
+                            var knowledge = new KnowledgeService(builtIn, externals);
+                            _knowledgeService = new MetricsKnowledgeService(knowledge);
                         }
                     }
                 }
-                return _knowledgeBase;
+                return _knowledgeService;
             }
         }
 
