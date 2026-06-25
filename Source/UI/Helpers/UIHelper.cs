@@ -44,6 +44,54 @@ namespace RimLife.UI
         public const float BtnGap = 8f;
 
         // ================================================================
+        // CJK 文本高度补偿
+        // ================================================================
+
+        /// <summary>
+        /// CJK 文本高度补偿因子。
+        /// RimWorld (Unity) 的 Text.CalcHeight 对中文字符的高度估算偏低，
+        /// 导致自动换行后实际渲染高度超出分配区域，产生截断。
+        /// 此因子用于补偿该误差。
+        /// </summary>
+        public const float CjkHeightCompensation = 1.25f;
+
+        /// <summary>
+        /// 检测文本是否包含 CJK（中日韩）字符。
+        /// </summary>
+        public static bool ContainsCjk(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            for (int i = 0; i < text.Length; i++)
+            {
+                var c = text[i];
+                // CJK Unified Ideographs + Extensions + CJK Radicals + Fullwidth Forms
+                if ((c >= '\u4E00' && c <= '\u9FFF') ||
+                    (c >= '\u3400' && c <= '\u4DBF') ||
+                    (c >= '\uF900' && c <= '\uFAFF') ||
+                    (c >= '\uFF00' && c <= '\uFFEF') ||
+                    (c >= '\u3000' && c <= '\u303F') ||
+                    (c >= '\u2E80' && c <= '\u2EFF'))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 补偿版 Text.CalcHeight。
+        /// 对包含 CJK 字符的文本应用高度补偿因子，消除 RimWorld 引擎的中文高度低估问题。
+        /// </summary>
+        /// <param name="text">要测量的文本。</param>
+        /// <param name="width">可用宽度。</param>
+        /// <returns>补偿后的文本高度。</returns>
+        public static float CalcTextHeight(string text, float width)
+        {
+            var h = Text.CalcHeight(text, width);
+            if (ContainsCjk(text))
+                h *= CjkHeightCompensation;
+            return h;
+        }
+
+        // ================================================================
         // 颜色常量
         // ================================================================
 
@@ -165,11 +213,12 @@ namespace RimLife.UI
         /// </summary>
         public static void LabelWithDescription(Listing_Standard listing, string label, string description)
         {
-            var labelHeight = Text.CalcHeight(label, listing.ColumnWidth);
+            var labelHeight = CalcTextHeight(label, listing.ColumnWidth);
             Widgets.Label(listing.GetRect(labelHeight), label);
             if (!string.IsNullOrEmpty(description))
             {
-                var descHeight = Text.CalcHeight($"<color=#888888><size=12>{description}</size></color>", listing.ColumnWidth);
+                var descText = $"<color=#888888><size=12>{description}</size></color>";
+                var descHeight = CalcTextHeight(descText, listing.ColumnWidth);
                 Widgets.Label(listing.GetRect(descHeight), $"<color=#888888><size=12>{description}</size></color>");
             }
         }
@@ -180,7 +229,7 @@ namespace RimLife.UI
         /// </summary>
         public static void AutoHeightLabel(Listing_Standard listing, string text, float minHeight = 20f)
         {
-            var height = Text.CalcHeight(text, listing.ColumnWidth);
+            var height = CalcTextHeight(text, listing.ColumnWidth);
             if (height < minHeight) height = minHeight;
             Widgets.Label(listing.GetRect(height), text);
         }

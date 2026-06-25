@@ -49,7 +49,7 @@ namespace RimLife.UI.Pages
 
             // 计算换行后的实际文本高度
             var textWidth = contentRect.width - 16f; // 留出滚动条空间
-            var textHeight = Text.CalcHeight(logText, textWidth);
+            var textHeight = CalcTextHeight(logText, textWidth);
             var totalHeight = Mathf.Max(contentRect.height, textHeight + 10f);
             var viewRect = new Rect(contentRect.x, contentRect.y, textWidth, totalHeight);
 

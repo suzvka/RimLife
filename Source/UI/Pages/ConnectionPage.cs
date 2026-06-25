@@ -40,8 +40,6 @@ namespace RimLife.UI.Pages
         private readonly HashSet<string> _expanded = new HashSet<string>();
         private readonly HashSet<string> _editing = new HashSet<string>();
         private readonly Dictionary<string, bool> _showApiKey = new Dictionary<string, bool>();
-        private readonly Dictionary<string, string> _maskedKeyBuffer = new Dictionary<string, string>();
-
         // 每卡片异步操作状态
         private readonly Dictionary<string, string> _testStatus = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _testError = new Dictionary<string, string>();
@@ -297,28 +295,33 @@ namespace RimLife.UI.Pages
 
         private float CalcExpandedCardHeight(string alias, LlmCredential cred, string testSt)
         {
+            // 使用 CJK 补偿后的行高，消除 RimWorld 引擎对中文文本高度的低估
+            float lineH = 22f * CjkHeightCompensation;
+            float keyLineH = 28f * CjkHeightCompensation;
+
             float h = 36f; // 紧凑行区域
             h += GapSmall;
-            h += 22f; // BaseUrl
+            h += lineH; // BaseUrl
             h += GapTiny;
-            h += 28f; // ApiKey 行
+            h += keyLineH; // ApiKey 行
             h += GapTiny;
-            h += 22f; // 当前模型显示
+            h += lineH; // 当前模型显示
 
             // 错误提示
             if (testSt == "failed" && _testError.ContainsKey(alias))
-                h += 16f;
+                h += 16f * CjkHeightCompensation;
 
             h += GapSmall;
             h += 30f; // 操作按钮行
 
-            // 模型列表区（固定高度：搜索框 + 滚动列表）
+            // 模型列表区（固定高度：搜索框 + 摘要行 + 滚动列表）
             if (_availableModels.ContainsKey(alias))
             {
                 h += GapSmall;
                 h += 28f; // 搜索框
                 h += GapTiny;
-                h += ModelListMaxHeight; // 滚动列表区
+                h += 14f; // 摘要统计行（"X/Y 个模型 | 已启用: Z"）
+                h += ModelListMaxHeight - 28f - GapTiny - 14f; // 滚动列表区
             }
 
             return h;
@@ -502,15 +505,19 @@ namespace RimLife.UI.Pages
 
         private float CalcEditCardHeight(string alias)
         {
+            // 使用 CJK 补偿后的行高
+            float lineH = 22f * CjkHeightCompensation;
+            float keyLineH = 28f * CjkHeightCompensation;
+
             float h = 28f; // 标题
             h += GapTiny;
-            h += 22f; // 名称
+            h += lineH; // 名称
             h += GapTiny;
-            h += 22f; // BaseUrl
+            h += lineH; // BaseUrl
             h += GapTiny;
-            h += 28f; // ApiKey
+            h += keyLineH; // ApiKey
             h += GapTiny;
-            h += 22f; // ModelName
+            h += lineH; // ModelName
             h += GapTiny;
             h += 32f; // ProviderType
             h += GapMedium;
@@ -579,7 +586,7 @@ namespace RimLife.UI.Pages
             else UpdateEditField(alias, "baseUrl", newUrlVal);
             cursorY += 22f + GapTiny;
 
-            // ApiKey
+            // ApiKey（隐藏时只读显示脱敏文本，显示时可编辑）
             var keyLabelRect = new Rect(x + 4f, cursorY, 60f, 28f);
             Widgets.Label(keyLabelRect, "<color=#999999><size=11>API Key</size></color>");
             var toggleW = 56f;
@@ -587,53 +594,41 @@ namespace RimLife.UI.Pages
             var keyFieldRect = new Rect(x + 64f, cursorY, keyFieldW, 28f);
             var toggleRect = new Rect(x + 64f + keyFieldW + BtnGap, cursorY, toggleW, 28f);
 
-            string keyDisplay;
             if (editShowKey)
             {
-                keyDisplay = editApiKey;
-            }
-            else
-            {
-                var bufferKey = isNew ? "__new__" : alias;
-                if (!_maskedKeyBuffer.ContainsKey(bufferKey))
-                    _maskedKeyBuffer[bufferKey] = MaskApiKey(editApiKey);
-                keyDisplay = _maskedKeyBuffer[bufferKey];
-            }
-
-            var newKeyVal = Widgets.TextField(keyFieldRect, keyDisplay);
-            if (editShowKey)
-            {
+                // 显示模式：可编辑真实值
+                var newKeyVal = Widgets.TextField(keyFieldRect, editApiKey);
                 if (isNew) _newApiKey = newKeyVal;
                 else UpdateEditField(alias, "apiKey", newKeyVal);
             }
             else
             {
-                var bufferKey = isNew ? "__new__" : alias;
-                _maskedKeyBuffer[bufferKey] = newKeyVal;
+                // 隐藏模式：只读显示脱敏文本，不可编辑
+                Widgets.Label(keyFieldRect, $"<color=#CCCCCC><size=12>{MaskApiKey(editApiKey)}</size></color>");
             }
 
             if (Widgets.ButtonText(toggleRect, editShowKey ? "隐藏" : "显示"))
             {
-                if (isNew)
-                {
-                    _newShowApiKey = !_newShowApiKey;
-                    if (_newShowApiKey) _maskedKeyBuffer.Remove("__new__");
-                }
-                else
-                {
-                    _showApiKey[alias] = !editShowKey;
-                    if (editShowKey) _maskedKeyBuffer.Remove(alias);
-                }
+                if (isNew) _newShowApiKey = !_newShowApiKey;
+                else _showApiKey[alias] = !editShowKey;
             }
             cursorY += 28f + GapTiny;
 
             // ModelName
             Widgets.Label(new Rect(x + 4f, cursorY, 60f, 22f),
                 "<color=#999999><size=11>Model</size></color>");
-            var modelRect = new Rect(x + 64f, cursorY, w - 68f, 22f);
-            var newModelVal = Widgets.TextField(modelRect, editModelName);
-            if (isNew) _newModelName = newModelVal;
-            else UpdateEditField(alias, "modelName", newModelVal);
+            if (isNew)
+            {
+                // 新增凭证：模型通过获取模型列表自动发现，无需手动填写
+                Widgets.Label(new Rect(x + 64f, cursorY, w - 68f, 22f),
+                    "<color=#888888><size=11>保存后展开卡片，点击「获取模型列表」选择</size></color>");
+            }
+            else
+            {
+                var modelRect = new Rect(x + 64f, cursorY, w - 68f, 22f);
+                var newModelVal = Widgets.TextField(modelRect, editModelName);
+                UpdateEditField(alias, "modelName", newModelVal);
+            }
             cursorY += 22f + GapTiny;
 
             // ProviderType
@@ -736,7 +731,6 @@ namespace RimLife.UI.Pages
             _editing.Remove(alias);
             _editBuffers.Remove(alias);
             _showApiKey.Remove(alias);
-            _maskedKeyBuffer.Remove(alias);
         }
 
         private void SaveEdit(string alias)
@@ -821,7 +815,6 @@ namespace RimLife.UI.Pages
             _newModelName = "";
             _newProviderType = LlmProviderType.OpenAI;
             _newShowApiKey = false;
-            _maskedKeyBuffer.Remove("__new__");
         }
 
         // ================================================================
@@ -841,7 +834,6 @@ namespace RimLife.UI.Pages
             _expanded.Remove(alias);
             _editing.Remove(alias);
             _showApiKey.Remove(alias);
-            _maskedKeyBuffer.Remove(alias);
             _testStatus.Remove(alias);
             _testError.Remove(alias);
             _availableModels.Remove(alias);
