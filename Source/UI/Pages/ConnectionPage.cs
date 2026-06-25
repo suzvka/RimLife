@@ -333,7 +333,7 @@ namespace RimLife.UI.Pages
             else
             {
                 var maskedDisplay = MaskApiKey(_editApiKey);
-                Widgets.TextField(keyFieldRect, maskedDisplay);
+                _editApiKey = Widgets.TextField(keyFieldRect, maskedDisplay);
             }
 
             if (Widgets.ButtonText(toggleRect, _showApiKey ? "隐藏" : "显示"))
@@ -342,8 +342,8 @@ namespace RimLife.UI.Pages
             }
             listing.Gap(GapTiny);
 
-            // 模型名称
-            Widgets.Label(listing.GetRect(20f), "<size=12>模型名称</size>");
+            // 模型名称（可选，可从下方"模型发现"获取列表后点击设置）
+            Widgets.Label(listing.GetRect(20f), "<size=12>模型名称 <color=#888888>(可选)</color></size>");
             var modelRect = listing.GetRect(28f);
             _editModelName = Widgets.TextField(modelRect, _editModelName);
             listing.Gap(GapTiny);
@@ -390,6 +390,11 @@ namespace RimLife.UI.Pages
             if (string.IsNullOrWhiteSpace(_editBaseUrl))
             {
                 SetStatus("[错误] Base URL 不能为空");
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_editApiKey))
+            {
+                SetStatus("[错误] API 密钥不能为空");
                 return;
             }
 
