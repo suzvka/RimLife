@@ -79,6 +79,19 @@ namespace RimLife.UI
             var cursorY = rect.y + GapSmall;
             var lastGroup = "";
 
+            // 统计每组页面数：仅当组内有 ≥2 个页面时才显示分组标题
+            var groupCounts = new Dictionary<string, int>();
+            foreach (var page in Pages)
+            {
+                if (!string.IsNullOrEmpty(page.Group))
+                {
+                    if (groupCounts.ContainsKey(page.Group))
+                        groupCounts[page.Group]++;
+                    else
+                        groupCounts[page.Group] = 1;
+                }
+            }
+
             foreach (var page in Pages)
             {
                 if (page.Group != lastGroup)
@@ -87,9 +100,14 @@ namespace RimLife.UI
                         cursorY += GapTiny;
 
                     lastGroup = page.Group;
-                    var groupRect = new Rect(rect.x + GapSmall, cursorY, rect.width - GapSmall * 2, GroupHeaderHeight);
-                    Widgets.Label(groupRect, $"<color=#999999><size=13><b>{page.Group}</b></size></color>");
-                    cursorY += GroupHeaderHeight;
+
+                    // 仅当该组有 ≥2 个页面时显示分组标题
+                    if (!string.IsNullOrEmpty(page.Group) && groupCounts.TryGetValue(page.Group, out var count) && count >= 2)
+                    {
+                        var groupRect = new Rect(rect.x + GapSmall, cursorY, rect.width - GapSmall * 2, GroupHeaderHeight);
+                        Widgets.Label(groupRect, $"<color=#999999><size=13><b>{page.Group}</b></size></color>");
+                        cursorY += GroupHeaderHeight;
+                    }
                 }
 
                 var itemRect = new Rect(rect.x + GapTiny, cursorY, rect.width - GapTiny * 2, NavItemHeight);

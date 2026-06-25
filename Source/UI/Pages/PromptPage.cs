@@ -31,6 +31,7 @@ namespace RimLife.UI
 
         // 保存反馈
         private string _statusMessage;
+        private float _statusMessageTime;
 
         public void Draw(Rect rect, Listing_Standard listing)
         {
@@ -70,6 +71,7 @@ namespace RimLife.UI
                 _directorPrompt = PromptConfig.DefaultDirectorPrompt;
                 _directorBuffers = null;
                 _statusMessage = "导演提示词已恢复默认（需保存生效）";
+                _statusMessageTime = Time.time;
             }
             EndSection(listing);
 
@@ -88,6 +90,7 @@ namespace RimLife.UI
                 _screenwriterPrompt = PromptConfig.DefaultScreenwriterPrompt;
                 _screenwriterBuffers = null;
                 _statusMessage = "编剧提示词已恢复默认（需保存生效）";
+                _statusMessageTime = Time.time;
             }
             EndSection(listing);
 
@@ -106,6 +109,7 @@ namespace RimLife.UI
                 _freelancerPrompt = PromptConfig.DefaultFreelancerPrompt;
                 _freelancerBuffers = null;
                 _statusMessage = "临时工提示词已恢复默认（需保存生效）";
+                _statusMessageTime = Time.time;
             }
             EndSection(listing);
 
@@ -127,6 +131,7 @@ namespace RimLife.UI
                 RimLifeCore.SetPromptConfig(pc);
                 RimLifeCore.RebuildAgents();
                 _statusMessage = "已保存并重建 Agent";
+                _statusMessageTime = Time.time;
                 Log.Message("[RimLife.UI] Prompt settings saved");
             }
 
@@ -139,15 +144,11 @@ namespace RimLife.UI
                 _styleInstruction = ""; _styleBuffers = null;
                 _temperature = def.Temperature;
                 _statusMessage = "全部已恢复默认（需保存生效）";
+                _statusMessageTime = Time.time;
             }
 
-            // 状态消息
-            if (!string.IsNullOrEmpty(_statusMessage))
-            {
-                listing.Gap(GapTiny);
-                Widgets.Label(listing.GetRect(22f),
-                    $"<color=#88FF88><size=12>{_statusMessage}</size></color>");
-            }
+            // 状态消息（统一淡出效果）
+            DrawStatusMessage(listing, _statusMessage, _statusMessageTime);
         }
 
         private void InitializeIfNeeded()

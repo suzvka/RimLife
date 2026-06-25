@@ -34,6 +34,7 @@ namespace RimLife.UI
 
         // 状态消息
         private string _statusMessage;
+        private float _statusMessageTime;
 
         public void Draw(Rect rect, Listing_Standard listing)
         {
@@ -76,11 +77,13 @@ namespace RimLife.UI
                     config.Diagnostics.EnableEventTracing = _enableEventTracing;
                     RimLifeCore.Configure(config);
                     _statusMessage = "配置已保存并生效";
+                    _statusMessageTime = Time.time;
                     Log.Message("[RimLife.UI] Advanced settings saved");
                 }
                 else
                 {
                     _statusMessage = "保存失败：无法克隆当前配置";
+                    _statusMessageTime = Time.time;
                 }
             }
 
@@ -88,6 +91,7 @@ namespace RimLife.UI
             {
                 InitializeFromDefaults();
                 _statusMessage = "已重置（需保存生效）";
+                _statusMessageTime = Time.time;
             }
 
             listing.Gap(GapSmall);
@@ -138,6 +142,7 @@ namespace RimLife.UI
                 var json = RimLifeCore.Config.ToJson();
                 GUIUtility.systemCopyBuffer = json;
                 _statusMessage = "配置已复制到剪贴板";
+                _statusMessageTime = Time.time;
                 Log.Message($"[RimLife.UI] Config exported: {json.Substring(0, Mathf.Min(json.Length, 100))}...");
             }
 
@@ -152,27 +157,25 @@ namespace RimLife.UI
                         RimLifeCore.Configure(imported);
                         InitializeFromConfig();
                         _statusMessage = "已从剪贴板导入配置";
+                        _statusMessageTime = Time.time;
                     }
                     else
                     {
                         _statusMessage = "剪贴板中没有有效的 JSON 配置";
+                        _statusMessageTime = Time.time;
                     }
                 }
                 catch (System.Exception e)
                 {
                     _statusMessage = $"导入失败: {e.Message}";
+                    _statusMessageTime = Time.time;
                 }
             }
 
             EndSection(listing);
 
-            // 状态消息
-            if (!string.IsNullOrEmpty(_statusMessage))
-            {
-                listing.Gap(GapTiny);
-                Widgets.Label(listing.GetRect(22f),
-                    $"<color=#88FF88><size=12>{_statusMessage}</size></color>");
-            }
+            // 状态消息（统一淡出效果）
+            DrawStatusMessage(listing, _statusMessage, _statusMessageTime);
         }
 
         private void InitializeIfNeeded()

@@ -359,5 +359,55 @@ namespace RimLife.UI
             }
             return isHover;
         }
+
+        // ================================================================
+        // 状态消息统一绘制（带淡出效果）
+        // ================================================================
+
+        /// <summary>
+        /// 绘制状态消息。持续显示 5 秒，最后 1 秒淡出。
+        /// 所有配置页面复用此方法，确保一致的反馈体验。
+        /// </summary>
+        /// <param name="listing">Listing 实例。</param>
+        /// <param name="message">消息文本（以 "[错误]" 开头时显示红色）。</param>
+        /// <param name="messageTime">消息的 Time.time 时间戳。传 0 表示无消息。</param>
+        /// <returns>消息是否仍在显示中。</returns>
+        public static bool DrawStatusMessage(Listing_Standard listing, string message, float messageTime)
+        {
+            if (string.IsNullOrEmpty(message) || messageTime <= 0f)
+                return false;
+
+            var elapsed = Time.time - messageTime;
+            if (elapsed >= 5f)
+                return false;
+
+            var isError = message.StartsWith("[错误]");
+            var baseColor = isError ? "#FF6666" : "#88FF88";
+
+            string colorTag;
+            if (elapsed > 4f)
+            {
+                var alpha = Mathf.Clamp01(5f - elapsed);
+                var alphaHex = ((int)(alpha * 255)).ToString("X2");
+                colorTag = $"<color={baseColor}{alphaHex}>";
+            }
+            else
+            {
+                colorTag = $"<color={baseColor}>";
+            }
+
+            Widgets.Label(listing.GetRect(22f), $"{colorTag}<size=12>{message}</size></color>");
+            listing.Gap(GapSmall);
+            return true;
+        }
+
+        // ================================================================
+        // 凭证测试状态颜色
+        // ================================================================
+
+        public static readonly Color ColorTestSuccess = new Color(0.3f, 0.8f, 0.3f);
+        public static readonly Color ColorTestFailed = new Color(0.9f, 0.3f, 0.3f);
+        public static readonly Color ColorTestUntested = new Color(0.5f, 0.5f, 0.5f);
+        public static readonly Color ColorTestRunning = new Color(0.35f, 0.65f, 1f);
     }
 }

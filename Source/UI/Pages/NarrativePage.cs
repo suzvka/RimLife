@@ -41,6 +41,7 @@ namespace RimLife.UI
 
         // 保存反馈
         private string _statusMessage;
+        private float _statusMessageTime;
 
         public void Draw(Rect rect, Listing_Standard listing)
         {
@@ -130,6 +131,7 @@ namespace RimLife.UI
                 RimLifeCore.SetDriverConfig(dc);
                 RimLifeCore.RebuildAgents();
                 _statusMessage = "已保存并重建 Agent";
+                _statusMessageTime = Time.time;
                 Log.Message("[RimLife.UI] Narrative settings saved");
             }
 
@@ -147,15 +149,11 @@ namespace RimLife.UI
                 _recentHistoryCapacity = defaultDc.RecentHistoryCapacity;
                 _maxAgentRounds = defaultDc.MaxAgentRounds;
                 _statusMessage = "已重置（需保存生效）";
+                _statusMessageTime = Time.time;
             }
 
-            // 状态消息
-            if (!string.IsNullOrEmpty(_statusMessage))
-            {
-                listing.Gap(GapTiny);
-                Widgets.Label(listing.GetRect(22f),
-                    $"<color=#88FF88><size=12>{_statusMessage}</size></color>");
-            }
+            // 状态消息（统一淡出效果）
+            DrawStatusMessage(listing, _statusMessage, _statusMessageTime);
         }
 
         private void InitializeIfNeeded()

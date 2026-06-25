@@ -60,6 +60,14 @@ namespace RimLife.UI.Pages
 
         private CancellationTokenSource _discoveryCts;
 
+        // 凭证测试状态 (alias -> "untested"|"testing"|"success"|"failed")
+        private Dictionary<string, string> _credentialTestStatus = new Dictionary<string, string>();
+        private Dictionary<string, string> _credentialTestError = new Dictionary<string, string>();
+        private CancellationTokenSource _testCts;
+
+        // API Key 脱敏显示缓冲区（隔离 TextField 返回值，防止覆盖真实密钥）
+        private string _maskedKeyBuffer = "";
+
         // 凭证注册表快捷访问器
         private ICredentialRegistry Registry => RimLifeCore.CredentialRegistry;
 
@@ -75,7 +83,7 @@ namespace RimLife.UI.Pages
                 return;
             }
 
-            DrawStatusMessage(listing);
+            DrawStatusMessage(listing, _statusMessage, _statusMessageTime);
 
             switch (_mode)
             {
@@ -95,32 +103,8 @@ namespace RimLife.UI.Pages
         }
 
         // ================================================================
-        // 状态消息
+        // 状态消息（委托 UIHelper 统一绘制）
         // ================================================================
-
-        private void DrawStatusMessage(Listing_Standard listing)
-        {
-            if (!string.IsNullOrEmpty(_statusMessage) && Time.time - _statusMessageTime < 5f)
-            {
-                var elapsed = Time.time - _statusMessageTime;
-                var baseColor = _statusMessage.StartsWith("[错误]") ? "#FF6666" : "#88FF88";
-
-                string colorTag;
-                if (elapsed > 4f)
-                {
-                    var alpha = Mathf.Clamp01(5f - elapsed);
-                    var alphaHex = ((int)(alpha * 255)).ToString("X2");
-                    colorTag = $"<color={baseColor}{alphaHex}>";
-                }
-                else
-                {
-                    colorTag = $"<color={baseColor}>";
-                }
-
-                Widgets.Label(listing.GetRect(22f), $"{colorTag}<size=12>{_statusMessage}</size></color>");
-                listing.Gap(GapSmall);
-            }
-        }
 
         private void SetStatus(string msg)
         {
@@ -139,24 +123,42 @@ namespace RimLife.UI.Pages
             var isReady = activeAliases.Count > 0;
             var totalAliases = aliases.Count;
 
-            // 状态栏背景
-            var summaryRect = listing.GetRect(52f);
+            // 统计未测试凭证数
+            int untestedCount = 0;
+            foreach (var alias in aliases)
+            {
+                var status = GetCredentialTestStatus(alias);
+                if (status == "untested") untestedCount++;
+            }
+
+            // 状态栏背景（扩高到 64px）
+            var summaryRect = listing.GetRect(64f);
             var bgColor = isReady
-                ? new Color(0.15f, 0.22f, 0.15f, 1f)
-                : new Color(0.22f, 0.18f, 0.15f, 1f);
+                ? new Color(0.12f, 0.20f, 0.12f, 1f)
+                : new Color(0.20f, 0.16f, 0.12f, 1f);
             Widgets.DrawBoxSolid(summaryRect, bgColor);
             Widgets.DrawBox(summaryRect, 1);
 
-            // 第一行：状态指示 + 当前代号
-            var row1Rect = new Rect(summaryRect.x + GapMedium, summaryRect.y + 6f, summaryRect.width - GapMedium * 2, 20f);
-            var statusIcon = isReady ? "<color=#88FF88>●</color>" : "<color=#FF8844>○</color>";
-            var statusText = isReady ? "已就绪" : "未就绪";
-            string currentAliasInfo = isReady ? $"  当前: <b>{activeAliases[0]}</b>" : "";
-            Widgets.Label(row1Rect, $"<size=13>{statusIcon} {statusText}{currentAliasInfo}</size>");
+            var pad = GapMedium;
+
+            // 第一行：大号状态图标 + 状态文本
+            var row1Rect = new Rect(summaryRect.x + pad, summaryRect.y + 8f, summaryRect.width - pad * 2, 22f);
+            var statusIcon = isReady ? "<color=#88FF88><size=14>●</size></color>" : "<color=#FF8844><size=14>○</size></color>";
+            var statusText = isReady ? "<size=14><b>LLM 已就绪</b></size>" : "<size=14>LLM 未就绪</size>";
+            string currentAliasInfo = isReady ? $"  —  当前: <b>{activeAliases[0]}</b>" : "";
+            Widgets.Label(row1Rect, $"{statusIcon} {statusText}{currentAliasInfo}");
 
             // 第二行：统计信息
-            var row2Rect = new Rect(summaryRect.x + GapMedium, summaryRect.y + 28f, summaryRect.width - GapMedium * 2, 18f);
-            Widgets.Label(row2Rect, $"<color=#AAAAAA><size=11>代号总数: {totalAliases}  |  激活: {activeAliases.Count} 个  |  顺序: [{string.Join(", ", activeAliases)}]</size></color>");
+            var row2Rect = new Rect(summaryRect.x + pad, summaryRect.y + 34f, summaryRect.width - pad * 2, 18f);
+            var fallbackChain = activeAliases.Count > 0 ? $"  |  链路: {string.Join(" → ", activeAliases)}" : "";
+            Widgets.Label(row2Rect, $"<color=#AAAAAA><size=11>已配置 {totalAliases} 个代号  |  激活 {activeAliases.Count} 个{fallbackChain}</size></color>");
+
+            // 第三行：未测试提醒
+            if (untestedCount > 0 && isReady)
+            {
+                var row3Rect = new Rect(summaryRect.x + pad, summaryRect.y + 50f, summaryRect.width - pad * 2, 12f);
+                Widgets.Label(row3Rect, $"<color=#FFCC66><size=10>⚠ {untestedCount} 个凭证尚未测试连接</size></color>");
+            }
 
             listing.Gap(GapMedium);
         }
@@ -181,7 +183,7 @@ namespace RimLife.UI.Pages
                 {
                     if (Registry.TryGetCredential(alias, out var cred))
                     {
-                        DrawAliasRow(listing, alias, cred);
+                        DrawAliasCard(listing, alias, cred);
                     }
                 }
                 listing.Gap(GapSmall);
@@ -200,47 +202,81 @@ namespace RimLife.UI.Pages
             EndSection(listing);
         }
 
-        private void DrawAliasRow(Listing_Standard listing, string alias, LlmCredential cred)
+        private void DrawAliasCard(Listing_Standard listing, string alias, LlmCredential cred)
         {
-            var rowHeight = 32f;
-            var rowRect = listing.GetRect(rowHeight);
+            var cardHeight = 52f;
+            var cardRect = listing.GetRect(cardHeight);
 
-            // 背景
+            // 卡片背景
             var activeAliases = Registry.GetActiveAliases();
             var isActive = activeAliases.Contains(alias);
+            var bgColor = isActive
+                ? new Color(0.16f, 0.20f, 0.16f, 1f)
+                : ColorCardBg;
+            Widgets.DrawBoxSolid(cardRect, bgColor);
+            Widgets.DrawBox(cardRect, 1);
+
+            // 激活态左侧蓝色竖条
             if (isActive)
             {
-                Widgets.DrawBoxSolid(rowRect, new Color(0.18f, 0.22f, 0.18f, 1f));
+                var barRect = new Rect(cardRect.x + 1f, cardRect.y + 4f, 3f, cardRect.height - 8f);
+                Widgets.DrawBoxSolid(barRect, ColorHighlight);
             }
 
-            DrawHoverBackground(rowRect, new Color(0.25f, 0.25f, 0.25f, 0.5f));
-
             var pad = GapSmall;
-            var leftX = rowRect.x + pad;
-            var contentWidth = rowRect.width - pad * 2;
+            var leftX = cardRect.x + pad + (isActive ? 4f : 0f);
+            var usableWidth = cardRect.width - pad * 2 - (isActive ? 4f : 0f);
 
-            // 代号名（左侧）
-            var labelWidth = Mathf.Min(120f, contentWidth * 0.22f);
-            var labelRect = new Rect(leftX, rowRect.y + 4f, labelWidth, 24f);
-            var activeMark = isActive ? "● " : "○ ";
-            Widgets.Label(labelRect, $"<size=12>{activeMark}<b>{alias}</b></size>");
+            // ---- 第一行：状态指示 + 代号名 + 操作按钮 ----
+            var row1Y = cardRect.y + 4f;
+            var row1H = 22f;
 
-            // 凭证摘要（中间）
-            var infoX = leftX + labelWidth + GapSmall;
-            var infoWidth = contentWidth - labelWidth - BtnWidthSmall * 2 - BtnGap * 2 - GapSmall;
-            var infoRect = new Rect(infoX, rowRect.y + 7f, infoWidth, 18f);
+            // 测试状态指示器
+            var testStatus = GetCredentialTestStatus(alias);
+            var indicatorColor = testStatus switch
+            {
+                "success" => ColorTestSuccess,
+                "failed" => ColorTestFailed,
+                "testing" => ColorTestRunning,
+                _ => ColorTestUntested
+            };
+            var indicatorRect = new Rect(leftX, row1Y + 5f, 8f, 8f);
+            Widgets.DrawBoxSolid(indicatorRect, indicatorColor);
 
-            var displayUrl = cred.BaseUrl?.Length > 25 ? cred.BaseUrl.Substring(0, 22) + "..." : (cred.BaseUrl ?? "");
-            var maskedKey = MaskApiKey(cred.ApiKey);
-            Widgets.Label(infoRect, $"<color=#AAAAAA><size=11>{cred.ModelName}  {displayUrl}  {maskedKey}  {cred.ProviderType}</size></color>");
+            // 代号名
+            var activeMark = isActive ? "<color=#88FF88>●</color> " : "";
+            var labelRect = new Rect(leftX + 14f, row1Y, 110f, row1H);
+            Widgets.Label(labelRect, $"<size=13>{activeMark}<b>{alias}</b></size>");
 
-            // 操作按钮（右侧）
-            var btnY = rowRect.y + 3f;
-            var btnRight = rowRect.x + rowRect.width - pad;
+            // 右侧操作按钮
+            var btnY = row1Y;
+            var btnH = 22f;
+            var btnRight = cardRect.x + cardRect.width - pad;
+
+            // 测试按钮
+            var testW = 56f;
+            var testRect = new Rect(btnRight - testW, btnY, testW, btnH);
+            var testLabel = testStatus == "testing" ? "测试中…" : "测试";
+            var origColor = GUI.color;
+            if (testStatus == "testing")
+                GUI.color = ColorTestRunning;
+            if (Widgets.ButtonText(testRect, testLabel) && testStatus != "testing")
+            {
+                StartCredentialTest(alias);
+            }
+            GUI.color = origColor;
+
+            // 编辑按钮
+            var editRect = new Rect(testRect.x - BtnWidthSmall - BtnGap, btnY, BtnWidthSmall, btnH);
+            if (Widgets.ButtonText(editRect, "编辑"))
+            {
+                _pendingDeleteAlias = null;
+                StartEditAlias(alias, cred);
+            }
 
             // 删除按钮（两步确认）
-            var delWidth = BtnWidthSmall;
-            var delRect = new Rect(btnRight - delWidth, btnY, delWidth, 26f);
+            var delW = 60f;
+            var delRect = new Rect(editRect.x - delW - BtnGap, btnY, delW, btnH);
             var isPendingDelete = _pendingDeleteAlias == alias;
             if (isPendingDelete)
             {
@@ -248,24 +284,35 @@ namespace RimLife.UI.Pages
                 if (Widgets.ButtonText(delRect, "确认删除"))
                 {
                     Registry.RemoveAlias(alias);
+                    _credentialTestStatus.Remove(alias);
+                    _credentialTestError.Remove(alias);
                     SetStatus($"已删除: {alias}");
                     _pendingDeleteAlias = null;
                 }
             }
             else
             {
-                if (Widgets.ButtonText(delRect, "×"))
+                if (Widgets.ButtonText(delRect, "删除"))
                 {
                     _pendingDeleteAlias = alias;
                 }
             }
 
-            // 编辑按钮
-            var editRect = new Rect(delRect.x - BtnWidthSmall - BtnGap, btnY, BtnWidthSmall, 26f);
-            if (Widgets.ButtonText(editRect, "编辑"))
+            // ---- 第二行：详细信息 ----
+            var row2Y = cardRect.y + 28f;
+            var row2H = 16f;
+            var providerLabel = cred.ProviderType == LlmProviderType.Anthropic ? "Anthropic" : "OpenAI 兼容";
+            var displayUrl = cred.BaseUrl?.Length > 35 ? cred.BaseUrl.Substring(0, 32) + "..." : (cred.BaseUrl ?? "");
+            var modelDisplay = string.IsNullOrEmpty(cred.ModelName) ? "(未设置模型)" : cred.ModelName;
+
+            var infoRect = new Rect(leftX + 14f, row2Y, usableWidth - 14f, row2H);
+            Widgets.Label(infoRect, $"<color=#999999><size=11>{providerLabel}  |  {displayUrl}  |  {modelDisplay}</size></color>");
+
+            // 测试失败时显示错误提示
+            if (testStatus == "failed" && _credentialTestError.TryGetValue(alias, out var errMsg))
             {
-                _pendingDeleteAlias = null;
-                StartEditAlias(alias, cred);
+                var errRect = new Rect(leftX + 14f, row2Y + 14f, usableWidth - 14f, 14f);
+                Widgets.Label(errRect, $"<color=#FF6666><size=10>✗ {errMsg}</size></color>");
             }
 
             listing.Gap(GapTiny);
@@ -332,13 +379,17 @@ namespace RimLife.UI.Pages
             }
             else
             {
-                var maskedDisplay = MaskApiKey(_editApiKey);
-                _editApiKey = Widgets.TextField(keyFieldRect, maskedDisplay);
+                // 隐藏态：使用独立缓冲区避免 TextField 覆盖真实密钥
+                if (string.IsNullOrEmpty(_maskedKeyBuffer))
+                    _maskedKeyBuffer = MaskApiKey(_editApiKey);
+                _maskedKeyBuffer = Widgets.TextField(keyFieldRect, _maskedKeyBuffer);
             }
 
             if (Widgets.ButtonText(toggleRect, _showApiKey ? "隐藏" : "显示"))
             {
                 _showApiKey = !_showApiKey;
+                if (_showApiKey)
+                    _maskedKeyBuffer = ""; // 切换到显示态时清空掩码缓冲
             }
             listing.Gap(GapTiny);
 
@@ -432,6 +483,8 @@ namespace RimLife.UI.Pages
         {
             var activeAliases = Registry.GetActiveAliases();
             var allAliases = Registry.GetAllAliases();
+            var activeList = activeAliases.ToList();
+            var inactiveList = allAliases.Where(a => !activeList.Contains(a)).ToList();
 
             BeginSection(listing, "激活顺序（Fallback 链路）");
 
@@ -442,42 +495,99 @@ namespace RimLife.UI.Pages
                 return;
             }
 
-            // 每个代号显示复选框
-            var newActive = activeAliases.ToList();
-            foreach (var alias in allAliases)
+            if (activeList.Count == 0)
             {
-                var rowRect = listing.GetRect(22f);
-                bool isActive = newActive.Contains(alias);
-                Widgets.CheckboxLabeled(rowRect, $" {alias}", ref isActive);
+                Widgets.Label(listing.GetRect(20f), "<color=#888888><size=11>未激活任何代号。运行时按此列表顺序尝试，失败自动切换下一个。</size></color>");
+            }
+            else
+            {
+                // 激活列表：每个条目含上下移动按钮 + 移除按钮
+                for (int i = 0; i < activeList.Count; i++)
+                {
+                    var alias = activeList[i];
+                    var rowRect = listing.GetRect(24f);
+                    var rowW = rowRect.width;
+                    var btnSize = 22f;
+                    var btnGap = 2f;
 
-                if (isActive && !newActive.Contains(alias))
-                {
-                    newActive.Add(alias);
-                }
-                else if (!isActive && newActive.Contains(alias))
-                {
-                    newActive.Remove(alias);
+                    // 序号
+                    var idxRect = new Rect(rowRect.x, rowRect.y + 2f, 20f, 20f);
+                    Widgets.Label(idxRect, $"<color=#888888><size=11>{i + 1}.</size></color>");
+
+                    // 名称
+                    var nameRect = new Rect(rowRect.x + 22f, rowRect.y + 2f, 120f, 20f);
+                    Widgets.Label(nameRect, $"<size=12><b>{alias}</b></size>");
+
+                    // 移除按钮（右侧）
+                    var removeRect = new Rect(rowRect.x + rowW - BtnWidthSmall, rowRect.y, BtnWidthSmall, btnSize);
+                    if (Widgets.ButtonText(removeRect, "移除"))
+                    {
+                        activeList.RemoveAt(i);
+                        Registry.SetActiveAliases(activeList);
+                        SetStatus($"{alias} 已从激活列表移除");
+                        break; // 列表已变更，退出循环
+                    }
+
+                    // 下移按钮
+                    var downRect = new Rect(removeRect.x - btnSize - btnGap, rowRect.y, btnSize, btnSize);
+                    if (i < activeList.Count - 1)
+                    {
+                        if (Widgets.ButtonText(downRect, "↓"))
+                        {
+                            var tmp = activeList[i];
+                            activeList[i] = activeList[i + 1];
+                            activeList[i + 1] = tmp;
+                            Registry.SetActiveAliases(activeList);
+                            SetStatus($"{alias} 下移一位");
+                            break;
+                        }
+                    }
+
+                    // 上移按钮
+                    var upRect = new Rect(downRect.x - btnSize - btnGap, rowRect.y, btnSize, btnSize);
+                    if (i > 0)
+                    {
+                        if (Widgets.ButtonText(upRect, "↑"))
+                        {
+                            var tmp = activeList[i];
+                            activeList[i] = activeList[i - 1];
+                            activeList[i - 1] = tmp;
+                            Registry.SetActiveAliases(activeList);
+                            SetStatus($"{alias} 上移一位");
+                            break;
+                        }
+                    }
                 }
             }
 
-            listing.Gap(GapSmall);
-
-            // 应用按钮
-            var applyResults = DrawButtonRow(listing,
-                new[] { $"应用激活 ({newActive.Count})" },
-                new[] { BtnWidthMedium });
-            if (applyResults[0])
+            // 可添加的未激活代号
+            if (inactiveList.Count > 0)
             {
-                Registry.SetActiveAliases(newActive);
-                SetStatus($"已应用: {newActive.Count} 个代号激活");
+                listing.Gap(GapTiny);
+                Widgets.Label(listing.GetRect(20f), "<color=#888888><size=11>点击添加至激活列表：</size></color>");
+                foreach (var alias in inactiveList)
+                {
+                    var addRect = listing.GetRect(22f);
+                    var btnW = 100f;
+                    var labelW = addRect.width - btnW - GapSmall;
+                    Widgets.Label(new Rect(addRect.x, addRect.y, labelW, addRect.height),
+                        $"<color=#AAAAAA>{alias}</color>");
+                    if (Widgets.ButtonText(new Rect(addRect.x + labelW + GapSmall, addRect.y, btnW, 20f), "+ 加入激活"))
+                    {
+                        var newActive = Registry.GetActiveAliases().ToList();
+                        newActive.Add(alias);
+                        Registry.SetActiveAliases(newActive);
+                        SetStatus($"{alias} 已加入激活列表");
+                    }
+                }
             }
 
-            // 说明
+            // 当前链路顺序只读展示
             if (activeAliases.Count > 0)
             {
-                var infoRect = listing.GetRect(22f);
+                var infoRect = listing.GetRect(20f);
                 Widgets.Label(infoRect,
-                    $"<color=#888888><size=11>运行时按顺序尝试，失败自动切换下一个 | 顺序: [{string.Join(" → ", activeAliases)}]</size></color>");
+                    $"<color=#888888><size=11>当前 Fallback 链路:  [{string.Join(" → ", activeAliases)}]</size></color>");
             }
 
             EndSection(listing);
@@ -630,6 +740,7 @@ namespace RimLife.UI.Pages
             _discoveryError = null;
             _discoveryStatus = "正在查询模型列表...";
             _discoveryCts = new CancellationTokenSource();
+            _discoveryCts.CancelAfter(TimeSpan.FromSeconds(30)); // 兜底超时保护
 
             try
             {
@@ -674,6 +785,74 @@ namespace RimLife.UI.Pages
             if (string.IsNullOrEmpty(key)) return "(未设置)";
             if (key.Length <= 8) return new string('*', key.Length);
             return key.Substring(0, 4) + new string('*', Math.Min(key.Length - 8, 8)) + key.Substring(key.Length - 4);
+        }
+
+        // ================================================================
+        // 凭证测试
+        // ================================================================
+
+        private string GetCredentialTestStatus(string alias)
+        {
+            if (_credentialTestStatus.TryGetValue(alias, out var status))
+                return status;
+            return "untested";
+        }
+
+        private async void StartCredentialTest(string alias)
+        {
+            if (!Registry.TryGetCredential(alias, out var cred)) return;
+
+            _credentialTestStatus[alias] = "testing";
+            _credentialTestError.Remove(alias);
+            _testCts?.Cancel();
+            _testCts = new CancellationTokenSource();
+            var ct = _testCts.Token;
+
+            try
+            {
+                // 使用模型发现端点做轻量连通性测试，5 秒超时
+                var timeoutTask = Task.Delay(5000, ct);
+                var llmService = RimLifeCore.LlmAccessor as ILlmService;
+
+                if (llmService == null)
+                {
+                    _credentialTestStatus[alias] = "failed";
+                    _credentialTestError[alias] = "LLM 服务未初始化";
+                    return;
+                }
+
+                var discoveryTask = llmService.ListModelsAsync(cred, ct);
+                var completedTask = await Task.WhenAny(discoveryTask, timeoutTask);
+
+                if (completedTask == timeoutTask)
+                {
+                    _credentialTestStatus[alias] = "failed";
+                    _credentialTestError[alias] = "连接超时 (5s)";
+                }
+                else
+                {
+                    await discoveryTask; // 可能抛异常
+                    _credentialTestStatus[alias] = "success";
+                    _credentialTestError.Remove(alias);
+                    SetStatus($"{alias}: 连接测试通过");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 用户取消了（例如切换到另一个凭证的测试）
+                if (_credentialTestStatus.TryGetValue(alias, out var s) && s == "testing")
+                    _credentialTestStatus[alias] = "untested";
+            }
+            catch (Exception ex)
+            {
+                _credentialTestStatus[alias] = "failed";
+                _credentialTestError[alias] = ex.Message;
+            }
+            finally
+            {
+                _testCts?.Dispose();
+                _testCts = null;
+            }
         }
     }
 }
