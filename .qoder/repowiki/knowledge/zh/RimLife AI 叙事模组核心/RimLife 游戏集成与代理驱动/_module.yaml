@@ -1,9 +1,0 @@
-schema_version: 1
-module_path: rimlife_game_integration
-title: RimLife 游戏集成与代理驱动
-scope:
-    - Source/
-source_files: []
-depends_on: []
-related_to:
-    - path: rimlife_tests
