@@ -29,6 +29,7 @@ namespace RimLife.Infrastructure
         private static ScriptDeliveryService _scriptDeliveryService;
         private static PromptAdditions _promptAdditions;
         private static readonly object _promptAdditionsLock = new object();
+        private static EventBuffer _eventBuffer;
 
         /// <summary>日志接口。由适配层在启动时注入。</summary>
         public static ILogger Logger { get; internal set; }
@@ -39,6 +40,20 @@ namespace RimLife.Infrastructure
         /// 框架在序列化 CharacterCard 时收集所有 provider 的产出。
         /// </summary>
         public static List<ICharacterContentProvider> ContentProviders { get; } = new List<ICharacterContentProvider>();
+
+        /// <summary>
+        /// 游戏侧事件缓冲。收集 Harmony 钩子产生的事件，
+        /// 在无新事件的指定 tick 数后批量推送到框架侧 EventPool，实现事件合并去抖。
+        /// </summary>
+        public static EventBuffer EventBuffer
+        {
+            get
+            {
+                if (_eventBuffer == null)
+                    _eventBuffer = new EventBuffer();
+                return _eventBuffer;
+            }
+        }
 
         /// <summary>
         /// 台词消费者。游戏侧实现 IScriptConsumer 后注入此处。
@@ -171,6 +186,8 @@ namespace RimLife.Infrastructure
 
             _frameworkConfig = null;
             _promptAdditions = null;
+            _eventBuffer?.Reset();
+            _eventBuffer = null;
             _skillRegistryInitialized = false;
 
             // 清理 LLM 组件
@@ -417,6 +434,8 @@ namespace RimLife.Infrastructure
 
             try
             {
+                // 强制排空事件缓冲，避免未推送事件在存档时丢失
+                FlushEventBuffer(Find.TickManager?.TicksGame ?? 0, force: true);
                 _workspaces?.Persist();
                 _interactionStore?.Persist();
             }
@@ -521,6 +540,9 @@ namespace RimLife.Infrastructure
             var dc = DriverConfig;
             if (dc == null) return;
 
+            // 事件缓冲 flush 检查（空闲超时 → 批量推送到 EventPool）
+            FlushEventBuffer(currentTicks);
+
             // 核心积分算法：1 现实秒 = 60 × speedMultiplier 个 tick
             float speedMult = GetCurrentSpeedMultiplier();
             float scorePerTick = 1f / (60f * speedMult);
@@ -591,6 +613,30 @@ namespace RimLife.Infrastructure
             _lastTicksGame = Find.TickManager?.TicksGame ?? 0;
             _directorAccumSec = 0f;
             _freelancerAccumSec = 0f;
+            _eventBuffer?.Reset();
+        }
+
+        // ================================================================
+        // 事件缓冲 flush（空闲超时 / 强制排空）
+        // ================================================================
+
+        /// <summary>
+        /// 将事件缓冲中的事件推送到导演工作空间的 EventPool。
+        /// <paramref name="force"/> 为 true 时跳过空闲超时检查（存档前强制排空）。
+        /// </summary>
+        private static void FlushEventBuffer(int currentTick, bool force = false)
+        {
+            if (_eventBuffer == null || !_eventBuffer.HasEvents) return;
+            if (!force && !_eventBuffer.ShouldFlush(currentTick)) return;
+
+            var directorWs = GetDirectorWorkspace();
+            if (directorWs == null) return;
+
+            var events = _eventBuffer.Drain();
+            foreach (var evt in events)
+                directorWs.EventPool.Append(evt);
+
+            Logger?.Message($"[RimLife.Core] EventBuffer flushed: {events.Count} events → Director workspace");
         }
 
         /// <summary>

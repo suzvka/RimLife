@@ -23,7 +23,7 @@ namespace RimLife
         {
             try
             {
-                RimLifeCore.GetDirectorWorkspace()?.EventPool?.Append(
+                RimLifeCore.EventBuffer?.Append(
                     EventCardMapper.FromLetter(textLetterDef, label, text, lookTargets, relatedFaction));
             }
             catch (Exception e)
