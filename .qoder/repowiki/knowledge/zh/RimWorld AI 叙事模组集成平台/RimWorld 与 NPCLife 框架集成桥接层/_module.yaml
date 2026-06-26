@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: rimlife_game_integration
+title: RimWorld 与 NPCLife 框架集成桥接层
+scope:
+    - Source/
+source_files: []
+depends_on: []
+related_to:
+    - path: rimlife_tests
