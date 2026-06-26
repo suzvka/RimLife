@@ -35,6 +35,7 @@ Source/
     RimWorldAgentDriver.cs - 每帧驱动（定时器脉冲 + 主线程回调）
     RimWorldSaveStore.cs - 存档读写适配
     RimWorldLogger.cs    - 日志适配
+    PromptAdditions.cs   - RimLife 侧附加指令与 LLM 参数（基础身份由 NPCLife 持有，此处仅追加）
     Mcp/                 - RimWorld 特定 MCP 工具（角色/殖民地/关系/环境/记忆查询）
     Knowledge/           - 游戏 Def 知识库
   Mappers/        - RimWorld 对象 → NPCLife Card 映射
@@ -48,11 +49,6 @@ Source/
     Models/       - UI 数据模型
   Settings/       - Mod 设置入口
   Tool/           - 自检工具（RimLifeSelfTest.cs）
-
-Prompts/          - 三个 Agent 角色的系统提示词
-  DirectorPrompt.txt    - 导演 Agent
-  ScreenwriterPrompt.txt - 编剧 Agent
-  FreelancerPrompt.txt  - 临时工 Agent
 
 Defs/             - RimWorld XML 定义（Hediff 等）
 Patches/          - XML 补丁（Trait 扩展等）
@@ -81,6 +77,7 @@ Libs/             - 外部依赖 DLL（Bubbles 等）
 
 - `Source/Infrastructure/RimLifeHarmony.cs` - Mod 启动入口，注册 ContentProvider、启动 Harmony patch
 - `Source/Infrastructure/RimLifeCore.cs` - 核心服务，组装 NPCLife 组件、管理 Agent 生命周期
+- `Source/Infrastructure/PromptAdditions.cs` - 游戏侧附加指令模型（NPCLife 基座身份不可编辑，此处仅追加）
 - `Source/Infrastructure/RimWorldAgentDriver.cs` - 每帧驱动，定时器脉冲 + 主线程回调
 - `Source/Data/Events/EventHooks.cs` - Harmony 补丁，拦截 RimWorld 事件注入事件池
 - `Source/Mappers/EventCardMapper.cs` - 将 RimWorld 事件转化为 NPCLife IGameEvent
@@ -88,7 +85,7 @@ Libs/             - 外部依赖 DLL（Bubbles 等）
 - `Source/UI/ConfigPanelWindow.cs` - 配置面板入口
 - `Source/UI/ConfigPanelLayout.cs` - 三区布局（侧栏 + 内容区 + 状态栏）
 - `Source/UI/Helpers/UIHelper.cs` - UI 绘制辅助（间距/颜色/按钮/卡片/分段选择器等统一原语）
-- `Prompts/` - 三个 Agent 角色的系统提示词
+- `Prompts/` - 三个 Agent 角色的系统提示词（由 NPCLife 持有，RimLife 不可编辑）
 
 ## 运行与预览
 

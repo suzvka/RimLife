@@ -27,8 +27,8 @@ namespace RimLife.Infrastructure
         private static readonly object _skillRegistryLock = new object();
         private static FrameworkConfig _frameworkConfig;
         private static ScriptDeliveryService _scriptDeliveryService;
-        private static PromptConfig _promptConfig;
-        private static readonly object _promptConfigLock = new object();
+        private static PromptAdditions _promptAdditions;
+        private static readonly object _promptAdditionsLock = new object();
 
         /// <summary>日志接口。由适配层在启动时注入。</summary>
         public static ILogger Logger { get; internal set; }
@@ -84,32 +84,33 @@ namespace RimLife.Infrastructure
         public static FrameworkConfig Config => _frameworkConfig ?? FrameworkConfig.CreateDefault();
 
         /// <summary>
-        /// 提示词配置。从 CacheStore 延迟加载，UI 修改后通过 SetPromptConfig 写回。
+        /// 游戏侧附加指令与 LLM 采样参数。从 CacheStore 延迟加载，UI 修改后通过 SetPromptAdditions 写回。
+        /// 基础身份由 NPCLife 的 PromptConfig 静态成员持有，此处仅保存"附加"部分。
         /// </summary>
-        public static PromptConfig PromptConfig
+        public static PromptAdditions PromptAdditions
         {
             get
             {
-                lock (_promptConfigLock)
+                lock (_promptAdditionsLock)
                 {
-                    if (_promptConfig == null)
-                        _promptConfig = LoadPromptConfig();
-                    return _promptConfig;
+                    if (_promptAdditions == null)
+                        _promptAdditions = LoadPromptAdditions();
+                    return _promptAdditions;
                 }
             }
         }
 
         /// <summary>
-        /// 更新提示词配置并持久化到 CacheStore。
+        /// 更新附加指令与 LLM 参数并持久化到 CacheStore。
         /// 修改后需调用 RebuildAgents() 才能生效。
         /// </summary>
-        public static void SetPromptConfig(PromptConfig config)
+        public static void SetPromptAdditions(PromptAdditions additions)
         {
-            if (config == null) throw new ArgumentNullException(nameof(config));
-            lock (_promptConfigLock)
+            if (additions == null) throw new ArgumentNullException(nameof(additions));
+            lock (_promptAdditionsLock)
             {
-                _promptConfig = config;
-                SavePromptConfig(config);
+                _promptAdditions = additions;
+                SavePromptAdditions(additions);
             }
         }
 
@@ -169,7 +170,7 @@ namespace RimLife.Infrastructure
             _freelancerAgent = null;
 
             _frameworkConfig = null;
-            _promptConfig = null;
+            _promptAdditions = null;
             _skillRegistryInitialized = false;
 
             // 清理 LLM 组件
@@ -610,7 +611,7 @@ namespace RimLife.Infrastructure
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
                                 knowledgeService: KnowledgeService,
-                                temperature: PromptConfig.Temperature,
+                                temperature: PromptAdditions.Temperature,
                                 modelRefsJson: freelancerWs.ModelRefs,
                                 currentModel: freelancerWs.CurrentModel);
                         }
@@ -646,7 +647,7 @@ namespace RimLife.Infrastructure
                                 serializer: CardSerializer.Default,
                                 contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
                                 knowledgeService: KnowledgeService,
-                                temperature: PromptConfig.Temperature,
+                                temperature: PromptAdditions.Temperature,
                                 modelRefsJson: directorWs.ModelRefs,
                                 currentModel: directorWs.CurrentModel);
                         }
@@ -705,7 +706,7 @@ namespace RimLife.Infrastructure
                     logger: Logger,
                     serializer: CardSerializer.Default,
                     knowledgeService: KnowledgeService,
-                    temperature: PromptConfig.Temperature,
+                    temperature: PromptAdditions.Temperature,
                     modelRefsJson: ws.ModelRefs,
                     currentModel: ws.CurrentModel);
 
@@ -734,9 +735,10 @@ namespace RimLife.Infrastructure
 
         private static string BuildDirectorSystemPrompt()
         {
-            var pc = PromptConfig;
-            var sb = new System.Text.StringBuilder(pc.DirectorPrompt ?? NPCLife.Driver.PromptConfig.DefaultDirectorPrompt);
-            AppendStyleInstruction(sb, pc);
+            var pa = PromptAdditions;
+            var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultDirectorPrompt);
+            AppendAdditions(sb, pa.DirectorAdditions, "RimWorld 导演附加指令");
+            AppendStyleInstruction(sb, pa);
             return sb.ToString();
         }
 
@@ -770,8 +772,9 @@ namespace RimLife.Infrastructure
 
         private static string BuildScreenwriterSystemPrompt(NPCLife.Workspace.IWorkspace ws)
         {
-            var pc = PromptConfig;
-            var sb = new System.Text.StringBuilder(pc.ScreenwriterPrompt ?? NPCLife.Driver.PromptConfig.DefaultScreenwriterPrompt);
+            var pa = PromptAdditions;
+            var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultScreenwriterPrompt);
+            AppendAdditions(sb, pa.ScreenwriterAdditions, "RimWorld 编剧附加指令");
 
             // 将工作空间上下文（ID、关联角色、格式规范）注入系统提示词。
             sb.AppendLine();
@@ -788,14 +791,15 @@ namespace RimLife.Infrastructure
             sb.AppendLine();
             sb.Append(ScriptFormat.GetFormatSpec());
 
-            AppendStyleInstruction(sb, pc);
+            AppendStyleInstruction(sb, pa);
             return sb.ToString();
         }
 
         private static string BuildFreelancerSystemPrompt(NPCLife.Workspace.IWorkspace ws)
         {
-            var pc = PromptConfig;
-            var sb = new System.Text.StringBuilder(pc.FreelancerPrompt ?? NPCLife.Driver.PromptConfig.DefaultFreelancerPrompt);
+            var pa = PromptAdditions;
+            var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultFreelancerPrompt);
+            AppendAdditions(sb, pa.FreelancerAdditions, "RimWorld 临时工附加指令");
 
             // 将工作空间上下文（ID、关联角色、格式规范）注入系统提示词。
             sb.AppendLine();
@@ -810,18 +814,30 @@ namespace RimLife.Infrastructure
             sb.AppendLine();
             sb.Append(ScriptFormat.GetFormatSpec());
 
-            AppendStyleInstruction(sb, pc);
+            AppendStyleInstruction(sb, pa);
             return sb.ToString();
         }
 
-        /// <summary>将全局风格指令追加到提示词末尾（共用辅助）。</summary>
-        private static void AppendStyleInstruction(System.Text.StringBuilder sb, PromptConfig pc)
+        /// <summary>将角色附加指令追加到系统提示词中（仅在非空时生效）。</summary>
+        private static void AppendAdditions(System.Text.StringBuilder sb, string additions, string sectionTitle)
         {
-            if (!string.IsNullOrEmpty(pc?.StyleInstruction))
+            if (!string.IsNullOrEmpty(additions))
+            {
+                sb.AppendLine();
+                sb.AppendLine();
+                sb.AppendLine($"## {sectionTitle}");
+                sb.AppendLine(additions);
+            }
+        }
+
+        /// <summary>将全局风格指令追加到提示词末尾（共用辅助）。</summary>
+        private static void AppendStyleInstruction(System.Text.StringBuilder sb, PromptAdditions pa)
+        {
+            if (!string.IsNullOrEmpty(pa?.StyleInstruction))
             {
                 sb.AppendLine();
                 sb.AppendLine("## 叙事风格");
-                sb.AppendLine(pc.StyleInstruction);
+                sb.AppendLine(pa.StyleInstruction);
             }
         }
 
@@ -864,30 +880,30 @@ namespace RimLife.Infrastructure
             return DriverConfig.CreateDefault();
         }
 
-        private static PromptConfig LoadPromptConfig()
+        private static PromptAdditions LoadPromptAdditions()
         {
             try
             {
-                var json = CacheStore?.FetchCache<string>("rimlife_prompt_config", null);
+                var json = CacheStore?.FetchCache<string>("rimlife_prompt_additions", null);
                 if (!string.IsNullOrEmpty(json))
-                    return PromptConfig.FromJson(json);
+                    return PromptAdditions.FromJson(json);
             }
             catch
             {
                 // 加载失败，返回默认
             }
-            return PromptConfig.CreateDefault();
+            return PromptAdditions.CreateDefault();
         }
 
-        private static void SavePromptConfig(PromptConfig config)
+        private static void SavePromptAdditions(PromptAdditions additions)
         {
             try
             {
-                CacheStore?.Cache("rimlife_prompt_config", config.ToJson());
+                CacheStore?.Cache("rimlife_prompt_additions", additions.ToJson());
             }
             catch (Exception e)
             {
-                Logger?.Warning($"[RimLife.Core] Failed to save PromptConfig: {e.Message}");
+                Logger?.Warning($"[RimLife.Core] Failed to save PromptAdditions: {e.Message}");
             }
         }
 

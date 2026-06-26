@@ -1,0 +1,72 @@
+version: 1
+
+# 范围控制：聚焦 Source/ 核心代码与 Prompts/ 提示词
+scope:
+  include:
+    - "Source/**"
+    - "Prompts/**"
+  exclude:
+    - "Source/**/*.Designer.cs"
+    - "**/obj/**"
+    - "**/bin/**"
+
+repowiki:
+  template: "product_requirement"
+
+  notes:
+    - text: "RimLife 是 RimWorld 1.6 游戏模组，运行时为 .NET Framework 4.8 / Unity，不是独立可运行的应用。"
+    - text: "所有 Agent 循环、LLM 通信、MCP 协议、事件总线等框架能力由 NPCLife 子模块（ext/NPCLife/）提供，RimLife 仅做游戏侧适配。"
+    - text: "UI 采用 RimWorld IMGUI（Verse.Widgets / Listing_Standard），是即时模式，每帧重绘，所有状态需手动维护。"
+    - text: "禁止在代码中硬编码 LLM 模型名称（如 gpt-4o），模型名必须由用户输入或从 API 发现。"
+    - text: "按钮尺寸必须使用 UIHelper 中的常量（BtnWidthSmall/Medium/Large, BtnHeight），禁止硬编码像素值。"
+    - text: "删除操作必须使用两步确认（首次点击标记待删除态，再次点击执行）。API Key 编辑必须提供显示/隐藏切换，默认脱敏显示。"
+
+  documents:
+    - title: "Infrastructure 基础设施层"
+      goal: "描述 RimLife 核心基础设施的产品需求：Mod 启动流程、Agent 生命周期管理、存档读写、事件钩子、MCP 工具集、知识库服务。"
+      parent: ""
+      hints:
+        - "覆盖 RimLifeCore、RimLifeHarmony、RimWorldAgentDriver、RimWorldSaveStore、EventHooks 等关键入口。"
+        - "说明各 MCP Provider（CharacterQuery、ColonyOverview、EnvironmentQuery、PawnMemory、RelationshipQuery）的功能定位。"
+
+    - title: "UI 配置面板系统"
+      goal: "描述配置面板 UI 的产品需求：页面结构、导航方式、交互规范、各页面功能定位。"
+      parent: ""
+      hints:
+        - "覆盖 ConfigPanelWindow、ConfigPanelLayout、各 Page（Connection、Narrative、Knowledge、Advanced、Debug、Prompt）。"
+        - "说明 UIHelper 统一布局原语的设计意图与使用约束。"
+
+    - title: "MCP 工具集需求规格"
+      goal: "描述 RimLife 提供的 RimWorld 特定 MCP 工具的功能需求与数据查询接口。"
+      parent: "Infrastructure 基础设施层"
+      hints:
+        - "逐一说明 CharacterQueryProvider、ColonyOverviewProvider、EnvironmentQueryProvider、PawnMemoryProvider、RelationshipQueryProvider 的查询能力与返回数据。"
+
+    - title: "Agent 驱动与事件流"
+      goal: "描述 Agent 生命周期驱动机制、事件钩子拦截策略、从游戏事件到 NPCLife Card 的完整数据流。"
+      parent: "Infrastructure 基础设施层"
+      hints:
+        - "说明 RimWorldAgentDriver 的定时器脉冲 + 主线程回调机制。"
+        - "说明 EventHooks 拦截了哪些 RimWorld 事件（袭击、社交、死亡等）以及如何注入事件池。"
+
+    - title: "UI 交互规范与设计约束"
+      goal: "描述 UI 层的交互设计规范：布局原语、状态反馈、安全操作（删除确认、密钥脱敏）等统一规则。"
+      parent: "UI 配置面板系统"
+      hints:
+        - "说明 UIHelper 提供的所有绘制原语（间距常量、按钮尺寸、DrawButtonRow、DrawSegmentedSelector 等）。"
+        - "强调 ConnectionPage 信息架构：状态摘要 → 凭证管理 → 模型选择。"
+
+    - title: "Agent 角色与提示词体系"
+      goal: "描述三个 Agent 角色（导演、编剧、临时工）的产品定位、职责边界和提示词设计意图。"
+      parent: ""
+      hints:
+        - "覆盖 Prompts/ 下的 DirectorPrompt、ScreenwriterPrompt、FreelancerPrompt。"
+        - "说明三角色协作模式与 NPCLife Workspace 工具的关系。"
+
+knowledgecard:
+  notes:
+    - text: "RimLife 的模块边界：Data 层负责游戏数据提取，Infrastructure 层负责桥接 NPCLife 框架，Mappers 层负责 Card 映射，UI 层负责配置面板。各层职责不交叉。"
+    - text: "所有 MCP Provider 实现 NPCLife 框架的 IMcpToolProvider 接口，注册到 NPCLife 的 SkillRegistry，由 Agent 通过 MCP 协议调用。"
+    - text: "UI 绘制必须使用 UIHelper 统一原语，禁止直接硬编码像素值或颜色。按钮尺寸常量：BtnWidthSmall/Medium/Large、BtnHeight。"
+    - text: "IMGUI 是即时模式 GUI，Text.CalcSize() 必须在 GUI 线程的绘制上下文中调用，Listing_Standard.GetRect() 会自动推进游标。"
+    - text: "RimLife 通过 ProjectReference 引用 NPCLife 子模块（ext/NPCLife/src/NPCLife/NPCLife.csproj），编译产物输出到 1.6/Assemblies/。"

@@ -1,4 +1,3 @@
-using NPCLife.Driver;
 using RimLife.Infrastructure;
 using UnityEngine;
 using Verse;
@@ -7,8 +6,8 @@ using static RimLife.UI.UIHelper;
 namespace RimLife.UI
 {
     /// <summary>
-    /// 提示词页面：各角色完整提示词全文编辑 + LLM 采样参数。
-    /// 缓存即真相，恢复 = 将缓存覆盖为默认值。
+    /// 提示词页面：编辑 RimLife 在 NPCLife 基础身份之上追加的指令与 LLM 采样参数。
+    /// 基础身份由 NPCLife 维护，对用户不可见也不可编辑；此处只管理附加部分。
     /// </summary>
     public class PromptPage : IConfigPage
     {
@@ -17,13 +16,13 @@ namespace RimLife.UI
         public string Group => "核心";
         public int Order => 2;
 
-        // 本地编辑缓冲
+        // 本地编辑缓冲（仅附加指令，不含 NPCLife 基座身份）
         private bool _initialized;
-        private string _directorPrompt = "";
+        private string _directorAdditions = "";
         private string[] _directorBuffers;
-        private string _screenwriterPrompt = "";
+        private string _screenwriterAdditions = "";
         private string[] _screenwriterBuffers;
-        private string _freelancerPrompt = "";
+        private string _freelancerAdditions = "";
         private string[] _freelancerBuffers;
         private string _styleInstruction = "";
         private string[] _styleBuffers;
@@ -36,6 +35,11 @@ namespace RimLife.UI
         public void Draw(Rect rect, Listing_Standard listing)
         {
             InitializeIfNeeded();
+
+            // ---- 顶部说明 ----
+            Widgets.Label(listing.GetRect(36f),
+                "<color=#aaaaaa><size=12>每个 Agent 的基础身份由 NPCLife 框架维护，不可编辑。下方文本框用于追加 RimWorld 特定指令、规则或约束。</size></color>");
+            listing.Gap(GapTiny);
 
             // ---- LLM 采样参数 ----
             BeginSection(listing, "LLM 参数");
@@ -59,91 +63,93 @@ namespace RimLife.UI
             DrawMultilineInput(listing, ref _styleInstruction, ref _styleBuffers);
             EndSection(listing);
 
-            // ---- 导演提示词 ----
-            BeginSection(listing, "导演 Agent (Director)");
-            DrawMultilineInput(listing, ref _directorPrompt, ref _directorBuffers);
+            // ---- 导演附加指令 ----
+            BeginSection(listing, "导演 Agent (Director) — 附加指令");
+            Widgets.Label(listing.GetRect(22f),
+                "<color=#888888><size=12>在框架基础身份之上追加指令。留空则不追加任何内容。</size></color>");
+            listing.Gap(GapTiny);
+            DrawMultilineInput(listing, ref _directorAdditions, ref _directorBuffers);
             listing.Gap(GapTiny);
             var dirBtns = DrawButtonRow(listing,
-                new[] { "恢复默认" },
+                new[] { "清空附加" },
                 new[] { BtnWidthMedium });
             if (dirBtns[0])
             {
-                _directorPrompt = PromptConfig.DefaultDirectorPrompt;
+                _directorAdditions = "";
                 _directorBuffers = null;
-                _statusMessage = "导演提示词已恢复默认（需保存生效）";
+                _statusMessage = "导演附加指令已清空（需保存生效）";
                 _statusMessageTime = Time.time;
             }
             EndSection(listing);
 
-            // ---- 编剧提示词 ----
-            BeginSection(listing, "编剧 Agent (Screenwriter)");
+            // ---- 编剧附加指令 ----
+            BeginSection(listing, "编剧 Agent (Screenwriter) — 附加指令");
             Widgets.Label(listing.GetRect(22f),
-                "<color=#888888><size=12>动态上下文（工作空间 ID、关联角色等）在运行时自动追加。</size></color>");
+                "<color=#888888><size=12>在框架基础身份之上追加指令。动态上下文（工作空间 ID、关联角色等）在运行时自动追加。留空则不追加任何内容。</size></color>");
             listing.Gap(GapTiny);
-            DrawMultilineInput(listing, ref _screenwriterPrompt, ref _screenwriterBuffers);
+            DrawMultilineInput(listing, ref _screenwriterAdditions, ref _screenwriterBuffers);
             listing.Gap(GapTiny);
             var swBtns = DrawButtonRow(listing,
-                new[] { "恢复默认" },
+                new[] { "清空附加" },
                 new[] { BtnWidthMedium });
             if (swBtns[0])
             {
-                _screenwriterPrompt = PromptConfig.DefaultScreenwriterPrompt;
+                _screenwriterAdditions = "";
                 _screenwriterBuffers = null;
-                _statusMessage = "编剧提示词已恢复默认（需保存生效）";
+                _statusMessage = "编剧附加指令已清空（需保存生效）";
                 _statusMessageTime = Time.time;
             }
             EndSection(listing);
 
-            // ---- Freelancer 提示词 ----
-            BeginSection(listing, "临时工 Agent (Freelancer)");
+            // ---- Freelancer 附加指令 ----
+            BeginSection(listing, "临时工 Agent (Freelancer) — 附加指令");
             Widgets.Label(listing.GetRect(22f),
-                "<color=#888888><size=12>动态上下文（工作空间 ID 等）在运行时自动追加。</size></color>");
+                "<color=#888888><size=12>在框架基础身份之上追加指令。动态上下文（工作空间 ID 等）在运行时自动追加。留空则不追加任何内容。</size></color>");
             listing.Gap(GapTiny);
-            DrawMultilineInput(listing, ref _freelancerPrompt, ref _freelancerBuffers);
+            DrawMultilineInput(listing, ref _freelancerAdditions, ref _freelancerBuffers);
             listing.Gap(GapTiny);
             var flBtns = DrawButtonRow(listing,
-                new[] { "恢复默认" },
+                new[] { "清空附加" },
                 new[] { BtnWidthMedium });
             if (flBtns[0])
             {
-                _freelancerPrompt = PromptConfig.DefaultFreelancerPrompt;
+                _freelancerAdditions = "";
                 _freelancerBuffers = null;
-                _statusMessage = "临时工提示词已恢复默认（需保存生效）";
+                _statusMessage = "临时工附加指令已清空（需保存生效）";
                 _statusMessageTime = Time.time;
             }
             EndSection(listing);
 
             // ---- 全局操作按钮 ----
             var btnResults = DrawButtonRow(listing,
-                new[] { "保存并应用", "全部恢复默认" },
+                new[] { "保存并应用", "清空所有附加" },
                 new[] { BtnWidthLarge, BtnWidthLarge });
 
             if (btnResults[0])
             {
-                var pc = new PromptConfig
+                var pa = new PromptAdditions
                 {
-                    DirectorPrompt = _directorPrompt,
-                    ScreenwriterPrompt = _screenwriterPrompt,
-                    FreelancerPrompt = _freelancerPrompt,
+                    DirectorAdditions = _directorAdditions,
+                    ScreenwriterAdditions = _screenwriterAdditions,
+                    FreelancerAdditions = _freelancerAdditions,
                     StyleInstruction = _styleInstruction,
                     Temperature = _temperature
                 };
-                RimLifeCore.SetPromptConfig(pc);
+                RimLifeCore.SetPromptAdditions(pa);
                 RimLifeCore.RebuildAgents();
                 _statusMessage = "已保存并重建 Agent";
                 _statusMessageTime = Time.time;
-                Log.Message("[RimLife.UI] Prompt settings saved");
+                Log.Message("[RimLife.UI] Prompt additions saved");
             }
 
             if (btnResults[1])
             {
-                var def = PromptConfig.CreateDefault();
-                _directorPrompt = def.DirectorPrompt; _directorBuffers = null;
-                _screenwriterPrompt = def.ScreenwriterPrompt; _screenwriterBuffers = null;
-                _freelancerPrompt = def.FreelancerPrompt; _freelancerBuffers = null;
+                _directorAdditions = ""; _directorBuffers = null;
+                _screenwriterAdditions = ""; _screenwriterBuffers = null;
+                _freelancerAdditions = ""; _freelancerBuffers = null;
                 _styleInstruction = ""; _styleBuffers = null;
-                _temperature = def.Temperature;
-                _statusMessage = "全部已恢复默认（需保存生效）";
+                _temperature = 0.7f;
+                _statusMessage = "所有附加已清空（需保存生效）";
                 _statusMessageTime = Time.time;
             }
 
@@ -155,12 +161,12 @@ namespace RimLife.UI
         {
             if (_initialized) return;
             _initialized = true;
-            var pc = RimLifeCore.PromptConfig;
-            _directorPrompt = pc.DirectorPrompt ?? PromptConfig.DefaultDirectorPrompt;
-            _screenwriterPrompt = pc.ScreenwriterPrompt ?? PromptConfig.DefaultScreenwriterPrompt;
-            _freelancerPrompt = pc.FreelancerPrompt ?? PromptConfig.DefaultFreelancerPrompt;
-            _styleInstruction = pc.StyleInstruction ?? "";
-            _temperature = pc.Temperature;
+            var pa = RimLifeCore.PromptAdditions;
+            _directorAdditions = pa.DirectorAdditions ?? "";
+            _screenwriterAdditions = pa.ScreenwriterAdditions ?? "";
+            _freelancerAdditions = pa.FreelancerAdditions ?? "";
+            _styleInstruction = pa.StyleInstruction ?? "";
+            _temperature = pa.Temperature;
         }
 
         // ================================================================

@@ -40,10 +40,6 @@
 	  <None Remove="ext\**" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <EmbeddedResource Include="Prompts\*.txt" />
-	</ItemGroup>
-
 	<!-- Reference NPCLife framework (submodule) -->
 	<ItemGroup>
 	  <ProjectReference Include="ext\NPCLife\src\NPCLife\NPCLife.csproj" />
