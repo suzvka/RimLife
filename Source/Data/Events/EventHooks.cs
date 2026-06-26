@@ -14,9 +14,11 @@ namespace RimLife
     // 统一信封 Hook（替代逐个事件 Hook，覆盖所有 RimWorld 信封事件）
     // Letter 自带叙事文案（label / text），天然适配编剧 agent 消费。
     // ================================================================
+    
+    // 补丁重载 1：完整参数版本
     [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter),
         new Type[] { typeof(TaggedString), typeof(TaggedString), typeof(LetterDef), typeof(LookTargets), typeof(Faction), typeof(Quest), typeof(List<ThingDef>), typeof(string), typeof(int), typeof(bool) })]
-    internal static class Patch_LetterStack_ReceiveLetter
+    internal static class Patch_LetterStack_ReceiveLetter_Full
     {
         static void Postfix(LetterStack __instance, TaggedString label, TaggedString text,
                              LetterDef textLetterDef, LookTargets lookTargets, Faction relatedFaction)
@@ -28,7 +30,47 @@ namespace RimLife
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife:EventHooks] Letter hook failed: {e.Message}");
+                Log.Warning($"[RimLife:EventHooks] Letter hook (full) failed: {e.Message}");
+            }
+        }
+    }
+
+    // 补丁重载 2：简化参数版本（无 LookTargets）
+    [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter),
+        new Type[] { typeof(TaggedString), typeof(TaggedString), typeof(LetterDef), typeof(string), typeof(int), typeof(bool) })]
+    internal static class Patch_LetterStack_ReceiveLetter_Simple
+    {
+        static void Postfix(LetterStack __instance, TaggedString label, TaggedString text, LetterDef textLetterDef)
+        {
+            try
+            {
+                RimLifeCore.EventBuffer?.Append(
+                    EventCardMapper.FromLetter(textLetterDef, label, text, default, null));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] Letter hook (simple) failed: {e.Message}");
+            }
+        }
+    }
+
+    // 补丁重载 3：Letter 对象版本
+    [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter),
+        new Type[] { typeof(Letter), typeof(string), typeof(int), typeof(bool) })]
+    internal static class Patch_LetterStack_ReceiveLetter_Letter
+    {
+        static void Postfix(LetterStack __instance, Letter let)
+        {
+            try
+            {
+                if (let == null) return;
+                // Letter 的属性可能不同，使用 def 和默认值
+                RimLifeCore.EventBuffer?.Append(
+                    EventCardMapper.FromLetter(let.def, let.def?.label ?? "Letter", "", default, null));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] Letter hook (letter) failed: {e.Message}");
             }
         }
     }

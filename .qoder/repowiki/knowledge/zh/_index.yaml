@@ -3,11 +3,11 @@ schema_version: 1
 locale: zh-CN
 branch: master
 nodes_managed: true
-exported_at: "2026-06-26T11:26:27Z"
+exported_at: "2026-06-26T11:57:01Z"
 modules:
     "":
-        dir_name: RimWorld AI 叙事模组集成平台
-        title: RimWorld AI 叙事模组集成平台
+        dir_name: RimWorld AI 叙事增强模组
+        title: RimWorld AI 叙事增强模组
         scope:
             - LICENSE.txt
             - RimLife.csproj
@@ -441,8 +441,8 @@ modules:
         depends_on: []
         related_to: []
     rimlife_game_integration:
-        dir_name: RimWorld 与 NPCLife 框架集成桥接层
-        title: RimWorld 与 NPCLife 框架集成桥接层
+        dir_name: RimWorld-NPCLife 游戏集成适配层
+        title: RimWorld-NPCLife 游戏集成适配层
         scope:
             - Source/
         source_files: []

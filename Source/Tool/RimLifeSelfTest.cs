@@ -1451,6 +1451,7 @@ namespace RimLife.Tool
             public IReadOnlyList<string> Tags { get; set; }
             public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
+            public string TimeLabel { get; set; }
             public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }

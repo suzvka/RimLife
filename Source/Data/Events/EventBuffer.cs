@@ -23,9 +23,9 @@ namespace RimLife
 
         /// <summary>
         /// 缓冲空闲超时（游戏 tick）。自最后一个事件到达起，
-        /// 经过此 tick 数无新事件到达，即触发推送。默认 3600。
+        /// 经过此 tick 数无新事件到达，即触发推送。默认 600（10 秒）。
         /// </summary>
-        public int IdleTimeoutTicks { get; set; } = 3600;
+        public int IdleTimeoutTicks { get; set; } = 600;
 
         public int Count => _pending.Count;
         public bool HasEvents => _pending.Count > 0;
@@ -37,6 +37,9 @@ namespace RimLife
             _pending.Add(evt);
             if (evt.Tick > _lastEventTick)
                 _lastEventTick = evt.Tick;
+            
+            // 诊断日志：记录事件进入缓冲
+            Verse.Log.Message($"[RimLife.EventBuffer] Event appended: {evt.EventID} (pending={_pending.Count})");
         }
 
         /// <summary>

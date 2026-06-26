@@ -20,6 +20,7 @@ namespace RimLife.Infrastructure
         {
             MainThreadDispatcher.DrainQueue();
             RimLifeCore.TickTimerPulses();
+            RimLifeCore.TickDialogueScheduler();
         }
 
         public override void StartedNewGame()

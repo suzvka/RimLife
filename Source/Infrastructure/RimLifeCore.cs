@@ -27,6 +27,7 @@ namespace RimLife.Infrastructure
         private static readonly object _skillRegistryLock = new object();
         private static FrameworkConfig _frameworkConfig;
         private static ScriptDeliveryService _scriptDeliveryService;
+        private static DialogueConsumer _dialogueConsumer;
         private static PromptAdditions _promptAdditions;
         private static readonly object _promptAdditionsLock = new object();
         private static EventBuffer _eventBuffer;
@@ -95,8 +96,16 @@ namespace RimLife.Infrastructure
             TimeProvider = timeProvider;
         }
 
-        /// <summary>当前框架配置。未配置时返回默认配置。</summary>
-        public static FrameworkConfig Config => _frameworkConfig ?? FrameworkConfig.CreateDefault();
+        /// <summary>当前框架配置。未配置时从 CacheStore 延迟加载，无持久化数据时返回默认配置。</summary>
+        public static FrameworkConfig Config
+        {
+            get
+            {
+                if (_frameworkConfig == null)
+                    _frameworkConfig = LoadFrameworkConfig();
+                return _frameworkConfig;
+            }
+        }
 
         /// <summary>
         /// 游戏侧附加指令与 LLM 采样参数。从 CacheStore 延迟加载，UI 修改后通过 SetPromptAdditions 写回。
@@ -151,6 +160,7 @@ namespace RimLife.Infrastructure
             ErrorHandler.DiagnosticMode = config.Diagnostics?.EnableVerboseLogging ?? false;
 
             config.Freeze();
+            SaveFrameworkConfig(config);
             LifecycleManager.NotifyConfigReady();
             EventBus.Publish(FrameworkEvents.ConfigReady);
 
@@ -199,6 +209,11 @@ namespace RimLife.Infrastructure
             _scriptDeliveryService?.Dispose();
             _scriptDeliveryService = null;
 
+            // 清理台词消费者
+            _dialogueConsumer?.Dispose();
+            _dialogueConsumer = null;
+            ScriptConsumer = null;
+
             Logger?.Message("[RimLife.Core] Shutdown complete.");
         }
 
@@ -217,22 +232,34 @@ namespace RimLife.Infrastructure
                 // 提前置位以阻断重入：RegisterHookProvider 可能回调本方法。
                 _skillRegistryInitialized = true;
 
-                McpSkillRegistry.InitializeDefaults();
+                try
+                {
+                    Logger?.Message("[RimLife.Core] EnsureSkillRegistryInitialized: starting...");
+                    
+                    McpSkillRegistry.InitializeDefaults();
+                    Logger?.Message("[RimLife.Core] McpSkillRegistry.InitializeDefaults completed.");
 
-                int count = RegisterHookProvider(new SystemMcpProvider(() => Workspaces, TimeProvider, Logger));
-                count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeService, Logger));
-                count += RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
-                count += RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
-                count += RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
+                    int count = RegisterHookProvider(new SystemMcpProvider(() => Workspaces, () => TimeProvider?.Invoke() ?? "", Logger));
+                    count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeService, Logger));
+                    count += RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
+                    count += RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
+                    count += RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
 
-                // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
-                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
-                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.CharacterQueryProvider());
-                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.RelationshipQueryProvider());
-                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.EnvironmentQueryProvider());
-                count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.PawnMemoryProvider());
+                    // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
+                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
+                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.CharacterQueryProvider());
+                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.RelationshipQueryProvider());
+                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.EnvironmentQueryProvider());
+                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.PawnMemoryProvider());
 
-                Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
+                    Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
+                }
+                catch (Exception ex)
+                {
+                    Logger?.Warning($"[RimLife.Core] SkillRegistry initialization failed: {ex.Message}");
+                    Logger?.Warning($"[RimLife.Core] Stack: {ex.StackTrace}");
+                    throw;
+                }
 
                 // ---- 台词推送服务 ----
                 if (_scriptDeliveryService == null)
@@ -243,6 +270,16 @@ namespace RimLife.Infrastructure
                         resolver: ScriptLineResolver ?? new DefaultScriptLineResolver(),
                         logger: Logger);
                     Logger?.Message("[RimLife.Core] ScriptDeliveryService initialized.");
+                }
+
+                // ---- 台词消费者 + 调度器 ----
+                if (_dialogueConsumer == null)
+                {
+                    _dialogueConsumer = new DialogueConsumer(
+                        getWorkspaceManager: () => Workspaces,
+                        logger: Logger);
+                    ScriptConsumer = _dialogueConsumer;
+                    Logger?.Message("[RimLife.Core] DialogueConsumer initialized.");
                 }
 
                 // 注入 Logger 到基础设施组件
@@ -588,6 +625,15 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>
+        /// 每帧调用。驱动台词调度器，消费已到达时间的台词行。
+        /// 由 RimWorldAgentDriver.GameComponentUpdate 调用。
+        /// </summary>
+        public static void TickDialogueScheduler()
+        {
+            _dialogueConsumer?.Tick();
+        }
+
+        /// <summary>
         /// 获取当前 RimWorld 游戏速度倍率（相对于 1×）。
         /// Normal=1, Fast=3, Superfast=6, Ultrafast=15, Paused/Unknown=1。
         /// </summary>
@@ -630,13 +676,20 @@ namespace RimLife.Infrastructure
             if (!force && !_eventBuffer.ShouldFlush(currentTick)) return;
 
             var directorWs = GetDirectorWorkspace();
-            if (directorWs == null) return;
+            if (directorWs == null)
+            {
+                Logger?.Warning("[RimLife.Core] FlushEventBuffer: DirectorWorkspace is null");
+                return;
+            }
 
             var events = _eventBuffer.Drain();
             foreach (var evt in events)
                 directorWs.EventPool.Append(evt);
 
-            Logger?.Message($"[RimLife.Core] EventBuffer flushed: {events.Count} events → Director workspace");
+            Logger?.Message($"[RimLife.Core] EventBuffer flushed: {events.Count} events → Director workspace (pending={directorWs.EventPool.PendingCount}, importance={directorWs.EventPool.TotalImportance:F1})");
+            
+            // 确保 Director Agent 已创建
+            GetDirectorAgent();
         }
 
         /// <summary>
@@ -744,8 +797,19 @@ namespace RimLife.Infrastructure
             {
                 lock (_directorAgentLock)
                 {
-                    if (_directorAgent == null && SaveStore != null && LlmAccessor != null)
+                    if (_directorAgent == null)
                     {
+                        if (SaveStore == null)
+                        {
+                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: SaveStore is null");
+                            return null;
+                        }
+                        if (LlmAccessor == null)
+                        {
+                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: LlmAccessor is null");
+                            return null;
+                        }
+                        
                         var directorWs = GetDirectorWorkspace();
                         if (directorWs != null)
                         {
@@ -763,6 +827,11 @@ namespace RimLife.Infrastructure
                                 temperature: PromptAdditions.Temperature,
                                 modelRefsJson: directorWs.ModelRefs,
                                 currentModel: directorWs.CurrentModel);
+                            Logger?.Message("[RimLife.Core] DirectorAgent created and subscribed to EventPool");
+                        }
+                        else
+                        {
+                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: DirectorWorkspace is null");
                         }
                     }
                 }
@@ -951,6 +1020,38 @@ namespace RimLife.Infrastructure
                 sb.AppendLine();
                 sb.AppendLine("## 叙事风格");
                 sb.AppendLine(pa.StyleInstruction);
+            }
+        }
+
+        private static FrameworkConfig LoadFrameworkConfig()
+        {
+            try
+            {
+                var json = CacheStore?.FetchCache<string>("rimlife_framework_config", null);
+                if (!string.IsNullOrEmpty(json) && json.TrimStart().StartsWith("{"))
+                {
+                    var loaded = FrameworkConfig.FromJson(json);
+                    Logger?.Message("[RimLife.Core] FrameworkConfig loaded from CacheStore.");
+                    return loaded;
+                }
+            }
+            catch (Exception e)
+            {
+                Logger?.Warning($"[RimLife.Core] Failed to load FrameworkConfig: {e.Message}");
+            }
+            return FrameworkConfig.CreateDefault();
+        }
+
+        private static void SaveFrameworkConfig(FrameworkConfig config)
+        {
+            try
+            {
+                var json = config.ToJson();
+                CacheStore?.Cache("rimlife_framework_config", json);
+            }
+            catch (Exception e)
+            {
+                Logger?.Warning($"[RimLife.Core] Failed to save FrameworkConfig: {e.Message}");
             }
         }
 

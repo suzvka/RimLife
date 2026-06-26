@@ -284,6 +284,7 @@ namespace RimLife.Mappers
                 DefName = letterDef?.defName ?? "Letter",
                 Tags = tags,
                 Tick = tick,
+                TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
                 Importance = importance,
                 Actors = actors,
                 MapHint = mapHint,
@@ -310,6 +311,7 @@ namespace RimLife.Mappers
                 DefName = "TimerPulse",
                 Tags = new List<string> { "TimerPulse", "System" },
                 Tick = tick,
+                TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
                 Importance = 0.5f,
                 Actors = new List<EventActorRef>(),
                 MapHint = "",
@@ -332,6 +334,7 @@ namespace RimLife.Mappers
             public IReadOnlyList<string> Tags { get; set; }
             public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
+            public string TimeLabel { get; set; }
             public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
