@@ -59,8 +59,8 @@ namespace RimLife.UI
                 "pending 事件数达到此值时触发导演 Agent");
             DrawLabeledIntRow(listing, "导演专用重要度阈值:", ref _directorImportanceThreshold, 1, 999,
                 "pending 事件总重要度达到此值时触发导演 Agent");
-            DrawLabeledIntRow(listing, "导演定时器间隔 (ticks):", ref _directorTimerInterval, 0, 999999,
-                "0 = 禁用定时器；每 N ticks 注入一个 TimerPulse 事件");
+            DrawLabeledIntRow(listing, "导演定时器间隔 (秒):", ref _directorTimerInterval, 0, 999999,
+                "0 = 禁用定时器；每 N 现实秒注入一个 TimerPulse 事件（与游戏速度无关）");
 
             listing.Gap(GapTiny);
             EndSection(listing);
@@ -74,8 +74,8 @@ namespace RimLife.UI
                 "pending 事件数达到此值时触发 Freelancer Agent");
             DrawLabeledIntRow(listing, "Freelancer 专用重要度阈值:", ref _freelancerImportanceThreshold, 1, 999,
                 "pending 事件总重要度达到此值时触发 Freelancer Agent");
-            DrawLabeledIntRow(listing, "Freelancer 定时器间隔 (ticks):", ref _freelancerTimerInterval, 0, 999999,
-                "0 = 禁用定时器；每 N ticks 注入一个 TimerPulse 事件");
+            DrawLabeledIntRow(listing, "Freelancer 定时器间隔 (秒):", ref _freelancerTimerInterval, 0, 999999,
+                "0 = 禁用定时器；每 N 现实秒注入一个 TimerPulse 事件（与游戏速度无关）");
 
             listing.Gap(GapTiny);
             EndSection(listing);
