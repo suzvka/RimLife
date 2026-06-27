@@ -3,7 +3,7 @@ schema_version: 1
 locale: zh-CN
 branch: master
 nodes_managed: true
-exported_at: "2026-06-26T11:57:01Z"
+exported_at: "2026-06-27T15:18:58Z"
 modules:
     "":
         dir_name: RimWorld AI 叙事增强模组
@@ -441,8 +441,8 @@ modules:
         depends_on: []
         related_to: []
     rimlife_game_integration:
-        dir_name: RimWorld-NPCLife 游戏集成适配层
-        title: RimWorld-NPCLife 游戏集成适配层
+        dir_name: RimWorld-NPCLife 桥接与 AI 驱动核心
+        title: RimWorld-NPCLife 桥接与 AI 驱动核心
         scope:
             - Source/
         source_files: []

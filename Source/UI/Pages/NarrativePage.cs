@@ -8,7 +8,7 @@ namespace RimLife.UI
 {
     /// <summary>
     /// 叙事页面：Agent 驱动参数配置。
-    /// 支持分角色（导演/剧情编剧/临时编剧）触发阈值和定时器脉冲间隔。
+    /// 支持分角色（导演/剧情编剧/即兴编剧）触发阈值和定时器脉冲间隔。
     /// 所有控件直接读写真实配置，保存后重建 Agent 生效。
     /// </summary>
     public class NarrativePage : IConfigPage
@@ -26,10 +26,10 @@ namespace RimLife.UI
         private int _directorImportanceThreshold;
         private int _directorTimerInterval;
 
-        // Freelancer 专用
-        private int _freelancerCountThreshold;
-        private int _freelancerImportanceThreshold;
-        private int _freelancerTimerInterval;
+        // 即兴编剧专用
+        private int _improviserCountThreshold;
+        private int _improviserImportanceThreshold;
+        private int _improviserTimerInterval;
 
         // 剧情编剧专用
         private int _screenwriterCountThreshold;
@@ -66,15 +66,15 @@ namespace RimLife.UI
             EndSection(listing);
 
             // ================================================================
-            // Freelancer 策略
+            // 即兴编剧策略
             // ================================================================
-            BeginSection(listing, "Freelancer 策略");
+            BeginSection(listing, "即兴编剧策略");
 
-            DrawLabeledIntRow(listing, "Freelancer 专用事件数阈值:", ref _freelancerCountThreshold, 1, 999,
-                "pending 事件数达到此值时触发 Freelancer Agent");
-            DrawLabeledIntRow(listing, "Freelancer 专用重要度阈值:", ref _freelancerImportanceThreshold, 1, 999,
-                "pending 事件总重要度达到此值时触发 Freelancer Agent");
-            DrawLabeledIntRow(listing, "Freelancer 定时器间隔 (秒):", ref _freelancerTimerInterval, 0, 999999,
+            DrawLabeledIntRow(listing, "即兴编剧专用事件数阈值:", ref _improviserCountThreshold, 1, 999,
+                "pending 事件数达到此值时触发即兴编剧 Agent");
+            DrawLabeledIntRow(listing, "即兴编剧专用重要度阈值:", ref _improviserImportanceThreshold, 1, 999,
+                "pending 事件总重要度达到此值时触发即兴编剧 Agent");
+            DrawLabeledIntRow(listing, "即兴编剧定时器间隔 (秒):", ref _improviserTimerInterval, 0, 999999,
                 "0 = 禁用定时器；每 N 现实秒注入一个 TimerPulse 事件（与游戏速度无关）");
 
             listing.Gap(GapTiny);
@@ -120,9 +120,9 @@ namespace RimLife.UI
                     DirectorCountThreshold = _directorCountThreshold,
                     DirectorImportanceThreshold = _directorImportanceThreshold,
                     DirectorTimerInterval = _directorTimerInterval,
-                    FreelancerCountThreshold = _freelancerCountThreshold,
-                    FreelancerImportanceThreshold = _freelancerImportanceThreshold,
-                    FreelancerTimerInterval = _freelancerTimerInterval,
+                    ImproviserCountThreshold = _improviserCountThreshold,
+                    ImproviserImportanceThreshold = _improviserImportanceThreshold,
+                    ImproviserTimerInterval = _improviserTimerInterval,
                     ScreenwriterCountThreshold = _screenwriterCountThreshold,
                     ScreenwriterImportanceThreshold = _screenwriterImportanceThreshold,
                     RecentHistoryCapacity = _recentHistoryCapacity,
@@ -141,9 +141,9 @@ namespace RimLife.UI
                 _directorCountThreshold = defaultDc.DirectorCountThreshold;
                 _directorImportanceThreshold = (int)defaultDc.DirectorImportanceThreshold;
                 _directorTimerInterval = defaultDc.DirectorTimerInterval;
-                _freelancerCountThreshold = defaultDc.FreelancerCountThreshold;
-                _freelancerImportanceThreshold = (int)defaultDc.FreelancerImportanceThreshold;
-                _freelancerTimerInterval = defaultDc.FreelancerTimerInterval;
+                _improviserCountThreshold = defaultDc.ImproviserCountThreshold;
+                _improviserImportanceThreshold = (int)defaultDc.ImproviserImportanceThreshold;
+                _improviserTimerInterval = defaultDc.ImproviserTimerInterval;
                 _screenwriterCountThreshold = defaultDc.ScreenwriterCountThreshold;
                 _screenwriterImportanceThreshold = (int)defaultDc.ScreenwriterImportanceThreshold;
                 _recentHistoryCapacity = defaultDc.RecentHistoryCapacity;
@@ -164,9 +164,9 @@ namespace RimLife.UI
             _directorCountThreshold = dc.DirectorCountThreshold;
             _directorImportanceThreshold = (int)dc.DirectorImportanceThreshold;
             _directorTimerInterval = dc.DirectorTimerInterval;
-            _freelancerCountThreshold = dc.FreelancerCountThreshold;
-            _freelancerImportanceThreshold = (int)dc.FreelancerImportanceThreshold;
-            _freelancerTimerInterval = dc.FreelancerTimerInterval;
+            _improviserCountThreshold = dc.ImproviserCountThreshold;
+            _improviserImportanceThreshold = (int)dc.ImproviserImportanceThreshold;
+            _improviserTimerInterval = dc.ImproviserTimerInterval;
             _screenwriterCountThreshold = dc.ScreenwriterCountThreshold;
             _screenwriterImportanceThreshold = (int)dc.ScreenwriterImportanceThreshold;
             _recentHistoryCapacity = dc.RecentHistoryCapacity;

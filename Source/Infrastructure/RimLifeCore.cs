@@ -190,9 +190,9 @@ namespace RimLife.Infrastructure
             _directorAgent?.Dispose();
             _directorAgent = null;
 
-            // 清理 Freelancer Agent
-            _freelancerAgent?.Dispose();
-            _freelancerAgent = null;
+            // 清理即兴编剧 Agent
+            _improviserAgent?.Dispose();
+            _improviserAgent = null;
 
             _frameworkConfig = null;
             _promptAdditions = null;
@@ -243,7 +243,7 @@ namespace RimLife.Infrastructure
                     count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeService, Logger));
                     count += RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
                     count += RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
-                    count += RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
+                    count += RegisterHookProvider(new ImproviserMcpProvider(() => Workspaces, Logger));
 
                     // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
                     count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
@@ -312,7 +312,7 @@ namespace RimLife.Infrastructure
                     AgentPipeline.AddInterceptor(
                         new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Screenwriter), priority: 100);
                     AgentPipeline.AddInterceptor(
-                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Freelancer), priority: 100);
+                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Improviser), priority: 100);
 
                     // 订阅 LLM 响应事件，采集 Token 消耗
                     EventBus.Subscribe(FrameworkEvents.LlmResponseReceived, args =>
@@ -515,12 +515,12 @@ namespace RimLife.Infrastructure
                     var w = new NPCLife.Framework.JsonWriter(256);
                     w.Prop("directorCountThreshold", config.DirectorCountThreshold);
                     w.Prop("directorImportanceThreshold", config.DirectorImportanceThreshold, "F2");
-                    w.Prop("freelancerCountThreshold", config.FreelancerCountThreshold);
-                    w.Prop("freelancerImportanceThreshold", config.FreelancerImportanceThreshold, "F2");
+                    w.Prop("freelancerCountThreshold", config.ImproviserCountThreshold);
+                    w.Prop("freelancerImportanceThreshold", config.ImproviserImportanceThreshold, "F2");
                     w.Prop("screenwriterCountThreshold", config.ScreenwriterCountThreshold);
                     w.Prop("screenwriterImportanceThreshold", config.ScreenwriterImportanceThreshold, "F2");
                     w.Prop("directorTimerInterval", config.DirectorTimerInterval);
-                    w.Prop("freelancerTimerInterval", config.FreelancerTimerInterval);
+                    w.Prop("freelancerTimerInterval", config.ImproviserTimerInterval);
                     w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
                     w.Prop("maxAgentRounds", config.MaxAgentRounds);
                     CacheStore?.Cache("rimlife_driver_config", w.Close());
@@ -550,8 +550,8 @@ namespace RimLife.Infrastructure
         /// <summary>导演脉冲积分累加器（现实秒）。每帧累加 deltaTicks 换算的秒数。</summary>
         private static float _directorAccumSec;
 
-        /// <summary>Freelancer 脉冲积分累加器（现实秒）。</summary>
-        private static float _freelancerAccumSec;
+        /// <summary>即兴编剧脉冲积分累加器（现实秒）。</summary>
+        private static float _improviserAccumSec;
 
         /// <summary>
         /// 每帧脉冲驱动函数。由 RimWorldAgentDriver.GameComponentUpdate() 调用。
@@ -604,21 +604,21 @@ namespace RimLife.Infrastructure
                 }
             }
 
-            // Freelancer 定时器
-            int freeInterval = dc.GetTimerInterval(NPCLife.Workspace.WorkspaceRole.Freelancer);
+            // 即兴编剧定时器
+            int freeInterval = dc.GetTimerInterval(NPCLife.Workspace.WorkspaceRole.Improviser);
             if (freeInterval > 0)
             {
-                _freelancerAccumSec += addedScore;
+                _improviserAccumSec += addedScore;
                 float freeThreshold = freeInterval;
-                while (_freelancerAccumSec >= freeThreshold)
+                while (_improviserAccumSec >= freeThreshold)
                 {
-                    _freelancerAccumSec -= freeThreshold;
-                    var freelancerWs = GetFreelancerWorkspace();
-                    if (freelancerWs != null)
+                    _improviserAccumSec -= freeThreshold;
+                    var improviserWs = GetImproviserWorkspace();
+                    if (improviserWs != null)
                     {
                         var pulseEvt = EventCardMapper.CreateTimerPulse(
-                            NPCLife.Workspace.WorkspaceRole.Freelancer, currentTicks);
-                        freelancerWs.EventPool.Append(pulseEvt);
+                            NPCLife.Workspace.WorkspaceRole.Improviser, currentTicks);
+                        improviserWs.EventPool.Append(pulseEvt);
                     }
                 }
             }
@@ -658,7 +658,7 @@ namespace RimLife.Infrastructure
         {
             _lastTicksGame = Find.TickManager?.TicksGame ?? 0;
             _directorAccumSec = 0f;
-            _freelancerAccumSec = 0f;
+            _improviserAccumSec = 0f;
             _eventBuffer?.Reset();
         }
 
@@ -711,8 +711,8 @@ namespace RimLife.Infrastructure
 
         private static AgentLoop _directorAgent;
         private static readonly object _directorAgentLock = new object();
-        private static AgentLoop _freelancerAgent;
-        private static readonly object _freelancerAgentLock = new object();
+        private static AgentLoop _improviserAgent;
+        private static readonly object _improviserAgentLock = new object();
         private static readonly Dictionary<string, AgentLoop> _screenwriters = new Dictionary<string, AgentLoop>();
         private static readonly object _screenwritersLock = new object();
 
@@ -735,56 +735,56 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>
-        /// 获取 Freelancer 所在工作空间。
-        /// 按 CreatedByRole == Freelancer &amp;&amp; Status == Active 查找，不存在时自动创建。
+        /// 获取即兴编剧所在工作空间。
+        /// 按 CreatedByRole == Improviser &amp;&amp; Status == Active 查找，不存在时自动创建。
         /// </summary>
-        public static NPCLife.Workspace.IWorkspace GetFreelancerWorkspace()
+        public static NPCLife.Workspace.IWorkspace GetImproviserWorkspace()
         {
             if (Workspaces == null) return null;
 
             var actives = Workspaces.GetActive();
             foreach (var ws in actives)
             {
-                if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Freelancer)
+                if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Improviser)
                     return ws;
             }
 
-            return Workspaces.Create("Freelancer", null, null, NPCLife.Workspace.WorkspaceRole.Freelancer);
+            return Workspaces.Create("Improviser", null, null, NPCLife.Workspace.WorkspaceRole.Improviser);
         }
 
         /// <summary>
-        /// 获取 Freelancer AgentLoop 实例。绑定 Freelancer 工作空间的 EventPool。
+        /// 获取即兴编剧 AgentLoop 实例。绑定即兴编剧工作空间的 EventPool。
         /// 存档未加载或 LLM 未配置时返回 null。
         /// </summary>
-        public static AgentLoop GetFreelancerAgent()
+        public static AgentLoop GetImproviserAgent()
         {
-            if (_freelancerAgent == null)
+            if (_improviserAgent == null)
             {
-                lock (_freelancerAgentLock)
+                lock (_improviserAgentLock)
                 {
-                    if (_freelancerAgent == null && SaveStore != null && LlmAccessor != null)
+                    if (_improviserAgent == null && SaveStore != null && LlmAccessor != null)
                     {
-                        var freelancerWs = GetFreelancerWorkspace();
-                        if (freelancerWs != null)
+                        var improviserWs = GetImproviserWorkspace();
+                        if (improviserWs != null)
                         {
-                            _freelancerAgent = new AgentLoop(
-                                pool: freelancerWs.EventPool,
+                            _improviserAgent = new AgentLoop(
+                                pool: improviserWs.EventPool,
                                 llm: LlmAccessor,
                                 credentialStore: CredentialManager,
-                                systemPrompt: BuildFreelancerSystemPrompt(freelancerWs),
-                                skillIds: new[] { "workspace_freelancer", "character_query", "event_query" },
+                                systemPrompt: BuildImproviserSystemPrompt(improviserWs),
+                                skillIds: new[] { "workspace_improviser", "character_query", "event_query" },
                                 maxRounds: DriverConfig.MaxAgentRounds,
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
                                 knowledgeService: KnowledgeService,
                                 temperature: PromptAdditions.Temperature,
-                                modelRefsJson: freelancerWs.ModelRefs,
-                                currentModel: freelancerWs.CurrentModel);
+                                modelRefsJson: improviserWs.ModelRefs,
+                                currentModel: improviserWs.CurrentModel);
                         }
                     }
                 }
             }
-            return _freelancerAgent;
+            return _improviserAgent;
         }
 
         /// <summary>
@@ -841,7 +841,7 @@ namespace RimLife.Infrastructure
 
         /// <summary>
         /// 根据工作空间角色创建对应类型的 Agent。
-        /// Director 工作空间 → Director Agent；Freelancer → Freelancer Agent；其他 → Screenwriter。
+        /// Director 工作空间 → Director Agent；Improviser → Improviser Agent；其他 → Screenwriter。
         /// </summary>
         private static void EnsureAgentForWorkspace(string workspaceId)
         {
@@ -851,8 +851,8 @@ namespace RimLife.Infrastructure
 
             if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Director)
                 GetDirectorAgent();
-            else if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Freelancer)
-                GetFreelancerAgent();
+            else if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Improviser)
+                GetImproviserAgent();
             else
                 GetScreenwriter(workspaceId);
         }
@@ -977,17 +977,17 @@ namespace RimLife.Infrastructure
             return sb.ToString();
         }
 
-        private static string BuildFreelancerSystemPrompt(NPCLife.Workspace.IWorkspace ws)
+        private static string BuildImproviserSystemPrompt(NPCLife.Workspace.IWorkspace ws)
         {
             var pa = PromptAdditions;
-            var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultFreelancerPrompt);
-            AppendAdditions(sb, pa.FreelancerAdditions, "RimWorld 临时工附加指令");
+            var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultImproviserPrompt);
+            AppendAdditions(sb, pa.ImproviserAdditions, "RimWorld 即兴编剧附加指令");
 
             // 将工作空间上下文（ID、关联角色、格式规范）注入系统提示词。
             sb.AppendLine();
             sb.AppendLine();
             sb.AppendLine($"工作空间 ID：{ws.Id}");
-            sb.AppendLine($"工作空间：{ws.Label ?? "Freelancer"}");
+            sb.AppendLine($"工作空间：{ws.Label ?? "Improviser"}");
             var directorWs = GetDirectorWorkspace();
             if (directorWs != null)
                 sb.AppendLine($"导演工作空间 ID：{directorWs.Id}");
@@ -1069,9 +1069,9 @@ namespace RimLife.Infrastructure
                     if (dict.TryGetValue("directorImportanceThreshold", out var dit) && float.TryParse(dit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var ditv))
                         dc.DirectorImportanceThreshold = ditv;
                     if (dict.TryGetValue("freelancerCountThreshold", out var fct) && int.TryParse(fct, out var fctv))
-                        dc.FreelancerCountThreshold = fctv;
+                        dc.ImproviserCountThreshold = fctv;
                     if (dict.TryGetValue("freelancerImportanceThreshold", out var fit) && float.TryParse(fit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var fitv))
-                        dc.FreelancerImportanceThreshold = fitv;
+                        dc.ImproviserImportanceThreshold = fitv;
                     if (dict.TryGetValue("screenwriterCountThreshold", out var sct) && int.TryParse(sct, out var sctv))
                         dc.ScreenwriterCountThreshold = sctv;
                     if (dict.TryGetValue("screenwriterImportanceThreshold", out var sit) && float.TryParse(sit, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var sitv))
@@ -1079,7 +1079,7 @@ namespace RimLife.Infrastructure
                     if (dict.TryGetValue("directorTimerInterval", out var dti) && int.TryParse(dti, out var dtiv))
                         dc.DirectorTimerInterval = dtiv;
                     if (dict.TryGetValue("freelancerTimerInterval", out var fti) && int.TryParse(fti, out var ftiv))
-                        dc.FreelancerTimerInterval = ftiv;
+                        dc.ImproviserTimerInterval = ftiv;
                     if (dict.TryGetValue("recentHistoryCapacity", out var rhc) && int.TryParse(rhc, out var rhcv))
                         dc.RecentHistoryCapacity = rhcv;
                     if (dict.TryGetValue("maxAgentRounds", out var mar) && int.TryParse(mar, out var marv))
@@ -1135,10 +1135,10 @@ namespace RimLife.Infrastructure
                 _directorAgent = null;
             }
 
-            lock (_freelancerAgentLock)
+            lock (_improviserAgentLock)
             {
-                _freelancerAgent?.Dispose();
-                _freelancerAgent = null;
+                _improviserAgent?.Dispose();
+                _improviserAgent = null;
             }
 
             lock (_screenwritersLock)

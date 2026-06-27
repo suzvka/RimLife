@@ -298,10 +298,10 @@ namespace RimLife.Mappers
 
         /// <summary>
         /// 创建定时器脉冲合成事件。由 RimWorldAgentDriver 定时器驱动，
-        /// 向导演/临时编剧工作空间注入一条无外部依赖的系统事件。
+        /// 向导演/即兴编剧工作空间注入一条无外部依赖的系统事件。
         /// 重要度固定为 0.5f，避免单次脉冲就触发阈值（需配合 Count 累积）。
         /// </summary>
-        /// <param name="role">触发此脉冲的角色（Director 或 Freelancer）。</param>
+        /// <param name="role">触发此脉冲的角色（Director 或 Improviser）。</param>
         /// <param name="tick">当前游戏 tick。</param>
         public static IGameEvent CreateTimerPulse(NPCLife.Workspace.WorkspaceRole role, int tick)
         {

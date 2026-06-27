@@ -25,7 +25,7 @@ namespace RimLife.UI
         private bool _enableDirectorAgent;
         private bool _enableMemoryConsolidation;
         private bool _enableKnowledgeBase;
-        private bool _enableFreelancerAgent;
+        private bool _enableImproviserAgent;
 
         // Diagnostics
         private bool _enableVerboseLogging;
@@ -43,10 +43,10 @@ namespace RimLife.UI
             // ---- 功能开关 ----
             BeginSection(listing, "功能开关");
             listing.CheckboxLabeled("启用运行时度量", ref _enableMetrics, "Token 消耗、工具调用统计");
-            listing.CheckboxLabeled("启用导演 Agent", ref _enableDirectorAgent, "Director 自动审查事件并分配剧情线");
+            listing.CheckboxLabeled("启用导演 Agent", ref _enableDirectorAgent, "导演自动审查事件并分配剧情线");
             listing.CheckboxLabeled("启用编剧 Agent", ref _enableMemoryConsolidation, "记忆巩固（跨轮次上下文）");
             listing.CheckboxLabeled("启用知识库", ref _enableKnowledgeBase, "事件关键词匹配 → 注入背景知识");
-            listing.CheckboxLabeled("启用 Freelancer Agent", ref _enableFreelancerAgent, "处理独立临时事件");
+            listing.CheckboxLabeled("启用即兴编剧 Agent", ref _enableImproviserAgent, "处理独立临时事件");
             listing.Gap(GapTiny);
             EndSection(listing);
 
@@ -71,7 +71,7 @@ namespace RimLife.UI
                     config.Features.EnableDirectorAgent = _enableDirectorAgent;
                     config.Features.EnableMemoryConsolidation = _enableMemoryConsolidation;
                     config.Features.EnableKnowledgeBase = _enableKnowledgeBase;
-                    config.Features.EnableFreelancerAgent = _enableFreelancerAgent;
+                    config.Features.EnableImproviserAgent = _enableImproviserAgent;
                     config.Diagnostics.EnableVerboseLogging = _enableVerboseLogging;
                     config.Diagnostics.EnableToolCallTracing = _enableToolCallTracing;
                     config.Diagnostics.EnableEventTracing = _enableEventTracing;
@@ -100,10 +100,10 @@ namespace RimLife.UI
             BeginSection(listing, "Agent 状态");
             var directorAgent = GetAgentStatus("director");
             var screenwriterStatus = GetAgentStatus("screenwriter");
-            var freelancerStatus = GetAgentStatus("freelancer");
-            DrawStatusRow(listing, "导演 Agent", directorAgent);
-            DrawStatusRow(listing, "编剧 Agent", screenwriterStatus);
-            DrawStatusRow(listing, "Freelancer", freelancerStatus);
+            var improviserStatus = GetAgentStatus("improviser");
+            DrawStatusRow(listing, "导演", directorAgent);
+            DrawStatusRow(listing, "剧情编剧", screenwriterStatus);
+            DrawStatusRow(listing, "即兴编剧", improviserStatus);
             EndSection(listing);
 
             // ---- 运行时度量 ----
@@ -193,7 +193,7 @@ namespace RimLife.UI
             _enableDirectorAgent = f?.EnableDirectorAgent ?? true;
             _enableMemoryConsolidation = f?.EnableMemoryConsolidation ?? true;
             _enableKnowledgeBase = f?.EnableKnowledgeBase ?? true;
-            _enableFreelancerAgent = f?.EnableFreelancerAgent ?? true;
+            _enableImproviserAgent = f?.EnableImproviserAgent ?? true;
             _enableVerboseLogging = d?.EnableVerboseLogging ?? false;
             _enableToolCallTracing = d?.EnableToolCallTracing ?? false;
             _enableEventTracing = d?.EnableEventTracing ?? false;
@@ -206,7 +206,7 @@ namespace RimLife.UI
             _enableDirectorAgent = def.Features.EnableDirectorAgent;
             _enableMemoryConsolidation = def.Features.EnableMemoryConsolidation;
             _enableKnowledgeBase = def.Features.EnableKnowledgeBase;
-            _enableFreelancerAgent = def.Features.EnableFreelancerAgent;
+            _enableImproviserAgent = def.Features.EnableImproviserAgent;
             _enableVerboseLogging = def.Diagnostics.EnableVerboseLogging;
             _enableToolCallTracing = def.Diagnostics.EnableToolCallTracing;
             _enableEventTracing = def.Diagnostics.EnableEventTracing;
@@ -231,8 +231,8 @@ namespace RimLife.UI
             {
                 case "director":
                     return RimLifeCore.GetDirectorAgent() != null ? "active" : "idle";
-                case "freelancer":
-                    return RimLifeCore.GetFreelancerAgent() != null ? "active" : "idle";
+                case "improviser":
+                    return RimLifeCore.GetImproviserAgent() != null ? "active" : "idle";
                 default:
                     return "idle";
             }

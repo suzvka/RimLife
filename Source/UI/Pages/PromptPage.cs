@@ -22,8 +22,8 @@ namespace RimLife.UI
         private string[] _directorBuffers;
         private string _screenwriterAdditions = "";
         private string[] _screenwriterBuffers;
-        private string _freelancerAdditions = "";
-        private string[] _freelancerBuffers;
+        private string _improviserAdditions = "";
+        private string[] _improviserBuffers;
         private string _styleInstruction = "";
         private string[] _styleBuffers;
         private float _temperature = 0.7f;
@@ -101,21 +101,21 @@ namespace RimLife.UI
             }
             EndSection(listing);
 
-            // ---- Freelancer 附加指令 ----
-            BeginSection(listing, "临时工 Agent (Freelancer) — 附加指令");
+            // ---- 即兴编剧附加指令 ----
+            BeginSection(listing, "即兴编剧 Agent (Improviser) — 附加指令");
             Widgets.Label(listing.GetRect(22f),
                 "<color=#888888><size=12>在框架基础身份之上追加指令。动态上下文（工作空间 ID 等）在运行时自动追加。留空则不追加任何内容。</size></color>");
             listing.Gap(GapTiny);
-            DrawMultilineInput(listing, ref _freelancerAdditions, ref _freelancerBuffers);
+            DrawMultilineInput(listing, ref _improviserAdditions, ref _improviserBuffers);
             listing.Gap(GapTiny);
             var flBtns = DrawButtonRow(listing,
                 new[] { "清空附加" },
                 new[] { BtnWidthMedium });
             if (flBtns[0])
             {
-                _freelancerAdditions = "";
-                _freelancerBuffers = null;
-                _statusMessage = "临时工附加指令已清空（需保存生效）";
+                _improviserAdditions = "";
+                _improviserBuffers = null;
+                _statusMessage = "即兴编剧附加指令已清空（需保存生效）";
                 _statusMessageTime = Time.time;
             }
             EndSection(listing);
@@ -131,7 +131,7 @@ namespace RimLife.UI
                 {
                     DirectorAdditions = _directorAdditions,
                     ScreenwriterAdditions = _screenwriterAdditions,
-                    FreelancerAdditions = _freelancerAdditions,
+                    ImproviserAdditions = _improviserAdditions,
                     StyleInstruction = _styleInstruction,
                     Temperature = _temperature
                 };
@@ -146,7 +146,7 @@ namespace RimLife.UI
             {
                 _directorAdditions = ""; _directorBuffers = null;
                 _screenwriterAdditions = ""; _screenwriterBuffers = null;
-                _freelancerAdditions = ""; _freelancerBuffers = null;
+                _improviserAdditions = ""; _improviserBuffers = null;
                 _styleInstruction = ""; _styleBuffers = null;
                 _temperature = 0.7f;
                 _statusMessage = "所有附加已清空（需保存生效）";
@@ -164,7 +164,7 @@ namespace RimLife.UI
             var pa = RimLifeCore.PromptAdditions;
             _directorAdditions = pa.DirectorAdditions ?? "";
             _screenwriterAdditions = pa.ScreenwriterAdditions ?? "";
-            _freelancerAdditions = pa.FreelancerAdditions ?? "";
+            _improviserAdditions = pa.ImproviserAdditions ?? "";
             _styleInstruction = pa.StyleInstruction ?? "";
             _temperature = pa.Temperature;
         }

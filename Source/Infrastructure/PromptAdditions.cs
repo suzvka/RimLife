@@ -16,8 +16,8 @@ namespace RimLife.Infrastructure
         /// <summary>编剧 Agent 附加指令。留空则不追加任何内容。</summary>
         public string ScreenwriterAdditions = "";
 
-        /// <summary>Freelancer Agent 附加指令。留空则不追加任何内容。</summary>
-        public string FreelancerAdditions = "";
+        /// <summary>即兴编剧 Agent 附加指令。留空则不追加任何内容。</summary>
+        public string ImproviserAdditions = "";
 
         /// <summary>全局风格指令，运行时追加到所有 Agent 的 system prompt 末尾。</summary>
         public string StyleInstruction = "";
@@ -32,8 +32,8 @@ namespace RimLife.Infrastructure
                 w.Prop("directorAdditions", DirectorAdditions);
             if (!string.IsNullOrEmpty(ScreenwriterAdditions))
                 w.Prop("screenwriterAdditions", ScreenwriterAdditions);
-            if (!string.IsNullOrEmpty(FreelancerAdditions))
-                w.Prop("freelancerAdditions", FreelancerAdditions);
+            if (!string.IsNullOrEmpty(ImproviserAdditions))
+                w.Prop("improviserAdditions", ImproviserAdditions);
             if (!string.IsNullOrEmpty(StyleInstruction))
                 w.Prop("styleInstruction", StyleInstruction);
             w.Prop("temperature", Temperature, "F2");
@@ -50,7 +50,7 @@ namespace RimLife.Infrastructure
                 var dict = JsonParser.ParseDict(json);
                 if (dict.TryGetValue("directorAdditions", out var da)) additions.DirectorAdditions = da;
                 if (dict.TryGetValue("screenwriterAdditions", out var sa)) additions.ScreenwriterAdditions = sa;
-                if (dict.TryGetValue("freelancerAdditions", out var fa)) additions.FreelancerAdditions = fa;
+                if (dict.TryGetValue("improviserAdditions", out var fa)) additions.ImproviserAdditions = fa;
                 if (dict.TryGetValue("styleInstruction", out var si)) additions.StyleInstruction = si;
                 if (dict.TryGetValue("temperature", out var t)
                     && float.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var tv))
