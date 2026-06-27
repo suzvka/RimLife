@@ -6,7 +6,7 @@ source_files:
     - ext/NPCLife/src/NPCLife/Framework/ErrorHandler.cs
     - ext/NPCLife/src/NPCLife/Agent/AgentLoop.cs
     - ext/NPCLife/src/NPCLife/Framework/Mcp/McpSkillRegistry.cs
+    - ext/NPCLife/src/NPCLife/Framework/AgentPipeline.cs
     - Source/Infrastructure/RimWorldLogger.cs
-    - Source/Infrastructure/RimLifeCore.cs
 depends_on: []
 related_to: []

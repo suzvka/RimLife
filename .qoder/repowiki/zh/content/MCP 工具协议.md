@@ -18,7 +18,16 @@
 - [PawnMemoryProvider.cs](file://Source\Infrastructure\Mcp\PawnMemoryProvider.cs)
 - [RelationshipQueryProvider.cs](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs)
 - [PawnQueryHelper.cs](file://Source\Infrastructure\Mcp\PawnQueryHelper.cs)
+- [SemanticLabels.cs](file://ext\NPCLife\src\NPCLife\Framework\SemanticLabels.cs)
+- [RimLifeSelfTest.cs](file://Source\Tool\RimLifeSelfTest.cs)
 </cite>
+
+## 更新摘要
+**变更内容**
+- 新增关系查询工具的双向关系分析功能
+- 添加 `get_relationship_between` 工具的详细文档
+- 更新关系查询工具的架构图和使用示例
+- 增强关系查询工具的综合分析能力说明
 
 ## 目录
 1. [简介](#简介)
@@ -42,6 +51,8 @@
 - 扩展机制与自定义工具开发
 - 常见问题与调试方法
 
+**更新** 新增双向关系分析功能，提供更全面的角色关系洞察能力。
+
 ## 项目结构
 围绕 MCP 的核心位于扩展项目 NPCLife 的 Framework/Mcp 目录，包含接口、工具定义、生成器、调用器、类型映射以及度量工具等模块；同时在主工程 Source/Infrastructure/Mcp 下提供了具体业务 Provider 的实现。
 
@@ -58,14 +69,18 @@ G["McpToolGenerator.cs"]
 H["McpToolInvoker.cs"]
 I["McpTypeMapper.cs"]
 J["MetricsMcpTools.cs"]
+K["SemanticLabels.cs"]
 end
 subgraph "主工程实现(Source/Infrastructure/Mcp)"
-K["CharacterQueryProvider.cs"]
-L["ColonyOverviewProvider.cs"]
-M["EnvironmentQueryProvider.cs"]
-N["PawnMemoryProvider.cs"]
-O["RelationshipQueryProvider.cs"]
-P["PawnQueryHelper.cs"]
+L["CharacterQueryProvider.cs"]
+M["ColonyOverviewProvider.cs"]
+N["EnvironmentQueryProvider.cs"]
+O["PawnMemoryProvider.cs"]
+P["RelationshipQueryProvider.cs"]
+Q["PawnQueryHelper.cs"]
+end
+subgraph "测试与验证"
+R["RimLifeSelfTest.cs"]
 end
 A --> E
 B --> G
@@ -78,16 +93,18 @@ G --> H
 I --> G
 I --> H
 J --> E
-K --> E
+K --> P
 L --> E
 M --> E
 N --> E
 O --> E
-P --> K
-P --> O
+P --> E
+Q --> L
+Q --> P
+R --> P
 ```
 
-图表来源
+**图表来源**
 - [IMcpHookProvider.cs:1-38](file://ext\NPCLife\src\NPCLife\Framework\Mcp\IMcpHookProvider.cs#L1-L38)
 - [McpTool.cs:1-40](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpTool.cs#L1-L40)
 - [McpToolAttribute.cs:1-18](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolAttribute.cs#L1-L18)
@@ -98,14 +115,16 @@ P --> O
 - [McpToolInvoker.cs:1-238](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolInvoker.cs#L1-L238)
 - [McpTypeMapper.cs:1-85](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpTypeMapper.cs#L1-L85)
 - [MetricsMcpTools.cs:1-56](file://ext\NPCLife\src\NPCLife\Framework\Mcp\MetricsMcpTools.cs#L1-L56)
+- [SemanticLabels.cs:1-205](file://ext\NPCLife\src\NPCLife\Framework\SemanticLabels.cs#L1-L205)
 - [CharacterQueryProvider.cs](file://Source\Infrastructure\Mcp\CharacterQueryProvider.cs)
 - [ColonyOverviewProvider.cs](file://Source\Infrastructure\Mcp\ColonyOverviewProvider.cs)
 - [EnvironmentQueryProvider.cs](file://Source\Infrastructure\Mcp\EnvironmentQueryProvider.cs)
 - [PawnMemoryProvider.cs](file://Source\Infrastructure\Mcp\PawnMemoryProvider.cs)
 - [RelationshipQueryProvider.cs](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs)
 - [PawnQueryHelper.cs](file://Source\Infrastructure\Mcp\PawnQueryHelper.cs)
+- [RimLifeSelfTest.cs:915-935](file://Source\Tool\RimLifeSelfTest.cs#L915-L935)
 
-章节来源
+**章节来源**
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [IMcpHookProvider.cs:1-38](file://ext\NPCLife\src\NPCLife\Framework\Mcp\IMcpHookProvider.cs#L1-L38)
 
@@ -124,8 +143,12 @@ P --> O
   - IMcpHookProvider：面向外部 Hook 的提供者接口，通过 RegisterFromProvider 注册到指定技能
 - 度量工具
   - MetricsMcpTools：system 技能下的运行时度量查询工具集
+- 语义标签系统
+  - SemanticLabels：提供数值到语义标签的映射，确保输出的一致性和可理解性
 
-章节来源
+**更新** 新增语义标签系统，为关系分析提供标准化的数值映射。
+
+**章节来源**
 - [McpToolDefinition.cs:1-50](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolDefinition.cs#L1-L50)
 - [McpTool.cs:1-40](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpTool.cs#L1-L40)
 - [McpToolGenerator.cs:1-214](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolGenerator.cs#L1-L214)
@@ -135,6 +158,7 @@ P --> O
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [IMcpHookProvider.cs:1-38](file://ext\NPCLife\src\NPCLife\Framework\Mcp\IMcpHookProvider.cs#L1-L38)
 - [MetricsMcpTools.cs:1-56](file://ext\NPCLife\src\NPCLife\Framework\Mcp\MetricsMcpTools.cs#L1-L56)
+- [SemanticLabels.cs:1-205](file://ext\NPCLife\src\NPCLife\Framework\SemanticLabels.cs#L1-L205)
 
 ## 架构总览
 MCP 工具协议在本项目中的运行路径如下：
@@ -161,7 +185,7 @@ Inv-->>Reg : "JSON 结果"
 Reg-->>LLM : "工具返回 JSON"
 ```
 
-图表来源
+**图表来源**
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [McpToolGenerator.cs:1-214](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolGenerator.cs#L1-L214)
 - [McpToolInvoker.cs:1-238](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolInvoker.cs#L1-L238)
@@ -209,7 +233,7 @@ McpSkillRegistry --> IMcpHookProvider : "RegisterFromProvider"
 McpSkillRegistry --> McpTool : "RegisterTool"
 ```
 
-图表来源
+**图表来源**
 - [IMcpHookProvider.cs:1-38](file://ext\NPCLife\src\NPCLife\Framework\Mcp\IMcpHookProvider.cs#L1-L38)
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [McpTool.cs:1-40](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpTool.cs#L1-L40)
@@ -219,7 +243,7 @@ McpSkillRegistry --> McpTool : "RegisterTool"
 - [PawnMemoryProvider.cs](file://Source\Infrastructure\Mcp\PawnMemoryProvider.cs)
 - [RelationshipQueryProvider.cs](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs)
 
-章节来源
+**章节来源**
 - [IMcpHookProvider.cs:1-38](file://ext\NPCLife\src\NPCLife\Framework\Mcp\IMcpHookProvider.cs#L1-L38)
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 
@@ -247,12 +271,12 @@ SerializeList --> Done
 Quote --> Done
 ```
 
-图表来源
+**图表来源**
 - [McpToolInvoker.cs:1-238](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolInvoker.cs#L1-L238)
 - [McpToolGenerator.cs:1-214](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolGenerator.cs#L1-L214)
 - [McpTypeMapper.cs:1-85](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpTypeMapper.cs#L1-L85)
 
-章节来源
+**章节来源**
 - [McpToolDefinition.cs:1-50](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolDefinition.cs#L1-L50)
 - [McpToolGenerator.cs:1-214](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolGenerator.cs#L1-L214)
 - [McpToolInvoker.cs:1-238](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolInvoker.cs#L1-L238)
@@ -270,7 +294,7 @@ Quote --> Done
   - 通过激活 character_query 技能后，LLM 可调用相应工具
   - 参数遵循 JSON Schema，注意 Required 字段与数组元素类型
 
-章节来源
+**章节来源**
 - [CharacterQueryProvider.cs](file://Source\Infrastructure\Mcp\CharacterQueryProvider.cs)
 - [PawnQueryHelper.cs](file://Source\Infrastructure\Mcp\PawnQueryHelper.cs)
 
@@ -280,18 +304,41 @@ Quote --> Done
 - 实现位置
   - 提供者：EnvironmentQueryProvider
 
-章节来源
+**章节来源**
 - [EnvironmentQueryProvider.cs](file://Source\Infrastructure\Mcp\EnvironmentQueryProvider.cs)
 
 ### 关系查询工具（relationship_query）
 - 职责
   - 查询角色社交关系
   - 查询交互历史流水
+  - **新增** 双向关系分析：获取两个角色之间的综合关系摘要
 - 实现位置
   - 提供者：RelationshipQueryProvider
   - 辅助：PawnQueryHelper（复用筛选与查询能力）
+- 新增功能详解
+  - `get_relationship_between`：提供双向关系分析，包括社交关系、牵绊、从属、双向好感、兼容度、互动频率等综合信息
+  - 支持社会关系、动物纽带关系和机械关系的综合分析
+  - 所有数值均经过语义化处理，提供易理解的关系状态描述
 
-章节来源
+**更新** 新增双向关系分析功能，提供更全面的角色关系洞察。
+
+```mermaid
+flowchart TD
+A["get_relationship_between 调用"] --> B["查找角色 A 和 B"]
+B --> C["检查牵绊关系"]
+C --> D["检查从属关系"]
+D --> E["分析直接社交关系"]
+E --> F["计算双向好感度"]
+F --> G["评估兼容度"]
+G --> H["统计互动频率"]
+H --> I["生成语义化摘要"]
+I --> J["返回综合关系报告"]
+```
+
+**图表来源**
+- [RelationshipQueryProvider.cs:236-343](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs#L236-L343)
+
+**章节来源**
 - [RelationshipQueryProvider.cs](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs)
 - [PawnQueryHelper.cs](file://Source\Infrastructure\Mcp\PawnQueryHelper.cs)
 
@@ -301,7 +348,7 @@ Quote --> Done
 - 实现位置
   - 提供者：PawnMemoryProvider
 
-章节来源
+**章节来源**
 - [PawnMemoryProvider.cs](file://Source\Infrastructure\Mcp\PawnMemoryProvider.cs)
 
 ### 殖民地全局概览工具（colony_overview）
@@ -310,7 +357,7 @@ Quote --> Done
 - 实现位置
   - 提供者：ColonyOverviewProvider
 
-章节来源
+**章节来源**
 - [ColonyOverviewProvider.cs](file://Source\Infrastructure\Mcp\ColonyOverviewProvider.cs)
 
 ### 工具属性系统与技能注册机制
@@ -325,7 +372,7 @@ Quote --> Done
   - GetActiveToolsJson：返回激活技能下的工具定义，供 LLM prompt 使用
   - InvokeTool：在激活技能与 system 技能中查找并调用
 
-章节来源
+**章节来源**
 - [McpToolAttribute.cs:1-18](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolAttribute.cs#L1-L18)
 - [McpSkillAttribute.cs:1-22](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillAttribute.cs#L1-L22)
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
@@ -339,15 +386,31 @@ Quote --> Done
 - 注册
   - 通过 [McpSkill(SystemSkillId)] 标注，自动注册到 system 技能
 
-章节来源
+**章节来源**
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [MetricsMcpTools.cs:1-56](file://ext\NPCLife\src\NPCLife\Framework\Mcp\MetricsMcpTools.cs#L1-L56)
+
+### 语义标签系统
+- 功能概述
+  - 将数值型指标转换为人类可理解的语义标签
+  - 提供统一的关系状态描述标准
+  - 支持社交关系、情感状态、环境条件等多种指标的语义化
+- 主要应用
+  - 社交关系：将好感度转换为 Adoring/Friendly/Warm/Neutral/Cold/Hostile 等标签
+  - 兼容度评估：将兼容性评分转换为 Great/Good/Average/Poor/Incompatible 等等级
+  - 互动频率：将互动次数转换为 none/rare/occasional/frequent 等频次等级
+
+**更新** 新增语义标签系统，为关系查询提供标准化的数值映射。
+
+**章节来源**
+- [SemanticLabels.cs:1-205](file://ext\NPCLife\src\NPCLife\Framework\SemanticLabels.cs#L1-L205)
 
 ## 依赖关系分析
 - 组件耦合
   - McpSkillRegistry 为核心枢纽，依赖 McpToolGenerator、McpToolInvoker、JsonWriter/JsonHelper 等基础设施
   - McpToolGenerator 依赖特性与类型映射，生成标准化工具定义
   - McpToolInvoker 依赖类型映射与 JSON 解析/序列化
+  - RelationshipQueryProvider 依赖 SemanticLabels 进行数值语义化
 - 外部依赖
   - 仅依赖基础反射与文本处理，保持零外部依赖，便于集成与部署
 
@@ -360,19 +423,27 @@ Gen --> TM["McpTypeMapper"]
 Inv --> TM
 Inv --> JP["JsonParser/JsonWriter"]
 Reg --> JP
+P["RelationshipQueryProvider"] --> SL["SemanticLabels"]
+P --> PH["PawnQueryHelper"]
 ```
 
-图表来源
+**图表来源**
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [McpToolGenerator.cs:1-214](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolGenerator.cs#L1-L214)
 - [McpToolInvoker.cs:1-238](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolInvoker.cs#L1-L238)
 - [McpTypeMapper.cs:1-85](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpTypeMapper.cs#L1-L85)
+- [RelationshipQueryProvider.cs:1-365](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs#L1-L365)
+- [SemanticLabels.cs:1-205](file://ext\NPCLife\src\NPCLife\Framework\SemanticLabels.cs#L1-L205)
+- [PawnQueryHelper.cs:1-114](file://Source\Infrastructure\Mcp\PawnQueryHelper.cs#L1-L114)
 
-章节来源
+**章节来源**
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [McpToolGenerator.cs:1-214](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolGenerator.cs#L1-L214)
 - [McpToolInvoker.cs:1-238](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolInvoker.cs#L1-L238)
 - [McpTypeMapper.cs:1-85](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpTypeMapper.cs#L1-L85)
+- [RelationshipQueryProvider.cs:1-365](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs#L1-L365)
+- [SemanticLabels.cs:1-205](file://ext\NPCLife\src\NPCLife\Framework\SemanticLabels.cs#L1-L205)
+- [PawnQueryHelper.cs:1-114](file://Source\Infrastructure\Mcp\PawnQueryHelper.cs#L1-L114)
 
 ## 性能考量
 - 反射与序列化
@@ -383,6 +454,10 @@ Reg --> JP
   - 注册与查询均使用锁保护，避免并发冲突；调用时采用最小锁范围策略
 - 缓存与去重
   - 工具名去重避免重复注册；可结合业务场景缓存常用查询结果
+- 关系查询优化
+  - 双向关系分析涉及多次关系查询，建议在高并发场景下考虑缓存策略
+
+**更新** 新增关系查询性能考量，特别是双向关系分析的优化建议。
 
 ## 故障排查指南
 - 工具未出现在 tools 列表
@@ -396,20 +471,36 @@ Reg --> JP
   - 数组/集合参数需传入 JSON 字符串数组
 - system 技能不可用
   - system 技能默认隐式激活，检查是否被错误禁用或未正确注册度量工具
+- 关系查询异常
+  - 检查角色 ID 是否有效且角色存在于当前地图
+  - 验证双向关系分析的参数传递是否正确
+  - 查看语义标签映射是否正常工作
 
-章节来源
+**更新** 新增关系查询相关的故障排查指导。
+
+**章节来源**
 - [McpSkillRegistry.cs:1-470](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpSkillRegistry.cs#L1-L470)
 - [McpToolInvoker.cs:1-238](file://ext\NPCLife\src\NPCLife\Framework\Mcp\McpToolInvoker.cs#L1-L238)
+- [RelationshipQueryProvider.cs:1-365](file://Source\Infrastructure\Mcp\RelationshipQueryProvider.cs#L1-L365)
 
 ## 结论
 本实现以清晰的接口与纯静态工具链构建了 MCP 工具协议的完整闭环：从工具定义、注册、查询到调用，均具备良好的可扩展性与可维护性。通过 IMcpHookProvider 与 [McpSkill]/[McpTool] 属性系统，开发者可以快速将任意方法暴露为 MCP 工具，并按技能维度进行组织与激活。system 技能与度量工具进一步增强了系统的可观测性与运维能力。
+
+**更新** 新增的双向关系分析功能显著提升了角色关系查询的深度和实用性，为故事叙述和角色互动提供了更丰富的数据支持。语义标签系统的引入确保了输出的一致性和可理解性，使得 AI 系统能够更好地理解和利用这些关系数据。
 
 ## 附录
 - 开发最佳实践
   - 使用 [McpTool] 与 [McpParam] 明确定义工具与参数，提升 LLM 可理解性
   - 将工具按功能拆分到不同技能，避免 tools 过大导致上下文膨胀
   - 在启动阶段完成注册与预热，减少首次调用延迟
+  - 利用语义标签系统确保输出的一致性和可理解性
 - 安全与权限控制建议
   - 在 Invoker 之前增加鉴权与参数校验层，限制敏感操作
   - 对返回数据进行脱敏与裁剪，避免泄露内部实现细节
   - 通过 Workspace/Role 维度控制技能激活范围，实现最小权限原则
+- 关系查询使用建议
+  - 双向关系分析适用于需要深入了解角色间复杂关系的场景
+  - 建议结合其他查询工具使用，获得更完整的角色画像
+  - 注意性能影响，在大量关系分析时考虑缓存策略
+
+**更新** 新增关系查询和语义标签系统的使用建议。

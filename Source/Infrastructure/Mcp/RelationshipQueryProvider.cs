@@ -346,10 +346,12 @@ namespace RimLife.Infrastructure.Mcp
 
         private static string MapCompatibilityTier(float compat)
         {
-            if (compat >= 0.8f) return "Great";
-            if (compat >= 0.6f) return "Good";
-            if (compat >= 0.4f) return "Average";
-            if (compat >= 0.2f) return "Poor";
+            // CompatibilityWith 典型范围 -5 ~ 5，但特质叠加可能超出，故 clamp 到 [-5, 5]
+            compat = Math.Max(-5f, Math.Min(5f, compat));
+            if (compat >= 3f) return "Great";
+            if (compat >= 1f) return "Good";
+            if (compat >= -1f) return "Average";
+            if (compat >= -3f) return "Poor";
             return "Incompatible";
         }
 

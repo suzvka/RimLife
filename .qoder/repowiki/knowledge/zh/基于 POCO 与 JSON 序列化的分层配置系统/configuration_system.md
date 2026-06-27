@@ -1,39 +1,35 @@
-RimLife AI 叙事模组采用了一套**分层、持久化且支持运行时热重载**的配置系统。该系统将全局框架行为、LLM 连接凭证、Agent 驱动参数以及提示词模板进行了逻辑隔离，并通过 RimWorld 的 `ModSettings` 机制与本地文件系统（JSON）实现持久化。
+RimLife 采用了一套**基于 POCO（Plain Old CLR Object）与自定义 JSON 序列化**的分层配置系统。该系统不依赖外部配置文件（如 `.json` 或 `.yaml`），而是将配置状态持久化到 RimWorld 的模组设置（Mod Settings）或本地缓存存储（CacheStore）中，实现了从 UI 到核心逻辑的闭环管理。
 
 ### 1. 核心架构与分层
 配置系统分为三个主要层级：
 
-*   **UI/交互层 (RimLife.UI)**: 提供多页签配置界面（`ConfigPanelLayout`），包括连接管理 (`ConnectionPage`)、高级功能开关 (`AdvancedPage`) 等。UI 组件不直接持有状态，而是通过服务定位器 (`RimLifeCore`) 读写底层配置。
-*   **核心管理层 (RimLife.Infrastructure)**: `RimLifeCore` 作为服务定位器，统一管理 `FrameworkConfig`、`DriverConfig`、`PromptConfig` 和 `CredentialRegistry`。它负责配置的加载、验证、冻结（Freeze）以及向子系统分发。
-*   **数据定义层 (NPCLife.Framework/Driver)**: 定义纯 POCO 配置类，如 `FrameworkConfig`（功能开关/诊断）、`DriverConfig`（事件阈值/定时器）、`LlmConfig`（API 三元组）等。这些类零外部依赖，支持 JSON 序列化。
+*   **全局框架配置 (`FrameworkConfig`)**：位于 `NPCLife` 核心库，管理 Agent 驱动参数、诊断开关和功能特性。通过 `RimLifeCore.Config` 访问，持久化于 `CacheStore`（本地文件）。
+*   **驱动配置 (`DriverConfig`)**：控制事件触发阈值、定时器脉冲间隔等运行时行为。支持分角色（导演/编剧/即兴）独立配置，持久化于 `CacheStore`。
+*   **凭证与连接配置 (`LlmCredential` / `CredentialRegistry`)**：管理 LLM API 的 BaseUrl、ApiKey、ModelName 及提供商类型。通过 `RimLifeModSettings` 持久化到 RimWorld 的全局模组设置中，实现跨存档共享。
 
-### 2. 关键配置模块
+### 2. 关键组件与实现
 
-#### A. LLM 凭证管理 (CredentialRegistry)
-*   **存储方式**: 凭证信息（BaseUrl, ApiKey, ModelName, ProviderType）以 JSON 字符串形式存储在 `RimLifeModSettings.LlmCredentialsJson` 中，利用 RimWorld 的 `Scribe_Values` 机制持久化到全局配置文件（`ModsConfig.xml`），**不绑定特定存档**。
-*   **管理逻辑**: `CredentialRegistry` 维护一个凭证字典和激活顺序列表（Fallback 链路）。支持动态增删改查、模型发现（ListModels）及连接测试。
-*   **安全实践**: UI 层提供 API Key 的显示/隐藏切换，并在内存中通过 `LlmCredential` 对象管理，避免明文日志输出。
+*   **POCO 配置类**：
+    *   `FrameworkConfig`：包含 `DriverConfig`、`DiagnosticSection` 和 `FeatureToggleSection`。支持冻结（Freeze）机制，防止运行时意外修改。
+    *   `DriverConfig`：定义了各 Agent 角色的事件数量/重要度阈值及定时器间隔。
+    *   `LlmConfig` / `LlmCredential`：封装 LLM 访问所需的三元组（URL, Key, Model）及提供商类型。
 
-#### B. 框架功能与诊断 (FrameworkConfig)
-*   **功能开关**: 控制导演 Agent、记忆巩固、知识库、Freelancer Agent 及运行时度量的启用状态。
-*   **诊断配置**: 支持详细日志、工具调用追踪和事件总线追踪的动态开启。
-*   **不可变性**: 配置应用后调用 `Freeze()` 方法，防止运行时意外修改，确保系统稳定性。
+*   **持久化策略**：
+    *   **模组设置持久化**：`RimLifeModSettings` 继承自 `ModSettings`，通过 `ExposeData` 将 `LlmCredentialsJson` 字符串保存到 RimWorld 的全局配置文件中。`CredentialRegistry` 负责将该 JSON 字符串反序列化为内存中的凭证列表。
+    *   **缓存存储持久化**：`LocalFileStore` 实现 `ICacheStore` 接口，将 `FrameworkConfig` 和 `DriverConfig` 序列化为 JSON 字符串并存储在本地文件系统（通常为 `Config/Mods` 目录）。
 
-#### C. Agent 驱动与提示词 (DriverConfig & PromptConfig)
-*   **持久化**: 这两类配置通过 `LocalFileStore` (ICacheStore) 持久化为本地 JSON 文件（`rimlife_driver_config.json`, `rimlife_prompt_config.json`），位于游戏本地缓存目录。
-*   **热重载**: 修改后需调用 `RimLifeCore.RebuildAgents()` 销毁并重建 Agent 实例，使新参数（如提示词内容、事件触发阈值）生效。
+*   **自定义序列化器**：
+    *   项目使用了轻量级的 `JsonWriter` 和 `JsonParser`（位于 `NPCLife.Framework`），避免了对重型 JSON 库（如 Newtonsoft.Json）的依赖，确保在 RimWorld 的 .NET 环境下兼容性与性能。
 
-### 3. 持久化策略对比
+### 3. 配置加载与生效流程
 
-| 配置类型 | 存储后端 | 作用域 | 关键类/字段 |
-| :--- | :--- | :--- | :--- |
-| **LLM 凭证** | RimWorld Mod Settings | 全局 (跨存档) | `RimLifeModSettings.LlmCredentialsJson` |
-| **驱动参数** | 本地 JSON 文件 | 全局 (跨存档) | `LocalFileStore` -> `rimlife_driver_config` |
-| **提示词模板** | 本地 JSON 文件 | 全局 (跨存档) | `LocalFileStore` -> `rimlife_prompt_config` |
-| **功能开关** | 内存 (运行时) | 当前会话 | `RimLifeCore.Configure()` |
+1.  **初始化**：`RimLifeCore` 在首次访问配置属性时，从 `CacheStore` 或 `RimLifeModSettings` 加载 JSON 字符串。
+2.  **反序列化**：调用 `FrameworkConfig.FromJson()` 或 `CredentialRegistry.DeserializeState()` 将 JSON 转换为 POCO 对象。
+3.  **UI 交互**：`ConnectionPage`（连接配置）和 `NarrativePage`（叙事配置）直接读写内存中的配置对象或编辑缓冲区。
+4.  **保存与重建**：用户点击“保存”后，配置被序列化回存储后端。对于驱动配置的修改，需调用 `RimLifeCore.RebuildAgents()` 销毁并重建 Agent 实例以应用新参数。
 
 ### 4. 开发者规范
-1.  **配置访问**: 严禁直接实例化配置类，应通过 `RimLifeCore.Config`、`RimLifeCore.DriverConfig` 等静态属性访问。
-2.  **状态同步**: 修改 `DriverConfig` 或 `PromptConfig` 后，必须调用 `RimLifeCore.SetDriverConfig()` 或 `SetPromptConfig()` 以触发持久化和 Agent 重建。
-3.  **线程安全**: 凭证注册表和配置加载过程包含锁机制（`lock`），在多线程环境下（如异步 LLM 请求）访问配置时需确保使用线程安全的接口。
-4.  **扩展配置**: 新增配置项应在 `NPCLife.Framework` 中定义 POCO 类，并在 `FrameworkConfig.ToJson/FromJson` 中实现序列化逻辑，同时在 `AdvancedPage` 中添加对应的 UI 控件。
+
+*   **配置不可变性**：`FrameworkConfig` 在应用后应调用 `Freeze()`，后续修改需通过创建新实例并调用 `RimLifeCore.Configure()` 完成。
+*   **线程安全**：`CredentialRegistry` 内部使用锁（`_lock`）保护凭证状态的读写，UI 线程在访问凭证列表时应注意异步操作的状态同步。
+*   **持久化委托**：`CredentialRegistry` 通过注入 `persistAction` 委托实现与宿主环境（RimWorld Mod Settings）的解耦，新增配置项时需确保其能被正确序列化到 JSON 结构中。

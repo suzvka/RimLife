@@ -1,4 +1,4 @@
-该仓库采用基于**静态全局钩子（Static Global Hooks）**和**事件总线（EventBus）**的混合错误处理架构，旨在实现框架核心逻辑（NPCLife）与宿主环境（RimWorld 游戏引擎）的解耦。系统通过 `ErrorHandler` 统一管理异常上报，结合 Trace ID 实现请求链路追踪，并在 Agent 循环和 MCP 工具调用层实施了多层容错策略。
+该仓库采用基于静态全局钩子（Static Global Hooks）和事件总线（EventBus）的混合错误处理架构，旨在实现框架核心逻辑与宿主环境（游戏引擎）的解耦。
 
 ### 1. 核心组件与模式
 *   **ErrorHandler (全局中枢)**：位于 `ext/NPCLife/src/NPCLife/Framework/ErrorHandler.cs`。提供纯静态的错误报告接口 `ReportError`。它不直接抛出异常，而是将错误封装为 `ErrorContext` 并分发给注册的处理器。支持**诊断模式**（DiagnosticMode）以输出详细日志。
@@ -10,7 +10,6 @@
 *   **AgentLoop 容错**：在 `AgentLoop.cs` 的主循环中，采用 `try-catch` 包裹整个执行流程。
     *   **取消处理**：捕获 `OperationCanceledException` 并标记为取消。
     *   **通用故障**：捕获其他 `Exception`，调用 `FailAndRequeue`。该策略会将当前已处理的事件**回灌（Requeue）**到事件池中，以便后续重试，而不是直接丢弃。
-    *   **重试保护**：引入连续失败计数器（`_consecutiveFailures`）和冷却期（`RetryCooldown`），防止因持续性错误导致的无限循环或资源耗尽。
 *   **MCP 工具调用隔离**：在 `McpSkillRegistry.cs` 中，工具执行被包裹在 `try-catch` 中。如果工具抛出异常，会返回一个 JSON 格式的错误字符串 `{"error": "..."}` 给 LLM，而不是让框架崩溃。这遵循了“将错误作为上下文反馈给智能体”的设计哲学。
 *   **异常隔离**：`ErrorHandler` 和 `EventBus` 在遍历处理器列表时，会对每个处理器的执行进行独立的 `try-catch` 保护，确保一个错误的观察者不会阻止其他观察者的执行。
 

@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: RimWorld AI 叙事集成枢纽
+title: RimLife AI 叙事引擎集成层
 scope:
     - LICENSE.txt
     - RimLife.csproj

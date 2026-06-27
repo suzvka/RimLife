@@ -6,6 +6,7 @@ source_files:
     - RimLife.csproj
     - ext/NPCLife/src/NPCLife/NPCLife.csproj
     - nuget.config
+    - .gitmodules
     - dotnet-tools.json
     - RimLife.Tests/RimLife.Tests.csproj
     - ext/NPCLife/tests/NPCLife.Tests/NPCLife.Tests.csproj
