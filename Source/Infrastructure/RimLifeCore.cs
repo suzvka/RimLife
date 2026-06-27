@@ -682,14 +682,15 @@ namespace RimLife.Infrastructure
                 return;
             }
 
+            // 确保 Director Agent 已创建并订阅 OnThresholdReached，
+            // 必须在 Append 之前完成，否则阈值回调会在无订阅者时触发而丢失。
+            GetDirectorAgent();
+
             var events = _eventBuffer.Drain();
             foreach (var evt in events)
                 directorWs.EventPool.Append(evt);
 
             Logger?.Message($"[RimLife.Core] EventBuffer flushed: {events.Count} events → Director workspace (pending={directorWs.EventPool.PendingCount}, importance={directorWs.EventPool.TotalImportance:F1})");
-            
-            // 确保 Director Agent 已创建
-            GetDirectorAgent();
         }
 
         /// <summary>
