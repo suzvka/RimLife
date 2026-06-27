@@ -913,6 +913,27 @@ namespace RimLife.Tool
             }
             catch (Exception e) { Fail("get_interaction_history 异常", e.Message); }
 
+            // --- 9.8b get_relationship_between ---
+            try
+            {
+                var pawns = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.Take(2).ToList();
+                if (pawns != null && pawns.Count >= 2)
+                {
+                    var json = RelationshipQueryProvider.GetRelationshipBetween(
+                        pawns[0].ThingID, pawns[1].ThingID);
+                    if (json.StartsWith("{") && json.Contains("\"ab\""))
+                    {
+                        Pass($"get_relationship_between 成功 ({json.Length} chars)");
+                        DumpObject("  preview", json.Length > 120 ? json.Substring(0, 120) + "..." : json);
+                    }
+                    else
+                        Fail("get_relationship_between 输出异常");
+                }
+                else
+                    Skip("get_relationship_between — 无足够 Pawn");
+            }
+            catch (Exception e) { Fail("get_relationship_between 异常", e.Message); }
+
             // --- 9.9 get_environment ---
             if (pawnId != null)
             {

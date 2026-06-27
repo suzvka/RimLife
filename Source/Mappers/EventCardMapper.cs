@@ -272,7 +272,8 @@ namespace RimLife.Mappers
             {
                 ["letterLabel"] = label.ToString() ?? "",
                 ["letterText"] = text.ToString() ?? "",
-                ["letterDef"] = letterDef?.defName ?? "Unknown"
+                ["letterDef"] = letterDef?.defName ?? "Unknown",
+                ["letterColor"] = GetLetterColorLabel(letterDef)
             };
 
             if (relatedFaction != null)
@@ -441,6 +442,7 @@ namespace RimLife.Mappers
 
         /// <summary>
         /// 从 LetterDef 查表返回固定重要度值。
+        /// 重要度对齐 RimWorld 信封颜色等级：红(5) > 橙红(3) > 蓝(2) > 白(1)。
         /// </summary>
         private static float MapLetterImportance(LetterDef letterDef)
         {
@@ -448,12 +450,36 @@ namespace RimLife.Mappers
 
             string defName = letterDef.defName ?? "";
 
+            // 红色信封 (5) — 高危/紧急：袭击、死亡、紧急警告
             if (defName == "ThreatBig" || defName == "Death" || defName == "BadUrgent")
                 return 5f;
-            if (defName == "ThreatSmall" || defName == "PositiveEvent" || defName == "NegativeEvent")
+            // 橙红色信封 (3) — 负面/小威胁：小型袭击、负面事件
+            if (defName == "ThreatSmall" || defName == "NegativeEvent" || defName == "Bad")
                 return 3f;
-
+            // 蓝色信封 (2) — 正面事件：好事、积极变化
+            if (defName == "PositiveEvent" || defName == "Good")
+                return 2f;
+            // 白色信封 (1) — 中性/信息性信件
             return 1f;
+        }
+
+        /// <summary>
+        /// 从 LetterDef 返回颜色等级标签，供 Agent 感知事件类型。
+        /// 对齐 RimWorld 信封 UI 颜色：red / orangeRed / blue / white。
+        /// </summary>
+        private static string GetLetterColorLabel(LetterDef letterDef)
+        {
+            if (letterDef == null) return "white";
+
+            string defName = letterDef.defName ?? "";
+
+            if (defName == "ThreatBig" || defName == "Death" || defName == "BadUrgent")
+                return "red";
+            if (defName == "ThreatSmall" || defName == "NegativeEvent" || defName == "Bad")
+                return "orangeRed";
+            if (defName == "PositiveEvent" || defName == "Good")
+                return "blue";
+            return "white";
         }
 
         /// <summary>

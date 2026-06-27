@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: rimlife_game_integration
-title: RimWorld-NPCLife 桥接与 AI 驱动核心
+title: RimWorld 与 NPCLife AI 集成枢纽
 scope:
     - Source/
 source_files: []
