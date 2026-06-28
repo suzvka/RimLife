@@ -3,13 +3,12 @@ module_path: frontend_style
 title: RimWorld IMGUI 配置面板样式系统
 scope: []
 source_files:
+    - Source/UI/ConfigPanelLayout.cs
     - Source/UI/Helpers/UIHelper.cs
     - Source/UI/Helpers/LayoutHelper.cs
-    - Source/UI/ConfigPanelLayout.cs
-    - Source/UI/ConfigPanelWindow.cs
     - Source/UI/Pages/IConfigPage.cs
     - Source/UI/Pages/ConnectionPage.cs
+    - Source/UI/Pages/NarrativePage.cs
+    - Source/UI/ConfigPanelWindow.cs
 depends_on: []
-related_to:
-    - path: configuration_system
-    - path: logging_system
+related_to: []

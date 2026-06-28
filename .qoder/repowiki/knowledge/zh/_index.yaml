@@ -3,7 +3,7 @@ schema_version: 1
 locale: zh-CN
 branch: master
 nodes_managed: true
-exported_at: "2026-06-27T18:31:34Z"
+exported_at: "2026-06-28T20:53:19Z"
 modules:
     "":
         dir_name: RimLife AI 叙事引擎集成层
@@ -372,7 +372,8 @@ modules:
             - nuget.config
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: dependency_management
     configuration_system:
         dir_name: 基于 POCO 与 JSON 序列化的分层配置系统
         title: 基于 POCO 与 JSON 序列化的分层配置系统
@@ -389,7 +390,9 @@ modules:
             - ext/NPCLife/src/NPCLife/Infrastructure/Llm/CredentialRegistry.cs
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: frontend_style
+            - path: rimlife_game_integration
     dependency_management:
         dir_name: .NET 项目依赖管理策略
         title: .NET 项目依赖管理策略
@@ -404,7 +407,8 @@ modules:
             - ext/NPCLife/tests/NPCLife.Tests/NPCLife.Tests.csproj
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: build_system
     error_handling:
         dir_name: 错误处理与诊断追踪体系
         title: 错误处理与诊断追踪体系
@@ -417,7 +421,9 @@ modules:
             - Source/Infrastructure/RimWorldLogger.cs
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: logging_system
+            - path: rimlife_game_integration
     frontend_style:
         dir_name: RimWorld IMGUI 配置面板样式系统
         title: RimWorld IMGUI 配置面板样式系统
@@ -431,7 +437,9 @@ modules:
             - Source/UI/Pages/ConnectionPage.cs
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: configuration_system
+            - path: logging_system
     logging_system:
         dir_name: 日志系统架构与规范
         title: 日志系统架构与规范
@@ -445,7 +453,10 @@ modules:
             - Source/Infrastructure/RimLifeCore.cs
         children: []
         depends_on: []
-        related_to: []
+        related_to:
+            - path: error_handling
+            - path: frontend_style
+            - path: rimlife_game_integration
     rimlife_game_integration:
         dir_name: RimWorld 与 NPCLife AI 框架集成层
         title: RimWorld 与 NPCLife AI 框架集成层
@@ -455,6 +466,9 @@ modules:
         children: []
         depends_on: []
         related_to:
+            - path: configuration_system
+            - path: error_handling
+            - path: logging_system
             - path: rimlife_tests
     rimlife_tests:
         dir_name: RimLife 模块单元测试

@@ -10,4 +10,7 @@ source_files:
     - ext/NPCLife/src/NPCLife/Framework/ErrorHandler.cs
     - Source/Infrastructure/RimLifeCore.cs
 depends_on: []
-related_to: []
+related_to:
+    - path: error_handling
+    - path: frontend_style
+    - path: rimlife_game_integration

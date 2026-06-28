@@ -11,4 +11,5 @@ source_files:
     - RimLife.Tests/RimLife.Tests.csproj
     - ext/NPCLife/tests/NPCLife.Tests/NPCLife.Tests.csproj
 depends_on: []
-related_to: []
+related_to:
+    - path: build_system

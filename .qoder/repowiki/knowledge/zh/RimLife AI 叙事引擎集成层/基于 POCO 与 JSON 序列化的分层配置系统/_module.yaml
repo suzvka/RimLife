@@ -13,4 +13,6 @@ source_files:
     - ext/NPCLife/src/NPCLife/Framework/Llm/LlmConfig.cs
     - ext/NPCLife/src/NPCLife/Infrastructure/Llm/CredentialRegistry.cs
 depends_on: []
-related_to: []
+related_to:
+    - path: frontend_style
+    - path: rimlife_game_integration

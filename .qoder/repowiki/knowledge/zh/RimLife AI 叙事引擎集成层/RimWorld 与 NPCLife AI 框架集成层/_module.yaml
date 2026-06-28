@@ -6,4 +6,7 @@ scope:
 source_files: []
 depends_on: []
 related_to:
+    - path: configuration_system
+    - path: error_handling
+    - path: logging_system
     - path: rimlife_tests
