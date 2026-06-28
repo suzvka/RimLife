@@ -37,9 +37,9 @@
 	  <None Remove="RimLife.Tests\**" />
 	</ItemGroup>
 
-	<!-- Reference NPCLife framework (local NuGet) -->
+	<!-- Reference NPCLife framework (Git submodule) -->
 	<ItemGroup>
-	  <PackageReference Include="NPCLife" Version="1.1.*" />
+	  <ProjectReference Include="ext\NPCLife\src\NPCLife\NPCLife.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

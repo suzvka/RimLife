@@ -9,13 +9,14 @@ scope:
     - "Source/**/*.Designer.cs"
     - "**/obj/**"
     - "**/bin/**"
+    - "ext/**"
 
 repowiki:
   template: "product_requirement"
 
   notes:
     - text: "RimLife 是 RimWorld 1.6 游戏模组，运行时为 .NET Framework 4.8 / Unity，不是独立可运行的应用。"
-    - text: "所有 Agent 循环、LLM 通信、MCP 协议、事件总线等框架能力由 NPCLife 子模块（ext/NPCLife/）提供，RimLife 仅做游戏侧适配。"
+    - text: "所有 Agent 循环、LLM 通信、MCP 协议、事件总线等框架能力由 NPCLife 子模块（ext/NPCLife/）提供。RimLife 仅使用 NPCLife 的公共 API，不依赖其内部实现。文档不应扫描或记录 ext/ 目录下的框架源码。"
     - text: "UI 采用 RimWorld IMGUI（Verse.Widgets / Listing_Standard），是即时模式，每帧重绘，所有状态需手动维护。"
     - text: "禁止在代码中硬编码 LLM 模型名称（如 gpt-4o），模型名必须由用户输入或从 API 发现。"
     - text: "按钮尺寸必须使用 UIHelper 中的常量（BtnWidthSmall/Medium/Large, BtnHeight），禁止硬编码像素值。"
@@ -66,7 +67,7 @@ repowiki:
 knowledgecard:
   notes:
     - text: "RimLife 的模块边界：Data 层负责游戏数据提取，Infrastructure 层负责桥接 NPCLife 框架，Mappers 层负责 Card 映射，UI 层负责配置面板。各层职责不交叉。"
-    - text: "所有 MCP Provider 实现 NPCLife 框架的 IMcpToolProvider 接口，注册到 NPCLife 的 SkillRegistry，由 Agent 通过 MCP 协议调用。"
+    - text: "所有 MCP Provider 实现 NPCLife 框架的 IMcpToolProvider 接口，注册到 NPCLife 的 SkillRegistry，由 Agent 通过 MCP 协议调用。此为框架公共 API，RimLife 不依赖框架内部实现。"
     - text: "UI 绘制必须使用 UIHelper 统一原语，禁止直接硬编码像素值或颜色。按钮尺寸常量：BtnWidthSmall/Medium/Large、BtnHeight。"
     - text: "IMGUI 是即时模式 GUI，Text.CalcSize() 必须在 GUI 线程的绘制上下文中调用，Listing_Standard.GetRect() 会自动推进游标。"
     - text: "RimLife 通过 ProjectReference 引用 NPCLife 子模块（ext/NPCLife/src/NPCLife/NPCLife.csproj），编译产物输出到 1.6/Assemblies/。"

@@ -1,6 +1,6 @@
 ## 项目概述
 
-RimLife 是一个 RimWorld 游戏模组（Mod），作为 [NPCLife](../NPCLife) 框架的**游戏侧适配层**，负责：
+RimLife 是一个 RimWorld 游戏模组（Mod），作为 **NPCLife** 框架的游戏侧适配层，负责：
 - 通过 Harmony 补丁拦截 RimWorld 游戏事件（袭击、社交互动、死亡等）
 - 将原始游戏数据映射为 NPCLife 框架的标准 Card 结构
 - 提供 RimWorld 特定的 MCP 工具（角色查询、殖民地概览、记忆系统等）
@@ -15,7 +15,7 @@ Agent 循环、LLM 通信、工作空间管理、MCP 协议、事件总线等框
 - 运行时: .NET Framework 4.8 (RimWorld 1.6 / Unity)
 - 构建: MSBuild (`RimLife.csproj`, `RimLife.sln`)
 - 测试: xUnit (`RimLife.Tests/`)
-- 框架依赖: **NPCLife** (NuGet 本地源 `C:\LocalNuGet\`)
+- 框架依赖: **NPCLife** (Git submodule `ext/NPCLife`，通过 ProjectReference 源码引用)
 - Harmony: 运行时 IL 注入，拦截游戏方法
 - UI 框架: RimWorld IMGUI (Verse.Widgets / Listing_Standard)
 - LLM 集成: 由 NPCLife 的 LlmAccessor 提供 (OpenAI 兼容 / Anthropic API)
@@ -59,19 +59,24 @@ Libs/             - 外部依赖 DLL（Bubbles 等）
 
 ## 框架依赖：NPCLife
 
-本项目的核心框架能力来自 **NPCLife**（`E:\NPCLife`），通过 NuGet 包（本地源 `C:\LocalNuGet\`）引用。NPCLife 提供：
+本项目的核心框架能力来自 **NPCLife**，通过 Git submodule（`ext/NPCLife`）以 ProjectReference 源码引用。submodule pin 住特定 commit，确保构建可复现。
 
-| 模块 | 路径 | 说明 |
-|---|---|---|
-| AgentLoop | `Agent/AgentLoop.cs` | Agent 循环引擎（Drain → Prompt → LLM → 工具调用） |
-| MCP 基础设施 | `Framework/Mcp/` | Skill 注册表、工具调用、序列化 |
-| Workspace 管理 | `Workspace/` | 工作空间生命周期、事件池、阈值触发 |
-| 三角色工具 | `Workspace/DirectionMcpTools.cs` | 导演工具（create_workspace, route_events 等） |
-|  | `Workspace/WritingMcpTools.cs` | 编剧工具（push_line, finish_round 等） |
-|  | `Workspace/FreelancerMcpTools.cs` | 临时工工具 |
-| LLM 适配 | `Infrastructure/Llm/` | OpenAI / Anthropic API 适配器 |
-| 事件系统 | `Framework/EventBus.cs` | 事件总线 |
-| 台词推送 | `Infrastructure/ScriptDeliveryService.cs` | 台词解析与投递 |
+**访问边界**：NPCLife 源码虽然可见，RimLife 应只使用其公共 API，不依赖 internal 类或实现细节。文档和知识库不应扫描或记录 NPCLife 的内部实现。
+
+RimLife 实际使用的 NPCLife 公共能力：
+
+| 能力 | RimLife 中的使用方式 |
+|---|---|
+| Agent 循环 | `AgentLoop` — 创建导演/编剧/即兴编剧 Agent 实例，绑定工作空间与系统提示词 |
+| 工作空间管理 | `IWorkspaceManager` / `IWorkspace` — 创建/查询工作空间、管理事件池与轮次 |
+| MCP 工具协议 | `ISkillRegistry` / `McpToolAttribute` — 注册 RimWorld 特定查询工具，供 Agent 调用 |
+| 角色工具 | `DirectionMcpTools`（导演）、`WritingMcpTools`（编剧）、`FreelancerMcpTools`（即兴编剧）— 由框架提供，RimLife 不修改 |
+| LLM 适配 | `ILlmAccessor` / `ICredentialManager` — 凭证管理、模型发现、API 调用 |
+| 台词投递 | `ScriptDeliveryService` / `IScriptConsumer` — 框架推送台词，RimLife 通过 `DialogueConsumer` 消费 |
+| 事件与卡结构 | `IGameEvent` / `EventCardImpl` / 各种 Card 类型 — RimWorld 对象映射为框架标准结构 |
+| 提示词配置 | `PromptConfig` — 框架持有基础身份，RimLife 通过 `PromptAdditions` 追加游戏侧指令 |
+| 序列化与基础工具 | `CardSerializer` / `JsonWriter` / `JsonParser` — 统一序列化与配置持久化 |
+| 主线程调度 | `MainThreadDispatcher` — 异步 LLM 回调安全转主线程 |
 
 ## 关键入口 / 核心模块
 
