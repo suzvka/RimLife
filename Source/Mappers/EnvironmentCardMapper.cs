@@ -1,4 +1,5 @@
 ﻿using NPCLife.Framework;
+using RimLife.Data;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,8 +31,8 @@ namespace RimLife.Mappers
             float temperature = GenTemperature.GetTemperatureForCell(pos, map);
             float lightLevel = map.glowGrid.GroundGlowAt(pos);
 
-            string thermalComfort = NPCLife.Framework.SemanticLabels.MapThermalComfort(temperature);
-            string lightLabel = NPCLife.Framework.SemanticLabels.MapLightLevel(lightLevel);
+            string thermalComfort = SemanticLabels.MapThermalComfort(temperature);
+            string lightLabel = SemanticLabels.MapLightLevel(lightLevel);
 
             EnvironmentCard card;
 

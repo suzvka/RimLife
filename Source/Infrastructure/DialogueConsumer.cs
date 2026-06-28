@@ -157,7 +157,7 @@ namespace RimLife.Infrastructure
 
             // 为工作空间中的所有参与角色写入"听见"条目
             var ws = _getWorkspaceManager()?.Get(scheduled.WorkspaceId);
-            var participantIds = ws?.ColonistIds;
+            var participantIds = ws?.FocusCharacterIds;
             if (participantIds != null)
             {
                 foreach (var pid in participantIds)

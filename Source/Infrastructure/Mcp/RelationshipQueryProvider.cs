@@ -2,6 +2,7 @@ using NPCLife.Cards;
 using NPCLife.Core;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
+using RimLife.Data;
 using RimWorld;
 using System;
 using System.Collections.Generic;

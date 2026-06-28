@@ -7,6 +7,7 @@ using UnityEngine;
 using System.Text;
 using Verse;
 using NPCLife.Framework;
+using RimLife.Data;
 
 namespace RimLife
 {

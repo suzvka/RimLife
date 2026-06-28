@@ -254,7 +254,7 @@ namespace RimLife.Infrastructure
                     count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeService, Logger));
                     count += RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
                     count += RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
-                    count += RegisterHookProvider(new ImproviserMcpProvider(() => Workspaces, Logger));
+                    count += RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
 
                     // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
                     count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
@@ -313,8 +313,7 @@ namespace RimLife.Infrastructure
 
                 // ---- 运行时度量系统（永久启用） ----
                 {
-                    // 注册度量查询 MCP 工具
-                    McpSkillRegistry.RegisterFromType(typeof(NPCLife.Framework.Mcp.MetricsMcpTools));
+                    // MetricsMcpTools 已从 NPCLife 移除，度量数据通过 RuntimeMetrics 静态类 + MetricsInterceptor 采集
 
                     // 为三种 Agent 角色分别注册 MetricsInterceptor
                     AgentPipeline.AddInterceptor(

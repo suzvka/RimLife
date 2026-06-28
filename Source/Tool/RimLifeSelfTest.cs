@@ -8,6 +8,7 @@ using NPCLife.Core;
 using NPCLife.Driver;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
+using RimLife.Data;
 using RimLife.Infrastructure;
 using NPCLife.Infrastructure.Mcp;
 using RimLife.Infrastructure.Mcp;
@@ -1290,7 +1291,7 @@ namespace RimLife.Tool
                 else
                 {
                     Pass("无活跃工作空间 — 创建测试空间验证字段");
-                    var testWs = wsManager.Create("FieldTest", null, WorkspaceRole.Screenwriter);
+                    var testWs = wsManager.Create("FieldTest", WorkspaceRole.Screenwriter);
                     if (testWs.EventPool.PendingCount == 0 && testWs.EventPool.TotalImportance == 0)
                         Pass("EventPool 初始状态为空 (预期)");
                     else
@@ -1305,7 +1306,7 @@ namespace RimLife.Tool
                 var wsManager = RimLifeCore.Workspaces;
                 if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
-                var testWs = wsManager.Create("PushTest", null, WorkspaceRole.Director);
+                var testWs = wsManager.Create("PushTest", WorkspaceRole.Director);
 
                 var evt = MakeTestEvent("ws_test_1", 1000, 3f);
                 bool pushed = wsManager.RouteEvents(testWs.Id, new List<IGameEvent> { evt });
@@ -1335,7 +1336,7 @@ namespace RimLife.Tool
                 var wsManager = RimLifeCore.Workspaces;
                 if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
-                var testWs = wsManager.Create("CallbackTest", null, WorkspaceRole.Director);
+                var testWs = wsManager.Create("CallbackTest", WorkspaceRole.Director);
                 var config = RimLifeCore.DriverConfig;
 
                 // 填充事件到阈值
@@ -1359,7 +1360,7 @@ namespace RimLife.Tool
                 if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
                 var config = RimLifeCore.DriverConfig;
-                var testWs = wsManager.Create("ActivationTest", null, WorkspaceRole.Director);
+                var testWs = wsManager.Create("ActivationTest", WorkspaceRole.Director);
 
                 // 填充高重要度事件：1个 importance=20 的事件即可满足重要性阈值
                 wsManager.RouteEvents(testWs.Id, new List<IGameEvent> {
@@ -1466,6 +1467,7 @@ namespace RimLife.Tool
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }
+            public IReadOnlyList<string> Keywords { get; set; } = new List<string>();
         }
     }
 

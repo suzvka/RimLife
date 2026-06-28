@@ -37,7 +37,7 @@ namespace RimLife.Infrastructure
                     return ws;
             }
 
-            return Workspaces.Create("Director", null, NPCLife.Workspace.WorkspaceRole.Director);
+            return Workspaces.Create("Director", NPCLife.Workspace.WorkspaceRole.Director);
         }
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace RimLife.Infrastructure
                     return ws;
             }
 
-            return Workspaces.Create("Improviser", null, NPCLife.Workspace.WorkspaceRole.Improviser);
+            return Workspaces.Create("Improviser", NPCLife.Workspace.WorkspaceRole.Improviser);
         }
 
         /// <summary>
@@ -271,8 +271,8 @@ namespace RimLife.Infrastructure
             var directorWs = GetDirectorWorkspace();
             if (directorWs != null)
                 sb.AppendLine($"导演工作空间 ID：{directorWs.Id}");
-            if (ws.ColonistIds != null && ws.ColonistIds.Count > 0)
-                sb.AppendLine($"关联角色：{string.Join(", ", ws.ColonistIds)}");
+            if (ws.FocusCharacterIds != null && ws.FocusCharacterIds.Count > 0)
+                sb.AppendLine($"关联角色：{string.Join(", ", ws.FocusCharacterIds)}");
             sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();

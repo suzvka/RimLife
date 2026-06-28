@@ -2,6 +2,7 @@
 using NPCLife.Core;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
+using RimLife.Data;
 using RimWorld;
 using System;
 using System.Collections.Generic;
@@ -100,7 +101,7 @@ namespace RimLife.Infrastructure.Mcp
                     if (!string.IsNullOrEmpty(moodTier))
                     {
                         float mood = p.needs?.mood?.CurLevelPercentage ?? 0.5f;
-                        string tier = NPCLife.Framework.SemanticLabels.MapMoodTier(mood);
+                        string tier = SemanticLabels.MapMoodTier(mood);
                         if (!string.Equals(tier, moodTier, StringComparison.OrdinalIgnoreCase))
                             continue;
                     }

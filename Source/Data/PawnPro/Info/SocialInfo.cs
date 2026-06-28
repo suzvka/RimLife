@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Verse;
 using NPCLife.Framework;
+using RimLife.Data;
 
 namespace RimLife
 {

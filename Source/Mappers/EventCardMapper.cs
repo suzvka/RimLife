@@ -325,6 +325,7 @@ namespace RimLife.Mappers
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }
+            public IReadOnlyList<string> Keywords { get; set; } = new List<string>();
         }
 
         // ================================================================
