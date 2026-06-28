@@ -73,6 +73,12 @@ namespace RimLife.Infrastructure
             {
                 saveId = Guid.NewGuid().ToString("D");
                 _data[SaveIdKey] = saveId;
+
+                // 通知 SaveIdResolver
+                SaveIdResolver.SetSaveId(saveId);
+
+                // 重绑定缓存文件（临时 → 正式），不重置内存数据
+                (RimLifeCore.CacheStore as LocalFileStore)?.Rebind(saveId);
             }
 
             // 序列化整个字典为 JSON 字符串
@@ -99,12 +105,22 @@ namespace RimLife.Infrastructure
         public override void FinalizeInit(bool fromLoad)
         {
             base.FinalizeInit(fromLoad);
-            // 确保 SaveIdResolver 在加载后已设置
-            if (_data.TryGetValue(SaveIdKey, out string resolvedId))
+
+            if (!fromLoad)
             {
-                SaveIdResolver.SetSaveId(resolvedId);
+                // 新游戏：清除旧 SaveId，使用临时缓存文件
+                SaveIdResolver.Clear();
             }
-            // 注册到核心服务定位器
+            else
+            {
+                // 读档：恢复 SaveId
+                if (_data.TryGetValue(SaveIdKey, out string resolvedId))
+                {
+                    SaveIdResolver.SetSaveId(resolvedId);
+                }
+            }
+
+            // 注册到核心服务定位器（触发 SaveStore setter → 重建 CacheStore）
             RimLifeCore.SaveStore = this;
         }
 

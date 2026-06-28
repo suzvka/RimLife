@@ -455,6 +455,12 @@ namespace RimLife.Infrastructure
                     _knowledgeService = null;
                     _interactionStore = null;
 
+                    // 重置缓存存储与依赖缓存的配置，确保绑定到新存档
+                    _cacheStore = null;         // 重建 CacheStore，绑定新存档文件
+                    _driverConfig = null;       // 重新从新 CacheStore 加载
+                    _frameworkConfig = null;    // 重新从新 CacheStore 加载
+                    _promptAdditions = null;    // 重新从新 CacheStore 加载
+
                     if (_saveStore != null)
                     {
                         EventBus.Publish(FrameworkEvents.SaveLoaded);
@@ -464,8 +470,21 @@ namespace RimLife.Infrastructure
             }
         }
 
-        /// <summary>缓存存储（本地文件）。</summary>
-        public static ICacheStore CacheStore { get; } = new LocalFileStore();
+        private static ICacheStore _cacheStore;
+
+        /// <summary>
+        /// 缓存存储（本地文件）。随存档切换自动重建，
+        /// 绑定到当前存档的 GUID 对应的缓存文件。
+        /// </summary>
+        public static ICacheStore CacheStore
+        {
+            get
+            {
+                if (_cacheStore == null)
+                    _cacheStore = new LocalFileStore();
+                return _cacheStore;
+            }
+        }
 
         /// <summary>
         /// 将当前内存中的工作空间和交互历史数据刷入 IAuthorityStore。

@@ -17,6 +17,9 @@ namespace RimLife.Infrastructure
         {
             try
             {
+                // 清理上次会话遗留的临时缓存文件（崩溃或未保存退出）
+                LocalFileStore.CleanupTempCache();
+
                 // 创建 UI 日志适配器，将框架日志重定向到调试窗口
                 var logger = new UiLoggerAdapter();
                 RimLifeCore.Logger = logger;
