@@ -2,6 +2,7 @@ using NPCLife.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using NPCLife.Core;
 using Verse;
 
@@ -197,5 +198,88 @@ namespace RimLife.Infrastructure
             }
         }
 
+        // ================================================================
+        // 知识库文件扫描（用于主菜单选择器）
+        // ================================================================
+
+        /// <summary>
+        /// 列出缓存目录下所有知识库文件及其条目数。
+        /// </summary>
+        public static List<KnowledgeBaseInfo> ListKnowledgeBases()
+        {
+            var results = new List<KnowledgeBaseInfo>();
+
+            try
+            {
+                Directory.CreateDirectory(CacheDirectory);
+
+                foreach (string file in Directory.GetFiles(CacheDirectory, "*.json"))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var saveId = Path.GetFileNameWithoutExtension(file);
+                    var isTemp = string.Equals(fileName, TempFileName, StringComparison.OrdinalIgnoreCase);
+
+                    int entryCount = 0;
+                    try
+                    {
+                        string json = File.ReadAllText(file);
+                        if (!string.IsNullOrEmpty(json) && json != "[]")
+                        {
+                            var dict = JsonParser.ParseDict(json);
+                            if (dict != null && dict.TryGetValue("rimlife_knowledge", out string kmJson))
+                            {
+                                var entries = JsonParser.ParseObjectArray(kmJson);
+                                if (entries != null)
+                                    entryCount = entries.Count;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // 文件损坏，条目数显示为 0
+                    }
+
+                    results.Add(new KnowledgeBaseInfo
+                    {
+                        FileName = fileName,
+                        SaveId = saveId,
+                        EntryCount = entryCount,
+                        IsTemp = isTemp
+                    });
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife.LocalFileStore] Failed to list knowledge bases: {e.Message}");
+            }
+
+            // 按条目数降序
+            results.Sort((a, b) => b.EntryCount.CompareTo(a.EntryCount));
+            return results;
+        }
+
+    }
+
+    /// <summary>
+    /// 知识库文件摘要信息。用于主菜单选择器。
+    /// </summary>
+    public class KnowledgeBaseInfo
+    {
+        /// <summary>文件名，如 "abc12345.json" 或 "_temp.json"</summary>
+        public string FileName;
+
+        /// <summary>存档 GUID（不含 .json 后缀）。临时文件为 "_temp"</summary>
+        public string SaveId;
+
+        /// <summary>词条数量</summary>
+        public int EntryCount;
+
+        /// <summary>是否为临时文件（新游戏未保存）</summary>
+        public bool IsTemp;
+
+        /// <summary>UI 显示名</summary>
+        public string DisplayName => IsTemp
+            ? $"临时（新建游戏）- {EntryCount} 条"
+            : $"{SaveId.Substring(0, Math.Min(8, SaveId.Length))}... - {EntryCount} 条";
     }
 }
