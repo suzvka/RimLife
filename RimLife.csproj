@@ -31,18 +31,15 @@
 	<ItemGroup>
 	  <Compile Remove="Source\RimLife\**" />
 	  <Compile Remove="RimLife.Tests\**" />
-	  <Compile Remove="ext\**" />
 	  <EmbeddedResource Remove="Source\RimLife\**" />
 	  <EmbeddedResource Remove="RimLife.Tests\**" />
-	  <EmbeddedResource Remove="ext\**" />
 	  <None Remove="Source\RimLife\**" />
 	  <None Remove="RimLife.Tests\**" />
-	  <None Remove="ext\**" />
 	</ItemGroup>
 
-	<!-- Reference NPCLife framework (submodule) -->
+	<!-- Reference NPCLife framework (local NuGet) -->
 	<ItemGroup>
-	  <ProjectReference Include="ext\NPCLife\src\NPCLife\NPCLife.csproj" />
+	  <PackageReference Include="NPCLife" Version="1.1.*" />
 	</ItemGroup>
 
 	<ItemGroup>
