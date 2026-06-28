@@ -1,0 +1,11 @@
+[project]
+sub_id = "71cda874"
+name = "RimLife"
+requires = ["dotnet-8"]
+project_type = ""
+
+[preview]
+preview_enable = "disabled"
+
+[subprojects]
+path = ["."]
