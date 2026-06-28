@@ -76,6 +76,86 @@ namespace RimLife
     }
 
     // ================================================================
+    // 消息通知 Hook（左上角 Messages.Message）
+    // 覆盖 Hediff 阶段变化、任务目标更新、商人到达、驯服结果等
+    // 不生成 Letter 的叙事性短通知，全量接入。
+    // ================================================================
+    [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
+        new Type[] { typeof(string), typeof(MessageTypeDef), typeof(LookTargets), typeof(bool) })]
+    internal static class Patch_Messages_Message
+    {
+        static void Postfix(string text, MessageTypeDef msgType, LookTargets lookTargets)
+        {
+            try
+            {
+                RimLifeCore.EventBuffer?.Append(
+                    EventCardMapper.FromMessage(text, msgType, lookTargets));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] Messages.Message hook failed: {e.Message}");
+            }
+        }
+    }
+
+    // 消息通知 TaggedString 重载
+    [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
+        new Type[] { typeof(TaggedString), typeof(MessageTypeDef), typeof(LookTargets), typeof(bool) })]
+    internal static class Patch_Messages_Message_Tagged
+    {
+        static void Postfix(TaggedString text, MessageTypeDef msgType, LookTargets lookTargets)
+        {
+            try
+            {
+                RimLifeCore.EventBuffer?.Append(
+                    EventCardMapper.FromMessage(text.ToString(), msgType, lookTargets));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] Messages.Message (tagged) hook failed: {e.Message}");
+            }
+        }
+    }
+
+    // 消息通知 string 无 LookTargets 重载
+    [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
+        new Type[] { typeof(string), typeof(MessageTypeDef), typeof(bool) })]
+    internal static class Patch_Messages_Message_Simple
+    {
+        static void Postfix(string text, MessageTypeDef msgType)
+        {
+            try
+            {
+                RimLifeCore.EventBuffer?.Append(
+                    EventCardMapper.FromMessage(text, msgType, null));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] Messages.Message (simple) hook failed: {e.Message}");
+            }
+        }
+    }
+
+    // 消息通知 TaggedString 无 LookTargets 重载
+    [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
+        new Type[] { typeof(TaggedString), typeof(MessageTypeDef), typeof(bool) })]
+    internal static class Patch_Messages_Message_TaggedSimple
+    {
+        static void Postfix(TaggedString text, MessageTypeDef msgType)
+        {
+            try
+            {
+                RimLifeCore.EventBuffer?.Append(
+                    EventCardMapper.FromMessage(text.ToString(), msgType, null));
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife:EventHooks] Messages.Message (tagged simple) hook failed: {e.Message}");
+            }
+        }
+    }
+
+    // ================================================================
     // 社交互动 Hook（不弹信，需独立 Hook）
     // 双写：EventLog（事件卡）+ InteractionHistoryStore（流水记录）
     // ================================================================
