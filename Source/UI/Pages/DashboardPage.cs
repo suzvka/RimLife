@@ -45,7 +45,7 @@ namespace RimLife.UI.Pages
             // ================================================================
             // LLM 使用统计（框架层 RuntimeMetrics）
             // ================================================================
-            var snap = RuntimeMetrics.GetSnapshot();
+            var snap = RimLifeCore.FrameworkFactory.Metrics.GetSnapshot();
 
             BeginSection(listing, "LLM 使用");
             DrawInfoRow(listing, "总会话", $"{snap.TotalSessions}（活跃 {snap.ActiveSessions}）");
@@ -154,7 +154,7 @@ namespace RimLife.UI.Pages
 
             if (btnResults[0])
             {
-                RuntimeMetrics.Reset();
+                RimLifeCore.FrameworkFactory.Metrics.Reset();
                 _statusMessage = "运行时度量已重置";
                 _statusMessageTime = Time.time;
             }

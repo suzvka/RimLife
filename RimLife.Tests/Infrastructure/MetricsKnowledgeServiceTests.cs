@@ -15,8 +15,9 @@ namespace RimLife.Tests.Infrastructure
     public class MetricsKnowledgeServiceTests
     {
         private readonly FakeKnowledgeService _inner = new FakeKnowledgeService();
+        private readonly IMetricsRecorder _recorder = new TestMetricsRecorder();
 
-        private MetricsKnowledgeService Create() => new MetricsKnowledgeService(_inner);
+        private MetricsKnowledgeService Create() => new MetricsKnowledgeService(_inner, _recorder);
 
         // ================================================================
         // Constructor
@@ -165,5 +166,24 @@ namespace RimLife.Tests.Infrastructure
                 return Entries;
             }
         }
+    }
+
+    /// <summary>
+    /// 测试用 IMetricsRecorder 实现，委托到 RuntimeMetrics 静态类。
+    /// </summary>
+    internal class TestMetricsRecorder : IMetricsRecorder
+    {
+        public void RecordTokenUsage(string sessionId, int inputTokens, int outputTokens, int cacheReadTokens, string model)
+            => RuntimeMetrics.RecordTokenUsage(sessionId, inputTokens, outputTokens, cacheReadTokens, model);
+
+        public void RecordWorkspaceOperation(string operation)
+            => RuntimeMetrics.RecordWorkspaceOperation(operation);
+
+        public void RecordKnowledgeLookup(string term, int hitLayer, string sessionId)
+            => RuntimeMetrics.RecordKnowledgeLookup(term, hitLayer, sessionId);
+
+        public MetricsSnapshot GetSnapshot() => RuntimeMetrics.GetSnapshot();
+
+        public void Reset() => RuntimeMetrics.Reset();
     }
 }

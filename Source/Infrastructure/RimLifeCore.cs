@@ -104,6 +104,22 @@ namespace RimLife.Infrastructure
             TimeProvider = timeProvider;
         }
 
+        private static NPCLife.Core.IFrameworkFactory _frameworkFactory;
+
+        /// <summary>
+        /// 框架组件工厂。封装 NPCLife 具体类的创建细节（WorkspaceManager、BuiltInKnowledgeBase、MetricsInterceptor）。
+        /// 首次访问时自动以当前 DriverConfig 初始化。
+        /// </summary>
+        public static NPCLife.Core.IFrameworkFactory FrameworkFactory
+        {
+            get
+            {
+                if (_frameworkFactory == null)
+                    _frameworkFactory = new NPCLife.Infrastructure.DefaultFrameworkFactory(DriverConfig);
+                return _frameworkFactory;
+            }
+        }
+
         /// <summary>当前框架配置。未配置时从 CacheStore 延迟加载，无持久化数据时返回默认配置。</summary>
         public static FrameworkConfig Config
         {
@@ -170,7 +186,7 @@ namespace RimLife.Infrastructure
             config.Freeze();
             SaveFrameworkConfig(config);
             LifecycleManager.NotifyConfigReady();
-            EventBus.Publish(FrameworkEvents.ConfigReady);
+            FrameworkFactory.Events.Publish(FrameworkEvents.ConfigReady);
 
             Logger?.Message("[RimLife.Core] Configuration applied and frozen.");
         }
@@ -183,7 +199,7 @@ namespace RimLife.Infrastructure
         {
             Logger?.Message("[RimLife.Core] Shutting down...");
             LifecycleManager.Shutdown();
-            FrameworkStatus.Clear();
+            FrameworkFactory.Status.Clear();
             ErrorHandler.ClearHandlers();
 
             // 清理编剧 Agent
@@ -247,7 +263,7 @@ namespace RimLife.Infrastructure
                 {
                     Logger?.Message("[RimLife.Core] EnsureSkillRegistryInitialized: starting...");
 
-                    McpSkillRegistry.InitializeDefaults();
+                    FrameworkFactory.Skills.InitializeDefaults();
                     Logger?.Message("[RimLife.Core] McpSkillRegistry.InitializeDefaults completed.");
 
                     int count = RegisterHookProvider(new SystemMcpProvider(() => Workspaces, () => TimeProvider?.Invoke() ?? "", Logger));
@@ -263,7 +279,7 @@ namespace RimLife.Infrastructure
                     count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.EnvironmentQueryProvider());
                     count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.PawnMemoryProvider());
 
-                    Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {McpSkillRegistry.SkillCount} skills, {count} tools registered.");
+                    Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {FrameworkFactory.Skills.SkillCount} skills, {count} tools registered.");
                 }
                 catch (Exception ex)
                 {
@@ -294,10 +310,10 @@ namespace RimLife.Infrastructure
                 }
 
                 // 注入 Logger 到基础设施组件
-                EventBus.Logger = Logger;
+                FrameworkFactory.Events.Logger = Logger;
                 LifecycleManager.Logger = Logger;
                 ErrorHandler.Logger = Logger;
-                AgentPipeline.Logger = Logger;
+                FrameworkFactory.Pipeline.Logger = Logger;
 
                 // 初始化生命周期管理器
                 LifecycleManager.Initialize();
@@ -306,25 +322,25 @@ namespace RimLife.Infrastructure
                 RegisterStatusReporters();
 
                 // 注册基础能力标识
-                FrameworkStatus.RegisterCapability("mcp_tools", true);
-                FrameworkStatus.RegisterCapability("event_bus", true);
-                FrameworkStatus.RegisterCapability("agent_pipeline", true);
-                FrameworkStatus.RegisterCapability("lifecycle_hooks", true);
+                FrameworkFactory.Status.RegisterCapability("mcp_tools", true);
+                FrameworkFactory.Status.RegisterCapability("event_bus", true);
+                FrameworkFactory.Status.RegisterCapability("agent_pipeline", true);
+                FrameworkFactory.Status.RegisterCapability("lifecycle_hooks", true);
 
                 // ---- 运行时度量系统（永久启用） ----
                 {
                     // MetricsMcpTools 已从 NPCLife 移除，度量数据通过 RuntimeMetrics 静态类 + MetricsInterceptor 采集
 
-                    // 为三种 Agent 角色分别注册 MetricsInterceptor
-                    AgentPipeline.AddInterceptor(
-                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Director), priority: 100);
-                    AgentPipeline.AddInterceptor(
-                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Screenwriter), priority: 100);
-                    AgentPipeline.AddInterceptor(
-                        new NPCLife.Framework.MetricsInterceptor(NPCLife.Framework.AgentRole.Improviser), priority: 100);
+                    // 为三种 Agent 角色分别注册度量拦截器
+                    FrameworkFactory.Pipeline.AddInterceptor(
+                        FrameworkFactory.CreateMetricsInterceptor(NPCLife.Framework.AgentRole.Director), priority: 100);
+                    FrameworkFactory.Pipeline.AddInterceptor(
+                        FrameworkFactory.CreateMetricsInterceptor(NPCLife.Framework.AgentRole.Screenwriter), priority: 100);
+                    FrameworkFactory.Pipeline.AddInterceptor(
+                        FrameworkFactory.CreateMetricsInterceptor(NPCLife.Framework.AgentRole.Improviser), priority: 100);
 
                     // 订阅 LLM 响应事件，采集 Token 消耗
-                    EventBus.Subscribe(FrameworkEvents.LlmResponseReceived, args =>
+                    FrameworkFactory.Events.Subscribe(FrameworkEvents.LlmResponseReceived, args =>
                     {
                         if (args?.Payload == null) return;
                         var sessionId = NPCLife.Framework.MetricsInterceptor.CurrentSessionId;
@@ -339,21 +355,21 @@ namespace RimLife.Infrastructure
                         int.TryParse(otStr, out int ot);
                         int.TryParse(crStr, out int cr);
 
-                        RuntimeMetrics.RecordTokenUsage(sessionId, it, ot, cr, model ?? "");
+                        FrameworkFactory.Metrics.RecordTokenUsage(sessionId, it, ot, cr, model ?? "");
                     });
 
                     // 订阅工作空间事件，采集操作计数
-                    EventBus.Subscribe(FrameworkEvents.WorkspaceCreated, args =>
-                        RuntimeMetrics.RecordWorkspaceOperation("created"));
-                    EventBus.Subscribe(FrameworkEvents.WorkspaceClosed, args =>
-                        RuntimeMetrics.RecordWorkspaceOperation("closed"));
-                    EventBus.Subscribe(FrameworkEvents.WorkspaceUpdated, args =>
-                        RuntimeMetrics.RecordWorkspaceOperation("updated"));
+                    FrameworkFactory.Events.Subscribe(FrameworkEvents.WorkspaceCreated, args =>
+                        FrameworkFactory.Metrics.RecordWorkspaceOperation("created"));
+                    FrameworkFactory.Events.Subscribe(FrameworkEvents.WorkspaceClosed, args =>
+                        FrameworkFactory.Metrics.RecordWorkspaceOperation("closed"));
+                    FrameworkFactory.Events.Subscribe(FrameworkEvents.WorkspaceUpdated, args =>
+                        FrameworkFactory.Metrics.RecordWorkspaceOperation("updated"));
 
                     // 注册度量状态报告器
-                    FrameworkStatus.RegisterReporter("RuntimeMetrics", () =>
+                    FrameworkFactory.Status.RegisterReporter("RuntimeMetrics", () =>
                     {
-                        var snap = RuntimeMetrics.GetSnapshot();
+                        var snap = FrameworkFactory.Metrics.GetSnapshot();
                         return new ComponentStatus
                         {
                             Name = "RuntimeMetrics",
@@ -370,21 +386,21 @@ namespace RimLife.Infrastructure
 
         private static void RegisterStatusReporters()
         {
-            FrameworkStatus.RegisterReporter("Llm", () => new ComponentStatus
+            FrameworkFactory.Status.RegisterReporter("Llm", () => new ComponentStatus
             {
                 Name = "Llm",
                 IsAvailable = _credentialManager != null && _credentialManager.HasCredentials,
                 Detail = _credentialManager != null ? $"{_credentialManager.GetActivationOrder().Count} active" : "not initialized"
             });
 
-            FrameworkStatus.RegisterReporter("Workspace", () => new ComponentStatus
+            FrameworkFactory.Status.RegisterReporter("Workspace", () => new ComponentStatus
             {
                 Name = "Workspace",
                 IsAvailable = _workspaces != null,
                 Detail = _workspaces != null ? "active" : "not initialized"
             });
 
-            FrameworkStatus.RegisterReporter("KnowledgeBase", () => new ComponentStatus
+            FrameworkFactory.Status.RegisterReporter("KnowledgeBase", () => new ComponentStatus
             {
                 Name = "KnowledgeBase",
                 IsAvailable = _knowledgeService != null,
@@ -408,7 +424,7 @@ namespace RimLife.Infrastructure
             try
             {
                 EnsureSkillRegistryInitialized();
-                int count = McpSkillRegistry.RegisterFromProvider(provider);
+                int count = FrameworkFactory.Skills.RegisterFromProvider(provider);
                 Logger?.Message($"[RimLife.Core] HookProvider '{provider.HookId}' registered: {count} tools.");
                 return count;
             }
@@ -434,7 +450,7 @@ namespace RimLife.Infrastructure
                 {
                     if (_saveStore != null)
                     {
-                        EventBus.Publish(FrameworkEvents.SaveUnloaded);
+                        FrameworkFactory.Events.Publish(FrameworkEvents.SaveUnloaded);
                     }
 
                     // 级联销毁旧组件
@@ -459,10 +475,11 @@ namespace RimLife.Infrastructure
                     _driverConfig = null;       // 重新从新 CacheStore 加载
                     _frameworkConfig = null;    // 重新从新 CacheStore 加载
                     _promptAdditions = null;    // 重新从新 CacheStore 加载
+                    _frameworkFactory = null;   // 重新以新 DriverConfig 创建
 
                     if (_saveStore != null)
                     {
-                        EventBus.Publish(FrameworkEvents.SaveLoaded);
+                        FrameworkFactory.Events.Publish(FrameworkEvents.SaveLoaded);
                         Logger?.Message("[RimLife.Core] SaveStore switched, components reset.");
                     }
                 }
@@ -553,11 +570,11 @@ namespace RimLife.Infrastructure
                     {
                         if (_knowledgeService == null && CacheStore != null)
                         {
-                            var builtIn = new NPCLife.Infrastructure.Knowledge.BuiltInKnowledgeBase(CacheStore, Logger);
+                            var builtIn = FrameworkFactory.CreateKnowledgeBase(CacheStore, Logger);
                             var gameDef = new Knowledge.GameDefKnowledgeBase();
                             var externals = new List<IExternalKnowledgeSource> { gameDef };
                             var knowledge = new KnowledgeService(builtIn, externals);
-                            _knowledgeService = new MetricsKnowledgeService(knowledge);
+                            _knowledgeService = new MetricsKnowledgeService(knowledge, FrameworkFactory.Metrics);
                         }
                     }
                 }
@@ -654,8 +671,8 @@ namespace RimLife.Infrastructure
                     {
                         if (_workspaces == null && SaveStore != null)
                         {
-                            _workspaces = new NPCLife.Workspace.WorkspaceManager(SaveStore, Logger,
-                                () => TimeProvider?.Invoke() ?? "", DriverConfig,
+                            _workspaces = FrameworkFactory.CreateWorkspaceManager(SaveStore, Logger,
+                                () => TimeProvider?.Invoke() ?? "",
                                 onWorkspaceReady: wsId => EnsureAgentForWorkspace(wsId));
 
                             // 为存档中已加载的活跃工作空间补齐对应 Agent

@@ -975,20 +975,20 @@ namespace RimLife.Tool
             // --- 10.1 初始状态 ---
             try
             {
-                DumpObject("已注册 Skill 数", McpSkillRegistry.SkillCount);
-                DumpObject("已注册工具总数", McpSkillRegistry.TotalToolCount);
+                DumpObject("已注册 Skill 数", RimLifeCore.FrameworkFactory.Skills.SkillCount);
+                DumpObject("已注册工具总数", RimLifeCore.FrameworkFactory.Skills.TotalToolCount);
 
-                if (McpSkillRegistry.SkillCount >= 7)
-                    Pass($"Skill 注册表: {McpSkillRegistry.SkillCount} skills, {McpSkillRegistry.TotalToolCount} tools");
+                if (RimLifeCore.FrameworkFactory.Skills.SkillCount >= 7)
+                    Pass($"Skill 注册表: {RimLifeCore.FrameworkFactory.Skills.SkillCount} skills, {RimLifeCore.FrameworkFactory.Skills.TotalToolCount} tools");
                 else
-                    Fail("Skill 注册数不足", $"expected >=7, got {McpSkillRegistry.SkillCount}");
+                    Fail("Skill 注册数不足", $"expected >=7, got {RimLifeCore.FrameworkFactory.Skills.SkillCount}");
             }
             catch (Exception e) { Fail("Skill 注册表状态异常", e.Message); }
 
             // --- 10.2 GetSkillListJson 纯函数 ---
             try
             {
-                var json = McpSkillRegistry.GetSkillListJson(null); // 传入 null = 无激活技能
+                var json = RimLifeCore.FrameworkFactory.Skills.GetSkillListJson(null); // 传入 null = 无激活技能
                 if (json.Contains("\"skills\"") && json.Contains("colony_overview"))
                 {
                     int len = json.Length;
@@ -1007,7 +1007,7 @@ namespace RimLife.Tool
             try
             {
                 var activeIds = new[] { "colony_overview" };
-                var json = McpSkillRegistry.GetActiveToolsJson(activeIds);
+                var json = RimLifeCore.FrameworkFactory.Skills.GetActiveToolsJson(activeIds);
                 int nameCount = 0;
                 int pos = 0;
                 while ((pos = json.IndexOf("\"name\":", pos, StringComparison.Ordinal)) >= 0)
@@ -1029,8 +1029,8 @@ namespace RimLife.Tool
                 var ids1 = new[] { "colony_overview" };
                 var ids2 = new[] { "colony_overview", "character_query", "relationship_query" };
 
-                var json1 = McpSkillRegistry.GetActiveToolsJson(ids1);
-                var json2 = McpSkillRegistry.GetActiveToolsJson(ids2);
+                var json1 = RimLifeCore.FrameworkFactory.Skills.GetActiveToolsJson(ids1);
+                var json2 = RimLifeCore.FrameworkFactory.Skills.GetActiveToolsJson(ids2);
 
                 if (json2.Length > json1.Length)
                     Pass($"累积激活: 1 skill → {json1.Length} chars, 3 skills → {json2.Length} chars");
@@ -1042,8 +1042,8 @@ namespace RimLife.Tool
             // --- 10.5 system 始终包含 ---
             try
             {
-                var emptyJson = McpSkillRegistry.GetActiveToolsJson(new string[0]);
-                var nullJson = McpSkillRegistry.GetActiveToolsJson(null);
+                var emptyJson = RimLifeCore.FrameworkFactory.Skills.GetActiveToolsJson(new string[0]);
+                var nullJson = RimLifeCore.FrameworkFactory.Skills.GetActiveToolsJson(null);
                 // 即使无激活技能，system 工具也应存在
                 if (emptyJson == nullJson)
                     Pass("空列表 / null 均正确返回（仅含 system 工具）");
@@ -1055,9 +1055,9 @@ namespace RimLife.Tool
             // --- 10.6 Token 节省对比 ---
             try
             {
-                var initialJson = McpSkillRegistry.GetActiveToolsJson(new string[0]);
-                var allIds = McpSkillRegistry.GetAllSkillIds();
-                var fullJson = McpSkillRegistry.GetActiveToolsJson(allIds);
+                var initialJson = RimLifeCore.FrameworkFactory.Skills.GetActiveToolsJson(new string[0]);
+                var allIds = RimLifeCore.FrameworkFactory.Skills.GetAllSkillIds();
+                var fullJson = RimLifeCore.FrameworkFactory.Skills.GetActiveToolsJson(allIds);
 
                 int initialLen = initialJson.Length;
                 int fullLen = fullJson.Length;
@@ -1070,7 +1070,7 @@ namespace RimLife.Tool
             try
             {
                 // 无激活
-                var before = McpSkillRegistry.GetSkillListJson(new string[0]);
+                var before = RimLifeCore.FrameworkFactory.Skills.GetSkillListJson(new string[0]);
                 // system 始终 active=true，业务技能 active=false
                 if (before.Contains("\"active\":false") || before.Contains("\"active\":true"))
                     Pass("GetSkillListJson 正确输出 active 状态字段");
@@ -1082,7 +1082,7 @@ namespace RimLife.Tool
             // --- 10.8 GetSkillToolsJson ---
             try
             {
-                var json = McpSkillRegistry.GetSkillToolsJson("colony_overview");
+                var json = RimLifeCore.FrameworkFactory.Skills.GetSkillToolsJson("colony_overview");
                 if (json.Contains("\"name\"") && json.Length > 10)
                     Pass($"GetSkillToolsJson(colony_overview) → {json.Length} chars");
                 else
@@ -1094,7 +1094,7 @@ namespace RimLife.Tool
             try
             {
                 // 用 system skill 范围内的工具（list_skills 总是可用）
-                var result = McpSkillRegistry.InvokeTool(null, "list_skills", "{\"workspaceId\":\"test\"}");
+                var result = RimLifeCore.FrameworkFactory.Skills.InvokeTool(null, "list_skills", "{\"workspaceId\":\"test\"}");
                 if (result.Contains("skills"))
                     Pass("InvokeTool(list_skills) 成功（system fallback）");
                 else
@@ -1105,7 +1105,7 @@ namespace RimLife.Tool
             // --- 10.10 InvokeTool 未找到工具 ---
             try
             {
-                var result = McpSkillRegistry.InvokeTool(null, "nonexistent_tool", "{}");
+                var result = RimLifeCore.FrameworkFactory.Skills.InvokeTool(null, "nonexistent_tool", "{}");
                 if (result.Contains("\"error\""))
                     Pass("InvokeTool(nonexistent) 正确返回 error");
                 else

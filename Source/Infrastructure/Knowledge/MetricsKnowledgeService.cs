@@ -11,10 +11,12 @@ namespace RimLife.Infrastructure.Knowledge
     internal class MetricsKnowledgeService : IKnowledgeService
     {
         private readonly IKnowledgeService _inner;
+        private readonly IMetricsRecorder _metrics;
 
-        public MetricsKnowledgeService(IKnowledgeService inner)
+        public MetricsKnowledgeService(IKnowledgeService inner, IMetricsRecorder metrics = null)
         {
             _inner = inner ?? throw new System.ArgumentNullException(nameof(inner));
+            _metrics = metrics;
         }
 
         /// <summary>
@@ -26,7 +28,7 @@ namespace RimLife.Infrastructure.Knowledge
             var results = _inner.Lookup(term);
             var sessionId = MetricsInterceptor.CurrentSessionId;
             int hitLayer = results.Count > 0 ? 0 : -1;
-            RuntimeMetrics.RecordKnowledgeLookup(term, hitLayer, sessionId);
+            _metrics?.RecordKnowledgeLookup(term, hitLayer, sessionId);
             return results;
         }
 

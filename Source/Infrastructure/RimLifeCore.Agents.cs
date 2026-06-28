@@ -23,6 +23,23 @@ namespace RimLife.Infrastructure
         private static readonly object _screenwritersLock = new object();
 
         /// <summary>
+        /// 构建 AgentLoop 共享基础设施依赖。
+        /// 所有角色共用同一组 LLM 服务、凭证存储、日志、序列化器、行为配置。
+        /// </summary>
+        private static AgentLoopDependencies BuildAgentDeps()
+        {
+            return new AgentLoopDependencies
+            {
+                Llm = LlmAccessor,
+                CredentialStore = CredentialManager,
+                Logger = Logger,
+                Serializer = CardSerializer.Default,
+                MaxRounds = DriverConfig.MaxAgentRounds,
+                Temperature = PromptAdditions.Temperature
+            };
+        }
+
+        /// <summary>
         /// 获取导演所在工作空间。
         /// 按 CreatedByRole == Director &amp;&amp; Status == Active 查找，不存在时自动创建。
         /// </summary>
@@ -74,17 +91,9 @@ namespace RimLife.Infrastructure
                         if (improviserWs != null)
                         {
                             _improviserAgent = new AgentLoop(
-                                pool: improviserWs.EventPool,
-                                llm: LlmAccessor,
-                                credentialStore: CredentialManager,
-                                systemPrompt: BuildImproviserSystemPrompt(improviserWs),
-                                skillIds: new[] { "workspace_improviser", "character_query", "event_query" },
-                                maxRounds: DriverConfig.MaxAgentRounds,
-                                logger: Logger,
-                                serializer: CardSerializer.Default,
-                                temperature: PromptAdditions.Temperature,
-                                modelRefsJson: improviserWs.ModelRefs,
-                                currentModel: improviserWs.CurrentModel);
+                                workspace: improviserWs,
+                                deps: BuildAgentDeps(),
+                                systemPrompt: BuildImproviserSystemPrompt(improviserWs));
                         }
                     }
                 }
@@ -119,18 +128,10 @@ namespace RimLife.Infrastructure
                         if (directorWs != null)
                         {
                             _directorAgent = new AgentLoop(
-                                pool: directorWs.EventPool,
-                                llm: LlmAccessor,
-                                credentialStore: CredentialManager,
+                                workspace: directorWs,
+                                deps: BuildAgentDeps(),
                                 systemPrompt: BuildDirectorSystemPrompt(),
-                                skillIds: new[] { "workspace_direction", "colony_overview", "character_query", "event_query", "knowledge_management" },
-                                maxRounds: DriverConfig.MaxAgentRounds,
-                                logger: Logger,
-                                serializer: CardSerializer.Default,
-                                contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
-                                temperature: PromptAdditions.Temperature,
-                                modelRefsJson: directorWs.ModelRefs,
-                                currentModel: directorWs.CurrentModel);
+                                contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces));
                             Logger?.Message("[RimLife.Core] DirectorAgent created and subscribed to EventPool");
                         }
                         else
@@ -178,22 +179,10 @@ namespace RimLife.Infrastructure
                 var ws = Workspaces.Get(workspaceId);
                 if (ws == null) return null;
 
-                var skillIds = new List<string> { "workspace_writing" };
-                if (ws.SkillSlot?.ActiveSkillIds != null)
-                    skillIds.AddRange(ws.SkillSlot.ActiveSkillIds);
-
                 var agent = new AgentLoop(
-                    pool: ws.EventPool,
-                    llm: LlmAccessor,
-                    credentialStore: CredentialManager,
-                    systemPrompt: BuildScreenwriterSystemPrompt(ws),
-                    skillIds: skillIds.ToArray(),
-                    maxRounds: DriverConfig.MaxAgentRounds,
-                    logger: Logger,
-                    serializer: CardSerializer.Default,
-                    temperature: PromptAdditions.Temperature,
-                    modelRefsJson: ws.ModelRefs,
-                    currentModel: ws.CurrentModel);
+                    workspace: ws,
+                    deps: BuildAgentDeps(),
+                    systemPrompt: BuildScreenwriterSystemPrompt(ws));
 
                 _screenwriters[workspaceId] = agent;
                 Logger?.Message($"[RimLife.Core] ScreenwriterAgent created for workspace '{ws.Label}' ({workspaceId})");
