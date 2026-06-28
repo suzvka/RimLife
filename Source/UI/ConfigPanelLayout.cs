@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using RimLife.Infrastructure;
@@ -23,6 +24,7 @@ namespace RimLife.UI
         public const float GroupHeaderHeight = 22f;
         public const float NavItemHeight = 36f;
         public const float StatusBarHeight = 30f;
+        public const float SidebarStatusFadeDuration = 5f;
 
         // ================================================================
         // 状态
@@ -33,6 +35,10 @@ namespace RimLife.UI
         private Vector2 _scrollPosition;
         private readonly LayoutHelper.ScrollHeightTracker _scrollTracker = new LayoutHelper.ScrollHeightTracker();
 
+        // 侧栏导入导出状态
+        private string _sidebarStatusMessage;
+        private float _sidebarStatusMessageTime;
+
         // ================================================================
         // 构造
         // ================================================================
@@ -41,15 +47,21 @@ namespace RimLife.UI
         {
             Pages = new List<IConfigPage>
             {
+                // ---- 核心分组 ----
                 new ConnectionPage(),
-                new NarrativePage(),
                 new PromptPage(),
+                new RunStrategyPage(),
                 new KnowledgePage(),
-                new AdvancedPage(),
+                // ---- 高级分组 ----
+                new DashboardPage(),
                 new DebugPage()
             };
 
-            Pages.Sort((a, b) => a.Order.CompareTo(b.Order));
+            Pages.Sort((a, b) =>
+            {
+                var groupCompare = string.Compare(a.Group, b.Group, StringComparison.Ordinal);
+                return groupCompare != 0 ? groupCompare : a.Order.CompareTo(b.Order);
+            });
             CurrentPage = Pages.FirstOrDefault();
         }
 
@@ -140,6 +152,81 @@ namespace RimLife.UI
                 }
 
                 cursorY += NavItemHeight + 1f;
+            }
+
+            // ---- 配置导入导出（侧栏底部） ----
+            DrawSidebarImportExport(rect);
+        }
+
+        /// <summary>
+        /// 在侧栏底部绘制配置导入/导出按钮。
+        /// </summary>
+        private void DrawSidebarImportExport(Rect sidebarRect)
+        {
+            const float btnHeight = 26f;
+            const float bottomPadding = 8f;
+            var btnWidth = (sidebarRect.width - GapSmall * 2 - BtnGap) / 2f;
+
+            var separatorY = sidebarRect.yMax - btnHeight - bottomPadding * 2 - GapTiny;
+            var separatorRect = new Rect(sidebarRect.x + GapSmall, separatorY, sidebarRect.width - GapSmall * 2, 1f);
+            Widgets.DrawBoxSolid(separatorRect, ColorDivider);
+
+            var rowY = separatorY + GapTiny + 2f;
+            var exportRect = new Rect(sidebarRect.x + GapSmall, rowY, btnWidth, btnHeight);
+            var importRect = new Rect(sidebarRect.x + GapSmall + btnWidth + BtnGap, rowY, btnWidth, btnHeight);
+
+            if (Widgets.ButtonText(exportRect, "导出"))
+            {
+                var json = RimLife.Infrastructure.RimLifeCore.Config.ToJson();
+                GUIUtility.systemCopyBuffer = json;
+                _sidebarStatusMessage = "配置已复制到剪贴板";
+                _sidebarStatusMessageTime = Time.time;
+            }
+
+            if (Widgets.ButtonText(importRect, "导入"))
+            {
+                try
+                {
+                    var json = GUIUtility.systemCopyBuffer;
+                    if (!string.IsNullOrEmpty(json) && json.TrimStart().StartsWith("{"))
+                    {
+                        var imported = NPCLife.Framework.FrameworkConfig.FromJson(json);
+                        RimLife.Infrastructure.RimLifeCore.Configure(imported);
+                        _sidebarStatusMessage = "已从剪贴板导入配置";
+                        _sidebarStatusMessageTime = Time.time;
+                    }
+                    else
+                    {
+                        _sidebarStatusMessage = "剪贴板中没有有效的 JSON 配置";
+                        _sidebarStatusMessageTime = Time.time;
+                    }
+                }
+                catch (System.Exception e)
+                {
+                    _sidebarStatusMessage = $"导入失败: {e.Message}";
+                    _sidebarStatusMessageTime = Time.time;
+                }
+            }
+
+            // 状态消息（淡出效果）
+            if (!string.IsNullOrEmpty(_sidebarStatusMessage))
+            {
+                var elapsed = Time.time - _sidebarStatusMessageTime;
+                if (elapsed < SidebarStatusFadeDuration)
+                {
+                    var alpha = 1f - Mathf.Clamp01((elapsed - (SidebarStatusFadeDuration - 1f)) / 1f);
+                    var msgRect = new Rect(sidebarRect.x + GapSmall, rowY - 16f, sidebarRect.width - GapSmall * 2, 14f);
+                    var color = _sidebarStatusMessage.StartsWith("导入失败") || _sidebarStatusMessage.StartsWith("剪贴板")
+                        ? new Color(0.9f, 0.3f, 0.3f, alpha)
+                        : new Color(0.5f, 0.9f, 0.5f, alpha);
+                    GUI.color = color;
+                    Widgets.Label(msgRect, $"<size=10>{_sidebarStatusMessage}</size>");
+                    GUI.color = Color.white;
+                }
+                else
+                {
+                    _sidebarStatusMessage = null;
+                }
             }
         }
 

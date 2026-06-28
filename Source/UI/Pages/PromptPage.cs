@@ -14,7 +14,7 @@ namespace RimLife.UI
         public string Id => "prompt";
         public string Label => "提示词";
         public string Group => "核心";
-        public int Order => 2;
+        public int Order => 1;
 
         // 本地编辑缓冲（仅附加指令，不含 NPCLife 基座身份）
         private bool _initialized;

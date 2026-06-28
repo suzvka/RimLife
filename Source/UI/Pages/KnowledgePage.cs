@@ -17,8 +17,8 @@ namespace RimLife.UI
     {
         public string Id => "knowledge";
         public string Label => "知识库";
-        public string Group => "数据";
-        public int Order => 0;
+        public string Group => "核心";
+        public int Order => 3;
 
         // ================================================================
         // 数据缓存

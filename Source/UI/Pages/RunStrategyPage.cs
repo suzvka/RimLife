@@ -1,4 +1,5 @@
 using NPCLife.Driver;
+using NPCLife.Framework;
 using RimLife.Infrastructure;
 using UnityEngine;
 using Verse;
@@ -7,19 +8,21 @@ using static RimLife.UI.UIHelper;
 namespace RimLife.UI
 {
     /// <summary>
-    /// 叙事页面：Agent 驱动参数配置。
-    /// 支持分角色（导演/剧情编剧/即兴编剧）触发阈值和定时器脉冲间隔。
-    /// 所有控件直接读写真实配置，保存后重建 Agent 生效。
+    /// 运行策略页面：Agent 触发阈值、定时器脉冲间隔与诊断开关。
+    /// 合并原叙事页（Agent 驱动参数）和高级页（诊断配置），移除所有功能开关。
+    /// 功能开关已永久启用——任何一个关闭都会导致整个系统无法运行。
     /// </summary>
-    public class NarrativePage : IConfigPage
+    public class RunStrategyPage : IConfigPage
     {
-        public string Id => "narrative";
-        public string Label => "叙事";
+        public string Id => "run_strategy";
+        public string Label => "运行策略";
         public string Group => "核心";
-        public int Order => 1;
+        public int Order => 2;
 
         // 本地编辑缓冲（首次 Draw 从配置初始化）
         private bool _initialized;
+
+        // ---- Agent 触发阈值（原 NarrativePage） ----
 
         // 导演专用
         private int _directorCountThreshold;
@@ -39,6 +42,11 @@ namespace RimLife.UI
         private int _recentHistoryCapacity;
         private int _maxAgentRounds;
 
+        // ---- 诊断开关（原 AdvancedPage） ----
+        private bool _enableVerboseLogging;
+        private bool _enableToolCallTracing;
+        private bool _enableEventTracing;
+
         // 保存反馈
         private string _statusMessage;
         private float _statusMessageTime;
@@ -54,7 +62,6 @@ namespace RimLife.UI
 
             listing.Gap(GapTiny);
 
-            // 导演专用覆盖
             DrawLabeledIntRow(listing, "导演专用事件数阈值:", ref _directorCountThreshold, 1, 999,
                 "pending 事件数达到此值时触发导演 Agent");
             DrawLabeledIntRow(listing, "导演专用重要度阈值:", ref _directorImportanceThreshold, 1, 999,
@@ -107,6 +114,15 @@ namespace RimLife.UI
             EndSection(listing);
 
             // ================================================================
+            // 诊断
+            // ================================================================
+            BeginSection(listing, "诊断");
+            listing.CheckboxLabeled("详细日志", ref _enableVerboseLogging, "输出完整 LLM 请求/响应到日志");
+            listing.CheckboxLabeled("工具调用追踪", ref _enableToolCallTracing, "记录每次工具调用的参数和结果");
+            listing.CheckboxLabeled("事件总线追踪", ref _enableEventTracing, "记录所有事件发布/订阅轨迹");
+            EndSection(listing);
+
+            // ================================================================
             // 操作按钮
             // ================================================================
             var btnResults = DrawButtonRow(listing,
@@ -115,6 +131,7 @@ namespace RimLife.UI
 
             if (btnResults[0])
             {
+                // 保存 DriverConfig
                 var dc = new DriverConfig
                 {
                     DirectorCountThreshold = _directorCountThreshold,
@@ -129,10 +146,21 @@ namespace RimLife.UI
                     MaxAgentRounds = _maxAgentRounds,
                 };
                 RimLifeCore.SetDriverConfig(dc);
+
+                // 保存 Diagnostics
+                var config = CloneCurrentConfig();
+                if (config != null)
+                {
+                    config.Diagnostics.EnableVerboseLogging = _enableVerboseLogging;
+                    config.Diagnostics.EnableToolCallTracing = _enableToolCallTracing;
+                    config.Diagnostics.EnableEventTracing = _enableEventTracing;
+                    RimLifeCore.Configure(config);
+                }
+
                 RimLifeCore.RebuildAgents();
                 _statusMessage = "已保存并重建 Agent";
                 _statusMessageTime = Time.time;
-                Log.Message("[RimLife.UI] Narrative settings saved");
+                Log.Message("[RimLife.UI] Run strategy settings saved");
             }
 
             if (btnResults[1])
@@ -148,6 +176,9 @@ namespace RimLife.UI
                 _screenwriterImportanceThreshold = (int)defaultDc.ScreenwriterImportanceThreshold;
                 _recentHistoryCapacity = defaultDc.RecentHistoryCapacity;
                 _maxAgentRounds = defaultDc.MaxAgentRounds;
+                _enableVerboseLogging = false;
+                _enableToolCallTracing = false;
+                _enableEventTracing = false;
                 _statusMessage = "已重置（需保存生效）";
                 _statusMessageTime = Time.time;
             }
@@ -160,6 +191,8 @@ namespace RimLife.UI
         {
             if (_initialized) return;
             _initialized = true;
+
+            // DriverConfig
             var dc = RimLifeCore.DriverConfig;
             _directorCountThreshold = dc.DirectorCountThreshold;
             _directorImportanceThreshold = (int)dc.DirectorImportanceThreshold;
@@ -171,6 +204,29 @@ namespace RimLife.UI
             _screenwriterImportanceThreshold = (int)dc.ScreenwriterImportanceThreshold;
             _recentHistoryCapacity = dc.RecentHistoryCapacity;
             _maxAgentRounds = dc.MaxAgentRounds;
+
+            // Diagnostics
+            var d = RimLifeCore.Config.Diagnostics;
+            _enableVerboseLogging = d?.EnableVerboseLogging ?? false;
+            _enableToolCallTracing = d?.EnableToolCallTracing ?? false;
+            _enableEventTracing = d?.EnableEventTracing ?? false;
+        }
+
+        // ================================================================
+        // 配置克隆
+        // ================================================================
+
+        private static FrameworkConfig CloneCurrentConfig()
+        {
+            try
+            {
+                var json = RimLifeCore.Config.ToJson();
+                return FrameworkConfig.FromJson(json);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // ================================================================
@@ -182,11 +238,9 @@ namespace RimLife.UI
         /// </summary>
         private static void DrawLabeledIntRow(Listing_Standard listing, string label, ref int value, int min, int max, string description)
         {
-            // 标签行
             var labelRect = listing.GetRect(20f);
             Widgets.Label(labelRect, label);
 
-            // 输入行
             var inputRect = listing.GetRect(24f);
             var fieldWidth = 100f;
             DrawIntField(new Rect(inputRect.x + 4f, inputRect.y, fieldWidth, inputRect.height), ref value, min, max);

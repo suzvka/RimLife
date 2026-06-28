@@ -14,9 +14,9 @@ namespace RimLife.UI.Pages
     public class DebugPage : IConfigPage
     {
         public string Id => "debug";
-        public string Label => "调试";
-        public string Group => "系统";
-        public int Order => 99; // 最后显示
+        public string Label => "调试(日志)";
+        public string Group => "高级";
+        public int Order => 1; // 高级分组内第二位
 
         private Vector2 _logScrollPosition;
         private bool _autoScroll = true;

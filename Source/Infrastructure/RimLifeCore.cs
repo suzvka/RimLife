@@ -311,8 +311,7 @@ namespace RimLife.Infrastructure
                 FrameworkStatus.RegisterCapability("agent_pipeline", true);
                 FrameworkStatus.RegisterCapability("lifecycle_hooks", true);
 
-                // ---- 运行时度量系统 ----
-                if (Config.Features?.EnableRuntimeMetrics ?? true)
+                // ---- 运行时度量系统（永久启用） ----
                 {
                     // 注册度量查询 MCP 工具
                     McpSkillRegistry.RegisterFromType(typeof(NPCLife.Framework.Mcp.MetricsMcpTools));
@@ -366,10 +365,6 @@ namespace RimLife.Infrastructure
                     });
 
                     Logger?.Message("[RimLife.Core] RuntimeMetrics enabled.");
-                }
-                else
-                {
-                    Logger?.Message("[RimLife.Core] RuntimeMetrics disabled (FeatureToggle.EnableRuntimeMetrics=false).");
                 }
             }
         }

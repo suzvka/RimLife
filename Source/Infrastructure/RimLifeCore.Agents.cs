@@ -106,7 +106,7 @@ namespace RimLife.Infrastructure
                     {
                         if (SaveStore == null)
                         {
-                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: SaveStore is null");
+                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: SaveStore is null (no save loaded?)");
                             return null;
                         }
                         if (LlmAccessor == null)
