@@ -208,6 +208,9 @@ namespace RimLife.Infrastructure
             _eventBuffer = null;
             _skillRegistryInitialized = false;
 
+            // 清理知识服务
+            _knowledgeService = null;
+
             // 清理 LLM 组件
             _llmAccessor?.Dispose();
             _llmAccessor = null;
