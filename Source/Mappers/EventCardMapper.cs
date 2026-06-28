@@ -312,6 +312,42 @@ namespace RimLife.Mappers
         }
 
         // ================================================================
+        // 消息通知映射（左上角 Messages.Message）
+        // ================================================================
+
+        /// <summary>
+        /// 从 RimWorld Messages.Message 创建事件卡。
+        /// 覆盖 Hediff 阶段变化、任务目标更新、商人到达、驯服结果等
+        /// 不生成 Letter 的叙事性短通知。
+        /// </summary>
+        public static IGameEvent FromMessage(string text, MessageTypeDef msgDef,
+                                              LookTargets lookTargets)
+        {
+            int tick = Find.TickManager?.TicksGame ?? 0;
+
+            var actors = ExtractActorsFromLookTargets(lookTargets, null);
+            string mapHint = ExtractMapHintFromLookTargets(lookTargets);
+
+            var payload = new Dictionary<string, string>
+            {
+                ["messageText"] = text ?? "",
+                ["messageDef"] = msgDef?.defName ?? "Unknown"
+            };
+
+            return new EventCardImpl
+            {
+                EventID = $"message_{msgDef?.defName ?? "unknown"}_{tick}",
+                DefName = msgDef?.defName ?? "Message",
+                Tick = tick,
+                TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
+                Importance = 1f,
+                Actors = actors,
+                MapHint = mapHint,
+                Payload = payload
+            };
+        }
+
+        // ================================================================
         // 私有实现
         // ================================================================
 
