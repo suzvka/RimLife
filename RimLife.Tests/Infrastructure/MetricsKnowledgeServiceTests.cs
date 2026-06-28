@@ -38,7 +38,7 @@ namespace RimLife.Tests.Infrastructure
             _inner.Entries.Add(new KnowledgeEntry
             {
                 Term = "Raid", Definition = "attack", Source = "Test",
-                Confidence = 1f, ContextTags = new List<string>()
+                ContextTags = new List<string>()
             });
 
             var svc = Create();
@@ -58,7 +58,7 @@ namespace RimLife.Tests.Infrastructure
             _inner.Entries.Add(new KnowledgeEntry
             {
                 Term = "Raid", Definition = "attack", Source = "Test",
-                Confidence = 1f, ContextTags = new List<string>()
+                ContextTags = new List<string>()
             });
 
             var svc = Create();
@@ -100,7 +100,7 @@ namespace RimLife.Tests.Infrastructure
             var entry = new KnowledgeEntry
             {
                 Term = "Raid", Definition = "attack", Source = "Test",
-                Confidence = 1f, ContextTags = new List<string>()
+                ContextTags = new List<string>()
             };
             svc.Store(entry);
 

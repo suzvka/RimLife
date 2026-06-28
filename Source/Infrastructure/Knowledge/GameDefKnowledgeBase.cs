@@ -183,7 +183,6 @@ namespace RimLife.Infrastructure.Knowledge
                 Term = def.defName ?? defLabel,
                 Definition = defDescription,
                 Source = "GameDef",
-                Confidence = 1.0f,
                 ContextTags = tags
             };
         }
