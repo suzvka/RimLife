@@ -326,7 +326,7 @@ namespace RimLife.Tool
             DumpObject("当前 TotalAppended", log.TotalAppended);
             DumpObject("当前 _events 数量", log.Count(EventQuery.All));
 
-            var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", new List<string> { "Selftest", "Social" }, 9999, 1f);
+            var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", 9999, 1f);
             if (testEvent == null)
             {
                 Fail("MakeTestEvent 返回 null");
@@ -363,11 +363,6 @@ namespace RimLife.Tool
                 else
                     Fail("Query(All) 返回空");
 
-                var byTag = log.Query(EventQuery.ByAnyTag("Social"));
-                if (byTag.Count > 0)
-                    Pass($"Query(ByAnyTag:Social) 返回 {byTag.Count} 条");
-                else
-                    Fail("Query(ByAnyTag:Social) 返回空");
             }
             catch (Exception e) { Fail("Query 异常", e.Message); }
 
@@ -385,7 +380,6 @@ namespace RimLife.Tool
                 {
                     DumpObject("EventID", latest.EventID);
                     DumpObject("DefName", latest.DefName);
-                    DumpObject("Tags", string.Join(", ", latest.Tags ?? new List<string>()));
                     DumpObject("Tick", latest.Tick);
                     DumpObject("Importance", latest.Importance);
                     DumpObject("MapHint", latest.MapHint);
@@ -511,7 +505,6 @@ namespace RimLife.Tool
                     {
                         Pass("FromDeath 构造成功");
                         DumpObject("  EventID", evt.EventID);
-                        DumpObject("  Tags", string.Join(", ", evt.Tags ?? new List<string>()));
                         DumpObject("  Importance", evt.Importance);
                     }
                     else
@@ -575,7 +568,6 @@ namespace RimLife.Tool
                     {
                         Pass("FromMentalBreak 构造成功");
                         DumpObject("  EventID", evt.EventID);
-                        DumpObject("  Tags", string.Join(", ", evt.Tags ?? new List<string>()));
                     }
                     else
                         Fail("FromMentalBreak 返回 null");
@@ -675,9 +667,9 @@ namespace RimLife.Tool
             // --- IGameEvent ---
             try
             {
-                var evt = MakeTestEvent("serializer_test", new List<string> { "Test" }, 10000, 3f);
+                var evt = MakeTestEvent("serializer_test", 10000, 3f);
                 var json = CardSerializer.Default.SerializeEvent(evt);
-                if (json.Contains("serializer_test") && json.Contains("Test"))
+                if (json.Contains("serializer_test"))
                 {
                     Pass("SerializeEvent 成功");
                     DumpObject("  EventID", evt.EventID);
@@ -692,8 +684,8 @@ namespace RimLife.Tool
             {
                 var events = new List<IGameEvent>
                 {
-                    MakeTestEvent("list_1", new List<string>{"A"}, 1, 1f),
-                    MakeTestEvent("list_2", new List<string>{"B"}, 2, 3f)
+                    MakeTestEvent("list_1", 1, 1f),
+                    MakeTestEvent("list_2", 2, 3f)
                 };
                 var json = CardSerializer.Default.SerializeEventList(events);
                 if (json.StartsWith("[") && json.Contains("list_1") && json.Contains("list_2"))
@@ -1177,7 +1169,7 @@ namespace RimLife.Tool
                 int before = pool.PendingCount;
 
                 // 追加测试事件
-                var testEvt = MakeTestEvent("driver_test_1", new List<string> { "Test", "Driver" }, 99999, 3f);
+                var testEvt = MakeTestEvent("driver_test_1", 99999, 3f);
                 pool.Append(testEvt);
 
                 int afterAppend = pool.PendingCount;
@@ -1213,9 +1205,9 @@ namespace RimLife.Tool
                 if (pool == null) { Skip("EventPool 不可用"); return; }
 
                 pool.DrainPending();
-                pool.Append(MakeTestEvent("imp_1", new List<string> { "Test" }, 1, 1f));
-                pool.Append(MakeTestEvent("imp_2", new List<string> { "Test" }, 2, 3f));
-                pool.Append(MakeTestEvent("imp_3", new List<string> { "Test" }, 3, 5f));
+                pool.Append(MakeTestEvent("imp_1", 1, 1f));
+                pool.Append(MakeTestEvent("imp_2", 2, 3f));
+                pool.Append(MakeTestEvent("imp_3", 3, 5f));
 
                 float expected = 1f + 3f + 5f;
 
@@ -1242,7 +1234,7 @@ namespace RimLife.Tool
 
                 // 添加少量 Minor 事件：数量达标
                 for (int i = 0; i < 3; i++)
-                    pool.Append(MakeTestEvent($"cnt_{i}", new List<string> { "Test" }, i, 1f));
+                    pool.Append(MakeTestEvent($"cnt_{i}", i, 1f));
 
                 if (callbackFired)
                     Pass("OnThresholdReached: 数量达标触发回调");
@@ -1298,7 +1290,7 @@ namespace RimLife.Tool
                 else
                 {
                     Pass("无活跃工作空间 — 创建测试空间验证字段");
-                    var testWs = wsManager.Create("FieldTest", null, null, WorkspaceRole.Screenwriter);
+                    var testWs = wsManager.Create("FieldTest", null, WorkspaceRole.Screenwriter);
                     if (testWs.EventPool.PendingCount == 0 && testWs.EventPool.TotalImportance == 0)
                         Pass("EventPool 初始状态为空 (预期)");
                     else
@@ -1313,9 +1305,9 @@ namespace RimLife.Tool
                 var wsManager = RimLifeCore.Workspaces;
                 if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
-                var testWs = wsManager.Create("PushTest", null, null, WorkspaceRole.Director);
+                var testWs = wsManager.Create("PushTest", null, WorkspaceRole.Director);
 
-                var evt = MakeTestEvent("ws_test_1", new List<string> { "Test", "Combat" }, 1000, 3f);
+                var evt = MakeTestEvent("ws_test_1", 1000, 3f);
                 bool pushed = wsManager.RouteEvents(testWs.Id, new List<IGameEvent> { evt });
                 if (pushed && testWs.EventPool.PendingCount == 1)
                     Pass($"RouteEvents 后 PendingCount=1");
@@ -1343,13 +1335,13 @@ namespace RimLife.Tool
                 var wsManager = RimLifeCore.Workspaces;
                 if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
-                var testWs = wsManager.Create("CallbackTest", null, null, WorkspaceRole.Director);
+                var testWs = wsManager.Create("CallbackTest", null, WorkspaceRole.Director);
                 var config = RimLifeCore.DriverConfig;
 
                 // 填充事件到阈值
                 var events = new List<IGameEvent>();
                 for (int i = 0; i < config.DirectorCountThreshold; i++)
-                    events.Add(MakeTestEvent($"cb_{i}", new List<string> { "Test" }, i, 3f));
+                    events.Add(MakeTestEvent($"cb_{i}", i, 3f));
 
                 wsManager.RouteEvents(testWs.Id, events);
 
@@ -1367,11 +1359,11 @@ namespace RimLife.Tool
                 if (wsManager == null) { Skip("WorkspaceManager 不可用"); return; }
 
                 var config = RimLifeCore.DriverConfig;
-                var testWs = wsManager.Create("ActivationTest", null, null, WorkspaceRole.Director);
+                var testWs = wsManager.Create("ActivationTest", null, WorkspaceRole.Director);
 
                 // 填充高重要度事件：1个 importance=20 的事件即可满足重要性阈值
                 wsManager.RouteEvents(testWs.Id, new List<IGameEvent> {
-                    MakeTestEvent("act_1", new List<string> { "Test" }, 1, 20f)
+                    MakeTestEvent("act_1", 1, 20f)
                 });
 
                 int count = testWs.EventPool.PendingCount;
@@ -1447,13 +1439,12 @@ namespace RimLife.Tool
         // 辅助
         // ================================================================
 
-        private static IGameEvent MakeTestEvent(string id, IReadOnlyList<string> tags, int tick, float importance)
+        private static IGameEvent MakeTestEvent(string id, int tick, float importance)
         {
             return new TestGameEvent
             {
                 EventID = id,
                 DefName = "SelftestEvent",
-                Tags = tags,
                 Tick = tick,
                 Importance = importance,
                 Actors = new List<EventActorRef>
@@ -1469,8 +1460,6 @@ namespace RimLife.Tool
         {
             public string EventID { get; set; }
             public string DefName { get; set; }
-            public IReadOnlyList<string> Tags { get; set; }
-            public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
             public string TimeLabel { get; set; }
             public float Importance { get; set; }

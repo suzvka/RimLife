@@ -37,8 +37,7 @@ namespace RimLife.Tests.Infrastructure
         {
             _inner.Entries.Add(new KnowledgeEntry
             {
-                Term = "Raid", Definition = "attack", Source = "Test",
-                ContextTags = new List<string>()
+                Term = "Raid", Definition = "attack", Source = "Test"
             });
 
             var svc = Create();
@@ -57,8 +56,7 @@ namespace RimLife.Tests.Infrastructure
 
             _inner.Entries.Add(new KnowledgeEntry
             {
-                Term = "Raid", Definition = "attack", Source = "Test",
-                ContextTags = new List<string>()
+                Term = "Raid", Definition = "attack", Source = "Test"
             });
 
             var svc = Create();
@@ -99,8 +97,7 @@ namespace RimLife.Tests.Infrastructure
             var svc = Create();
             var entry = new KnowledgeEntry
             {
-                Term = "Raid", Definition = "attack", Source = "Test",
-                ContextTags = new List<string>()
+                Term = "Raid", Definition = "attack", Source = "Test"
             };
             svc.Store(entry);
 
@@ -124,15 +121,6 @@ namespace RimLife.Tests.Infrastructure
         }
 
         [Fact]
-        public void ListByTags_DelegatesToInner()
-        {
-            var svc = Create();
-            svc.ListByTags(new List<string> { "Weapon" });
-            Assert.NotNull(_inner.LastFilterTags);
-            Assert.Contains("Weapon", _inner.LastFilterTags);
-        }
-
-        [Fact]
         public void ListByPrefix_DelegatesToInner()
         {
             var svc = Create();
@@ -150,7 +138,6 @@ namespace RimLife.Tests.Infrastructure
             public string LastLookupTerm;
             public string LastStoredTerm;
             public string LastDeletedTerm;
-            public IReadOnlyList<string> LastFilterTags;
             public string LastFilterPrefix;
 
             public IReadOnlyList<KnowledgeEntry> Lookup(string term)
@@ -171,12 +158,6 @@ namespace RimLife.Tests.Infrastructure
 
             public void Delete(string term) => LastDeletedTerm = term;
             public IReadOnlyList<KnowledgeEntry> ListAll() => Entries;
-
-            public IReadOnlyList<KnowledgeEntry> ListByTags(IReadOnlyList<string> tags)
-            {
-                LastFilterTags = tags;
-                return Entries;
-            }
 
             public IReadOnlyList<KnowledgeEntry> ListByPrefix(string prefix)
             {

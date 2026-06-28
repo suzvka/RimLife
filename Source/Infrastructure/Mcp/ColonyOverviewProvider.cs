@@ -56,25 +56,19 @@ namespace RimLife.Infrastructure.Mcp
         }
 
         /// <summary>
-        /// 获取最近 N 条事件，可选按标签过滤。
+        /// 获取最近 N 条事件。
         /// </summary>
         [McpTool(Name = "get_recent_events",
-                 Description = "获取最近 N 条事件，用于快速了解当前局势。可选按标签过滤。")]
+                 Description = "获取最近 N 条事件，用于快速了解当前局势。")]
         public static string GetRecentEvents(
-            [McpParam(Description = "返回条数，默认 10")] int limit = 10,
-            [McpParam(Description = "过滤标签，如 Combat/Raid/Death。留空则不限制",
-                      Required = McpRequired.False)] string tag = null)
+            [McpParam(Description = "返回条数，默认 10")] int limit = 10)
         {
             try
             {
                 var eventLog = RimLifeCore.GetDirectorWorkspace()?.EventPool;
                 if (eventLog == null) return "[]";
 
-                var query = new EventQuery();
-                if (!string.IsNullOrEmpty(tag))
-                    query.TagsAny = new List<string> { tag };
-
-                var all = eventLog.Query(query);
+                var all = eventLog.Query(EventQuery.All);
                 int count = all.Count;
                 if (count == 0) return "[]";
 

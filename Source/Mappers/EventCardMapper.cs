@@ -37,7 +37,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"incident_{def?.defName}_{tick}",
                 DefName = def?.defName ?? "Unknown",
-                Tags = BuildIncidentTags(def),
                 Tick = tick,
                 Importance = importance,
                 Actors = actors,
@@ -76,15 +75,10 @@ namespace RimLife.Mappers
                 }
             }
 
-            var deathTags = new List<string> { "PawnDeath", "Health" };
-            if (dinfo.HasValue && dinfo.Value.Instigator is Pawn)
-                deathTags.Add("Combat");
-
             return new EventCardImpl
             {
                 EventID = $"death_{victim?.ThingID}_{tick}",
                 DefName = "PawnDeath",
-                Tags = deathTags,
                 Tick = tick,
                 Importance = importance,
                 Actors = actors,
@@ -125,7 +119,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"mental_{pawn?.ThingID}_{tick}",
                 DefName = breakDef?.defName ?? "MentalBreak",
-                Tags = new List<string> { "MentalBreak", "Health" },
                 Tick = tick,
                 Importance = importance,
                 Actors = actors,
@@ -161,7 +154,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"social_{initiator?.ThingID}_{recipient?.ThingID}_{tick}",
                 DefName = intDef?.defName ?? "SocialInteraction",
-                Tags = new List<string> { "SocialInteraction", "Social" },
                 Tick = tick,
                 Importance = importance,
                 Actors = actors,
@@ -189,7 +181,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"quest_{quest?.id}_{tick}",
                 DefName = "Quest",
-                Tags = new List<string> { "Quest", stateChange ?? "Unknown" },
                 Tick = tick,
                 Importance = importance,
                 Actors = new List<EventActorRef>(),
@@ -241,7 +232,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"factionchange_{pawn?.ThingID}_{tick}",
                 DefName = "FactionChange",
-                Tags = new List<string> { "FactionChange", "Social", changeType },
                 Tick = tick,
                 Importance = importance,
                 Actors = actors,
@@ -263,7 +253,6 @@ namespace RimLife.Mappers
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
-            var tags = BuildLetterTags(letterDef);
             float importance = MapLetterImportance(letterDef);
             var actors = ExtractActorsFromLookTargets(lookTargets, relatedFaction);
             string mapHint = ExtractMapHintFromLookTargets(lookTargets);
@@ -283,7 +272,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"letter_{letterDef?.defName ?? "unknown"}_{tick}",
                 DefName = letterDef?.defName ?? "Letter",
-                Tags = tags,
                 Tick = tick,
                 TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
                 Importance = importance,
@@ -310,7 +298,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"timer_pulse_{role.ToString().ToLowerInvariant()}_{tick}",
                 DefName = "TimerPulse",
-                Tags = new List<string> { "TimerPulse", "System" },
                 Tick = tick,
                 TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
                 Importance = 0.5f,
@@ -332,8 +319,6 @@ namespace RimLife.Mappers
         {
             public string EventID { get; set; }
             public string DefName { get; set; }
-            public IReadOnlyList<string> Tags { get; set; }
-            public IReadOnlyList<string> Keywords { get; set; }
             public int Tick { get; set; }
             public string TimeLabel { get; set; }
             public float Importance { get; set; }
@@ -342,103 +327,9 @@ namespace RimLife.Mappers
             public IDictionary<string, string> Payload { get; set; }
         }
 
-        private static List<string> BuildIncidentTags(IncidentDef def)
-        {
-            var tags = new List<string> { "Incident" };
-            if (def == null)
-            {
-                tags.Add("Unknown");
-                return tags;
-            }
-
-            string name = def.defName ?? "";
-
-            // 从事件 defName 推导叙事标签，供 LLM 按主题分流事件。
-            if (name.StartsWith("Raid") || name.Contains("Raid") || name.Contains("Attack"))
-                tags.Add("Combat");
-            else if (name.Contains("Trade") || name.Contains("Trader"))
-                tags.Add("Economy");
-            else if (name.Contains("Quest") || name.Contains("GiveQuest"))
-                tags.Add("Quest");
-            else if (name.Contains("Weather") || name.Contains("Eclipse") || name.Contains("Toxic")
-                || name.Contains("Volcanic") || name.Contains("SolarFlare"))
-                tags.Add("Nature");
-            else if (name.Contains("Wanderer") || name.Contains("Refugee") || name.Contains("Join"))
-                tags.Add("Social");
-            else if (def.category != null)
-            {
-                string cat = def.category.defName ?? "";
-                if (cat == "ThreatBig" || cat == "ThreatSmall")
-                    tags.Add("Combat");
-                else if (cat == "Misc")
-                    tags.Add("Nature");
-                else
-                    tags.Add(cat);
-            }
-            else
-            {
-                tags.Add("Unknown");
-            }
-
-            return tags;
-        }
-
         // ================================================================
-        // 信封标签/重要度映射
+        // 信封重要度映射
         // ================================================================
-
-        /// <summary>
-        /// 从 LetterDef.defName 推导语义标签列表。
-        /// 首标签为原始 defName，后续为领域标签。
-        /// </summary>
-        private static List<string> BuildLetterTags(LetterDef letterDef)
-        {
-            var tags = new List<string>();
-
-            string defName = letterDef?.defName ?? "Unknown";
-            tags.Add(defName);
-
-            // 从 defName 推导领域标签
-            if (defName == "ThreatBig" || defName == "ThreatSmall")
-            {
-                tags.Add("Combat");
-                tags.Add("Raid");
-            }
-            else if (defName == "Death")
-            {
-                tags.Add("Death");
-                tags.Add("Health");
-            }
-            else if (defName == "PositiveEvent" || defName == "Good")
-            {
-                tags.Add("PositiveEvent");
-            }
-            else if (defName == "NegativeEvent" || defName == "Bad" || defName == "BadUrgent")
-            {
-                tags.Add("NegativeEvent");
-            }
-            else if (defName == "NeutralEvent")
-            {
-                tags.Add("NeutralEvent");
-            }
-            else
-            {
-                // 未知 defName 的回退推断：从名称中检测已知领域关键词。
-                string lower = defName.ToLowerInvariant();
-                if (lower.Contains("threat") || lower.Contains("raid") || lower.Contains("attack"))
-                    tags.Add("Combat");
-                else if (lower.Contains("death"))
-                    tags.Add("Death");
-                else if (lower.Contains("positive") || lower.Contains("good"))
-                    tags.Add("PositiveEvent");
-                else if (lower.Contains("negative") || lower.Contains("bad"))
-                    tags.Add("NegativeEvent");
-                else
-                    tags.Add("NeutralEvent");
-            }
-
-            return tags;
-        }
 
         /// <summary>
         /// 从 LetterDef 查表返回固定重要度值。

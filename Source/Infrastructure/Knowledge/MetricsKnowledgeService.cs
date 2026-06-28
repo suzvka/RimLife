@@ -33,7 +33,6 @@ namespace RimLife.Infrastructure.Knowledge
         public void Store(KnowledgeEntry entry) => _inner.Store(entry);
         public void Delete(string term) => _inner.Delete(term);
         public IReadOnlyList<KnowledgeEntry> ListAll() => _inner.ListAll();
-        public IReadOnlyList<KnowledgeEntry> ListByTags(IReadOnlyList<string> tags) => _inner.ListByTags(tags);
         public IReadOnlyList<KnowledgeEntry> ListByPrefix(string prefix) => _inner.ListByPrefix(prefix);
     }
 }

@@ -45,7 +45,7 @@ namespace RimLife.UI
             listing.CheckboxLabeled("启用运行时度量", ref _enableMetrics, "Token 消耗、工具调用统计");
             listing.CheckboxLabeled("启用导演 Agent", ref _enableDirectorAgent, "导演自动审查事件并分配剧情线");
             listing.CheckboxLabeled("启用编剧 Agent", ref _enableMemoryConsolidation, "记忆巩固（跨轮次上下文）");
-            listing.CheckboxLabeled("启用知识库", ref _enableKnowledgeBase, "事件关键词匹配 → 注入背景知识");
+            listing.CheckboxLabeled("启用知识库", ref _enableKnowledgeBase, "事件关联词条 → 自动注入背景知识");
             listing.CheckboxLabeled("启用即兴编剧 Agent", ref _enableImproviserAgent, "处理独立临时事件");
             listing.Gap(GapTiny);
             EndSection(listing);

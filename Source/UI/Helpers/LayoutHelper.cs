@@ -100,25 +100,33 @@ namespace RimLife.UI
         /// <summary>
         /// 自适应卡片追踪器。
         /// 每帧测量实际内容高度，下一帧使用测量值作为卡片高度。
-        /// 比手动估算 contentHeight 可靠得多。
+        /// IMGUI 双帧收敛，第二帧即稳定。
         /// </summary>
         public class AdaptiveCardTracker
         {
-            private float _lastMeasuredHeight = 120f; // 初始估计值
+            /// <summary>卡片底部固定余量，避免内容紧贴边框。</summary>
+            private const float BottomPadding = 10f;
+
+            /// <summary>初始高度预估。适中值，避免首帧过大或过小。</summary>
+            private const float InitialHeight = 250f;
+
+            private float _lastMeasuredHeight = InitialHeight;
+
+            /// <summary>上一帧测量的内容高度。可用于外部判断内容是否变化。</summary>
+            public float LastMeasuredHeight => _lastMeasuredHeight;
 
             /// <summary>
             /// 绘制自适应卡片。
-            /// 使用上一帧测量的高度作为本帧卡片高度，内容绘制后更新测量值。
-            /// IMGUI 双帧收敛，第二帧即稳定。
+            /// 使用上一帧测量的高度作为本帧卡片高度，
+            /// 内容绘制后更新测量值。IMGUI 双帧收敛，第二帧即稳定。
             /// </summary>
             /// <param name="listing">父 Listing。</param>
             /// <param name="title">卡片标题（null 时不绘制标题）。</param>
             /// <param name="drawContent">卡片内容绘制回调。</param>
             public void Draw(Listing_Standard listing, string title, Action<Listing_Standard> drawContent)
             {
-                // 使用上一帧测量值 + padding 作为本帧卡片高度
                 var titleHeight = title != null ? 28f + UIHelper.GapTiny : 0f;
-                var estimatedTotal = titleHeight + _lastMeasuredHeight + UIHelper.GapSmall;
+                var estimatedTotal = titleHeight + _lastMeasuredHeight + BottomPadding + UIHelper.GapSmall;
 
                 listing.Gap(UIHelper.GapTiny);
                 var cardRect = listing.GetRect(estimatedTotal);
@@ -138,23 +146,42 @@ namespace RimLife.UI
                     Widgets.Label(titleRect, $"<size=14><b>{title}</b></size>");
                 }
 
-                // 记录内容绘制前的 Y 位置
-                var beforeY = listing.CurHeight;
+                // 内容区域：在卡片内部创建子 Listing，
+                // 内容作为子元素渲染在容器内，与前端框架的容器包裹模型一致
+                var contentTop = cardRect.y + titleHeight;
+                var contentRect = new Rect(
+                    cardRect.x + UIHelper.GapSmall,
+                    contentTop,
+                    cardRect.width - UIHelper.GapSmall * 2,
+                    cardRect.height - titleHeight - BottomPadding);
 
-                // 绘制内容
-                drawContent(listing);
+                var childListing = new Listing_Standard();
+                childListing.Begin(contentRect);
 
-                // 测量实际内容高度
-                var afterY = listing.CurHeight;
-                var actualContentHeight = afterY - beforeY;
-                if (actualContentHeight > 10f) // 过滤异常值
+                // 绘制内容（通过子 Listing，所有内容自然包裹在卡片内）
+                drawContent(childListing);
+
+                // 测量实际内容高度（从子 Listing 的游标位置）
+                var actualContentHeight = childListing.CurHeight;
+                if (actualContentHeight > 10f)
                     _lastMeasuredHeight = actualContentHeight;
+
+                childListing.End();
+            }
+
+            /// <summary>
+            /// 通知追踪器内容结构已变化，下一帧将重新测量。
+            /// 在展开/折叠、添加/删除子元素等场景调用，避免一帧错位。
+            /// </summary>
+            public void Invalidate()
+            {
+                _lastMeasuredHeight = InitialHeight;
             }
 
             /// <summary>重置测量值。</summary>
             public void Reset()
             {
-                _lastMeasuredHeight = 120f;
+                _lastMeasuredHeight = InitialHeight;
             }
         }
     }

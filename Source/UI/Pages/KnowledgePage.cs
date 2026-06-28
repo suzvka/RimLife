@@ -26,14 +26,12 @@ namespace RimLife.UI
 
         private List<KnowledgeEntry> _cachedEntries = new List<KnowledgeEntry>();
         private List<KnowledgeEntry> _filteredEntries = new List<KnowledgeEntry>();
-        private List<string> _allTags = new List<string>();
 
         // ================================================================
         // 搜索与筛选
         // ================================================================
 
         private string _searchText = "";
-        private string _activeTagFilter; // null = 不限
 
         // ================================================================
         // UI 状态
@@ -43,17 +41,24 @@ namespace RimLife.UI
         private string _editingTerm; // 正在编辑的词条（null = 非编辑模式）
         private string _editTermBuffer = "";
         private string _editDefBuffer = "";
-        private string _editTagsBuffer = "";
 
         private string _pendingDeleteTerm; // 两步确认删除
 
         private bool _addingNew;
         private string _newTermBuffer = "";
         private string _newDefBuffer = "";
-        private string _newTagsBuffer = "";
 
         private string _statusMessage;
         private float _statusMessageTime;
+
+        // ================================================================
+        // 自适应卡片追踪器（每帧测量实际高度，下一帧使用测量值）
+        // ================================================================
+
+        private readonly LayoutHelper.AdaptiveCardTracker _formCardTracker
+            = new LayoutHelper.AdaptiveCardTracker();
+        private readonly LayoutHelper.AdaptiveCardTracker _editCardTracker
+            = new LayoutHelper.AdaptiveCardTracker();
 
         // ================================================================
         // Draw 入口
@@ -93,43 +98,14 @@ namespace RimLife.UI
         {
             var rowRect = listing.GetRect(BtnHeight + 2f);
 
-            // 搜索框（占大部分宽度）
-            var searchWidth = rowRect.width - BtnWidthMedium - BtnGap;
-            var searchRect = new Rect(rowRect.x, rowRect.y, searchWidth, BtnHeight);
+            // 搜索框
+            var searchRect = new Rect(rowRect.x, rowRect.y, rowRect.width, BtnHeight);
             var newSearch = Widgets.TextField(searchRect, _searchText);
             if (newSearch != _searchText)
             {
                 _searchText = newSearch;
                 ApplyFilter();
             }
-
-            // 标签筛选按钮
-            var filterRect = new Rect(rowRect.x + searchWidth + BtnGap, rowRect.y, BtnWidthMedium, BtnHeight);
-            var filterLabel = _activeTagFilter != null ? $"标签: {_activeTagFilter}" : "标签筛选";
-            if (Widgets.ButtonText(filterRect, filterLabel))
-            {
-                ShowTagFilterMenu(filterRect);
-            }
-        }
-
-        private void ShowTagFilterMenu(Rect anchor)
-        {
-            var options = new List<FloatMenuOption>();
-            options.Add(new FloatMenuOption("全部标签", () =>
-            {
-                _activeTagFilter = null;
-                ApplyFilter();
-            }));
-            foreach (var tag in _allTags)
-            {
-                var t = tag;
-                options.Add(new FloatMenuOption(t, () =>
-                {
-                    _activeTagFilter = t;
-                    ApplyFilter();
-                }));
-            }
-            Find.WindowStack.Add(new FloatMenu(options));
         }
 
         // ================================================================
@@ -167,12 +143,14 @@ namespace RimLife.UI
                 return;
             }
 
-            // 估算卡片高度
+            // 精确计算卡片高度：顶部填充 + 标题行 + 释义预览 + 底部填充
             var defPreview = Truncate(entry.Definition ?? "", 100);
-            var defHeight = CalcTextHeight(defPreview, listing.ColumnWidth - 20f);
-            var cardHeight = 30f + defHeight + 8f;
+            var contentWidth = listing.ColumnWidth - 16f;
+            var defHeight = CalcTextHeight(defPreview, contentWidth);
+            // 4(顶) + 22(标题) + defHeight(预览) + 4(底)
+            var cardHeight = 4f + 22f + defHeight + 4f;
             if (isExpanded)
-                cardHeight += CalcTextHeight(entry.Definition ?? "", listing.ColumnWidth - 20f) + 30f;
+                cardHeight += 4f + CalcTextHeight(entry.Definition ?? "", contentWidth);
 
             // 卡片背景
             listing.Gap(GapTiny);
@@ -181,18 +159,10 @@ namespace RimLife.UI
             Widgets.DrawBoxSolid(cardRect, bgColor);
             Widgets.DrawBox(cardRect, 1);
 
-            // 标题行：词条名 + 标签 + 操作按钮
+            // 标题行：词条名 + 操作按钮
             var titleY = cardRect.y + 4f;
             var titleRect = new Rect(cardRect.x + 8f, titleY, cardRect.width * 0.5f, 22f);
             Widgets.Label(titleRect, $"<b>{entry.Term}</b>");
-
-            // 标签
-            if (entry.ContextTags != null && entry.ContextTags.Count > 0)
-            {
-                var tagText = string.Join(", ", entry.ContextTags);
-                var tagRect = new Rect(titleRect.x, titleY + 20f, cardRect.width - 16f, 16f);
-                Widgets.Label(tagRect, $"<color=#888888><size=11>{tagText}</size></color>");
-            }
 
             // 操作按钮（右上角）
             var btnY = cardRect.y + 4f;
@@ -220,8 +190,6 @@ namespace RimLife.UI
 
             // 释义预览（可点击展开/折叠）
             var previewY = titleY + 22f;
-            if (entry.ContextTags != null && entry.ContextTags.Count > 0)
-                previewY += 16f;
 
             var previewRect = new Rect(cardRect.x + 8f, previewY, cardRect.width - 16f, defHeight);
             var previewColor = isPendingDelete ? "#FF8888" : "#CCCCCC";
@@ -261,51 +229,32 @@ namespace RimLife.UI
             _editingTerm = entry.Term;
             _editTermBuffer = entry.Term;
             _editDefBuffer = entry.Definition ?? "";
-            _editTagsBuffer = entry.ContextTags != null ? string.Join(", ", entry.ContextTags) : "";
             _pendingDeleteTerm = null;
             _expandedTerm = null;
         }
 
         private void DrawEditForm(Listing_Standard listing, KnowledgeEntry entry)
         {
-            var formHeight = 30f + 22f + 60f + 22f + BtnHeight + 8f + BtnHeight + 8f;
-            listing.Gap(GapTiny);
-            var cardRect = listing.GetRect(formHeight);
-            Widgets.DrawBoxSolid(cardRect, new Color(0.18f, 0.22f, 0.28f, 1f));
-            Widgets.DrawBox(cardRect, 1);
-
-            var innerX = cardRect.x + 8f;
-            var innerW = cardRect.width - 16f;
-            var curY = cardRect.y + 6f;
-
-            // 词条名
-            Widgets.Label(new Rect(innerX, curY, innerW, 20f), "<size=12>词条名:</size>");
-            curY += 20f;
-            _editTermBuffer = Widgets.TextField(new Rect(innerX, curY, innerW, 26f), _editTermBuffer);
-            curY += 30f;
-
-            // 释义
-            Widgets.Label(new Rect(innerX, curY, innerW, 20f), "<size=12>释义:</size>");
-            curY += 20f;
-            _editDefBuffer = Widgets.TextArea(new Rect(innerX, curY, innerW, 60f), _editDefBuffer);
-            curY += 64f;
-
-            // 标签
-            Widgets.Label(new Rect(innerX, curY, innerW, 20f), "<size=12>标签 (逗号分隔):</size>");
-            curY += 20f;
-            _editTagsBuffer = Widgets.TextField(new Rect(innerX, curY, innerW, 26f), _editTagsBuffer);
-            curY += 32f;
-
-            // 按钮行
-            var btnResults = DrawButtonRowInRect(
-                new Rect(innerX, curY, innerW, BtnHeight),
-                new[] { "保存", "取消" },
-                new[] { BtnWidthMedium, BtnWidthMedium });
-
-            if (btnResults[0])
-                SaveEdit(entry.Term);
-            if (btnResults[1])
-                CancelEdit();
+            _editCardTracker.Draw(listing, null, inner =>
+            {
+                inner.Gap(GapTiny);
+                // 词条名
+                Widgets.Label(inner.GetRect(20f), "<size=12>词条名:</size>");
+                inner.Gap(2f);
+                _editTermBuffer = Widgets.TextField(inner.GetRect(26f), _editTermBuffer);
+                inner.Gap(GapSmall);
+                // 释义
+                Widgets.Label(inner.GetRect(20f), "<size=12>释义:</size>");
+                inner.Gap(2f);
+                _editDefBuffer = Widgets.TextArea(inner.GetRect(60f), _editDefBuffer);
+                inner.Gap(GapSmall);
+                // 按钮行
+                var btnResults = DrawButtonRow(inner,
+                    new[] { "保存", "取消" },
+                    new[] { BtnWidthMedium, BtnWidthMedium });
+                if (btnResults[0]) SaveEdit(entry.Term);
+                if (btnResults[1]) CancelEdit();
+            });
         }
 
         private void SaveEdit(string originalTerm)
@@ -328,8 +277,7 @@ namespace RimLife.UI
             {
                 Term = newTerm,
                 Definition = _editDefBuffer,
-                Source = "LLM",
-                ContextTags = ParseTags(_editTagsBuffer)
+                Source = "LLM"
             });
 
             _editingTerm = null;
@@ -348,47 +296,26 @@ namespace RimLife.UI
 
         private void DrawNewEntryForm(Listing_Standard listing)
         {
-            var formHeight = 30f + 22f + 60f + 22f + BtnHeight + 8f + BtnHeight + 8f;
-            listing.Gap(GapTiny);
-            var cardRect = listing.GetRect(formHeight);
-            Widgets.DrawBoxSolid(cardRect, new Color(0.18f, 0.28f, 0.22f, 1f));
-            Widgets.DrawBox(cardRect, 1);
-
-            var innerX = cardRect.x + 8f;
-            var innerW = cardRect.width - 16f;
-            var curY = cardRect.y + 6f;
-
-            Widgets.Label(new Rect(innerX, curY, innerW, 20f), "<size=14><b>新增词条</b></size>");
-            curY += 24f;
-
-            // 词条名
-            Widgets.Label(new Rect(innerX, curY, innerW, 20f), "<size=12>词条名:</size>");
-            curY += 20f;
-            _newTermBuffer = Widgets.TextField(new Rect(innerX, curY, innerW, 26f), _newTermBuffer);
-            curY += 30f;
-
-            // 释义
-            Widgets.Label(new Rect(innerX, curY, innerW, 20f), "<size=12>释义:</size>");
-            curY += 20f;
-            _newDefBuffer = Widgets.TextArea(new Rect(innerX, curY, innerW, 60f), _newDefBuffer);
-            curY += 64f;
-
-            // 标签
-            Widgets.Label(new Rect(innerX, curY, innerW, 20f), "<size=12>标签 (逗号分隔):</size>");
-            curY += 20f;
-            _newTagsBuffer = Widgets.TextField(new Rect(innerX, curY, innerW, 26f), _newTagsBuffer);
-            curY += 32f;
-
-            // 按钮行
-            var btnResults = DrawButtonRowInRect(
-                new Rect(innerX, curY, innerW, BtnHeight),
-                new[] { "添加", "取消" },
-                new[] { BtnWidthMedium, BtnWidthMedium });
-
-            if (btnResults[0])
-                AddNewEntry();
-            if (btnResults[1])
-                CancelAdd();
+            _formCardTracker.Draw(listing, "新增词条", inner =>
+            {
+                inner.Gap(GapTiny);
+                // 词条名
+                Widgets.Label(inner.GetRect(20f), "<size=12>词条名:</size>");
+                inner.Gap(2f);
+                _newTermBuffer = Widgets.TextField(inner.GetRect(26f), _newTermBuffer);
+                inner.Gap(GapSmall);
+                // 释义
+                Widgets.Label(inner.GetRect(20f), "<size=12>释义:</size>");
+                inner.Gap(2f);
+                _newDefBuffer = Widgets.TextArea(inner.GetRect(60f), _newDefBuffer);
+                inner.Gap(GapSmall);
+                // 按钮行
+                var btnResults = DrawButtonRow(inner,
+                    new[] { "添加", "取消" },
+                    new[] { BtnWidthMedium, BtnWidthMedium });
+                if (btnResults[0]) AddNewEntry();
+                if (btnResults[1]) CancelAdd();
+            });
         }
 
         private void AddNewEntry()
@@ -407,14 +334,12 @@ namespace RimLife.UI
             {
                 Term = term,
                 Definition = _newDefBuffer,
-                Source = "LLM",
-                ContextTags = ParseTags(_newTagsBuffer)
+                Source = "LLM"
             });
 
             _addingNew = false;
             _newTermBuffer = "";
             _newDefBuffer = "";
-            _newTagsBuffer = "";
             RefreshCache();
             SetStatus($"已添加词条「{term}」");
         }
@@ -424,7 +349,6 @@ namespace RimLife.UI
             _addingNew = false;
             _newTermBuffer = "";
             _newDefBuffer = "";
-            _newTagsBuffer = "";
         }
 
         // ================================================================
@@ -464,7 +388,7 @@ namespace RimLife.UI
             }
 
             // 计数
-            var countText = _searchText.Length > 0 || _activeTagFilter != null
+            var countText = _searchText.Length > 0
                 ? $"显示 {_filteredEntries.Count} / {_cachedEntries.Count} 条"
                 : $"共 {_cachedEntries.Count} 条";
             var countRect = new Rect(rowRect.x + BtnWidthMedium + BtnGap, rowRect.y,
@@ -492,21 +416,10 @@ namespace RimLife.UI
             {
                 _cachedEntries.Clear();
                 _filteredEntries.Clear();
-                _allTags.Clear();
                 return;
             }
 
             _cachedEntries = svc.ListAll().ToList();
-
-            // 聚合所有标签
-            var tagSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var e in _cachedEntries)
-            {
-                if (e.ContextTags != null)
-                    foreach (var t in e.ContextTags)
-                        tagSet.Add(t);
-            }
-            _allTags = tagSet.OrderBy(t => t).ToList();
 
             ApplyFilter();
         }
@@ -515,9 +428,8 @@ namespace RimLife.UI
         {
             var query = _searchText?.Trim();
             var hasQuery = !string.IsNullOrEmpty(query);
-            var hasTag = !string.IsNullOrEmpty(_activeTagFilter);
 
-            if (!hasQuery && !hasTag)
+            if (!hasQuery)
             {
                 _filteredEntries = new List<KnowledgeEntry>(_cachedEntries);
                 return;
@@ -525,39 +437,17 @@ namespace RimLife.UI
 
             _filteredEntries = _cachedEntries.Where(e =>
             {
-                if (hasTag)
-                {
-                    if (e.ContextTags == null || !e.ContextTags.Any(
-                        t => string.Equals(t, _activeTagFilter, StringComparison.OrdinalIgnoreCase)))
-                        return false;
-                }
-
-                if (hasQuery)
-                {
-                    var termMatch = e.Term != null &&
-                        e.Term.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
-                    var defMatch = e.Definition != null &&
-                        e.Definition.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
-                    if (!termMatch && !defMatch)
-                        return false;
-                }
-
-                return true;
+                var termMatch = e.Term != null &&
+                    e.Term.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+                var defMatch = e.Definition != null &&
+                    e.Definition.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+                return termMatch || defMatch;
             }).ToList();
         }
 
         // ================================================================
         // 辅助
         // ================================================================
-
-        private static List<string> ParseTags(string input)
-        {
-            if (string.IsNullOrEmpty(input)) return new List<string>();
-            return input.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(s => s.Trim())
-                .Where(s => s.Length > 0)
-                .ToList();
-        }
 
         private static string Truncate(string value, int maxLength)
         {

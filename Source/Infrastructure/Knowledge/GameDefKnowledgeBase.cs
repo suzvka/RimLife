@@ -23,8 +23,8 @@ namespace RimLife.Infrastructure.Knowledge
             // 原版 Def 类型注册 — 各 DLC 通过 Register<T>() 追加，无需修改此文件
             // ================================================================
 
-            // ThingDef: 物品/建筑/武器/服装/食物等，附带丰富语义标签
-            Register<ThingDef>(BuildThingDefTags);
+            // ThingDef: 物品/建筑/武器/服装/食物等
+            Register<ThingDef>();
 
             // PawnKindDef: 生物/人形/动物种类
             Register<PawnKindDef>();
@@ -59,8 +59,7 @@ namespace RimLife.Infrastructure.Knowledge
         /// 重复注册同一类型名会被静默忽略。
         /// </summary>
         /// <typeparam name="T">Def 子类型，必须是 Verse.Def 的子类</typeparam>
-        /// <param name="tagBuilder">可选语义标签构建器。为 null 时仅使用类型名（如 "PawnKindDef"）作为标签。</param>
-        public static void Register<T>(Func<Def, List<string>> tagBuilder = null) where T : Def
+        public static void Register<T>() where T : Def
         {
             var typeName = typeof(T).Name;
 
@@ -72,8 +71,7 @@ namespace RimLife.Infrastructure.Knowledge
             {
                 TypeName = typeName,
                 Lookup = term => DefDatabase<T>.GetNamedSilentFail(term),
-                AllDefs = () => DefDatabase<T>.AllDefsListForReading.Cast<Def>(),
-                TagBuilder = tagBuilder
+                AllDefs = () => DefDatabase<T>.AllDefsListForReading.Cast<Def>()
             });
 
             Log.Message($"[RimLife.Knowledge] Registered Def resolver: {typeName}");
@@ -172,50 +170,12 @@ namespace RimLife.Infrastructure.Knowledge
             string defLabel = (def.label != null) ? def.label.ToString() : string.Empty;
             string defDescription = def.description ?? "";
 
-            List<string> tags;
-            if (resolver.TagBuilder != null)
-                tags = resolver.TagBuilder(def);
-            else
-                tags = new List<string> { resolver.TypeName };
-
             return new KnowledgeEntry
             {
                 Term = def.defName ?? defLabel,
                 Definition = defDescription,
-                Source = "GameDef",
-                ContextTags = tags
+                Source = "GameDef"
             };
-        }
-
-        /// <summary>
-        /// ThingDef 专用语义标签构建器。从物品类别/用途推断标签。
-        /// </summary>
-        private static List<string> BuildThingDefTags(Def def)
-        {
-            var tags = new List<string> { "ThingDef" };
-            var td = def as ThingDef;
-            if (td == null) return tags;
-
-            if (td.IsWeapon) tags.Add("Weapon");
-            if (td.IsApparel) tags.Add("Apparel");
-            if (td.IsMedicine) tags.Add("Medicine");
-            if (td.IsDrug) tags.Add("Drug");
-            if (td.IsCorpse) tags.Add("Corpse");
-            if (td.IsRangedWeapon) tags.Add("Ranged");
-            if (td.IsMeleeWeapon) tags.Add("Melee");
-
-            if (td.IsIngestible && td.ingestible?.HumanEdible == true)
-                tags.Add("Food");
-
-            if (td.thingClass != null && typeof(Building).IsAssignableFrom(td.thingClass))
-                tags.Add("Building");
-
-            bool isBuilding = td.thingClass != null && typeof(Building).IsAssignableFrom(td.thingClass);
-            bool isHumanlike = td.race?.Humanlike == true;
-            if (!isBuilding && !td.IsCorpse && !isHumanlike)
-                tags.Add("Item");
-
-            return tags;
         }
 
         // ================================================================
@@ -232,9 +192,6 @@ namespace RimLife.Infrastructure.Knowledge
 
             /// <summary>该类型全部 Def 枚举（用于 label/description 模糊匹配）。</summary>
             public Func<IEnumerable<Def>> AllDefs;
-
-            /// <summary>可选的语义标签构建器。</summary>
-            public Func<Def, List<string>> TagBuilder;
         }
     }
 }

@@ -37,7 +37,7 @@ namespace RimLife.Infrastructure
                     return ws;
             }
 
-            return Workspaces.Create("Director", null, null, NPCLife.Workspace.WorkspaceRole.Director);
+            return Workspaces.Create("Director", null, NPCLife.Workspace.WorkspaceRole.Director);
         }
 
         /// <summary>
@@ -55,7 +55,7 @@ namespace RimLife.Infrastructure
                     return ws;
             }
 
-            return Workspaces.Create("Improviser", null, null, NPCLife.Workspace.WorkspaceRole.Improviser);
+            return Workspaces.Create("Improviser", null, NPCLife.Workspace.WorkspaceRole.Improviser);
         }
 
         /// <summary>
@@ -82,7 +82,6 @@ namespace RimLife.Infrastructure
                                 maxRounds: DriverConfig.MaxAgentRounds,
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
-                                knowledgeService: KnowledgeService,
                                 temperature: PromptAdditions.Temperature,
                                 modelRefsJson: improviserWs.ModelRefs,
                                 currentModel: improviserWs.CurrentModel);
@@ -129,7 +128,6 @@ namespace RimLife.Infrastructure
                                 logger: Logger,
                                 serializer: CardSerializer.Default,
                                 contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
-                                knowledgeService: KnowledgeService,
                                 temperature: PromptAdditions.Temperature,
                                 modelRefsJson: directorWs.ModelRefs,
                                 currentModel: directorWs.CurrentModel);
@@ -193,7 +191,6 @@ namespace RimLife.Infrastructure
                     maxRounds: DriverConfig.MaxAgentRounds,
                     logger: Logger,
                     serializer: CardSerializer.Default,
-                    knowledgeService: KnowledgeService,
                     temperature: PromptAdditions.Temperature,
                     modelRefsJson: ws.ModelRefs,
                     currentModel: ws.CurrentModel);
@@ -247,8 +244,6 @@ namespace RimLife.Infrastructure
             {
                 sb.AppendLine();
                 sb.Append($"- {ws.Label} (id={ws.Id})");
-                if (ws.Tags != null && ws.Tags.Count > 0)
-                    sb.Append($" tags=[{string.Join(",", ws.Tags)}]");
                 sb.Append($" rounds={ws.Rounds?.Count ?? 0}");
                 if (!string.IsNullOrEmpty(ws.DirectorMessage))
                     sb.Append($" msg={TruncateForSummary(ws.DirectorMessage, 60)}");
