@@ -226,11 +226,17 @@ namespace RimLife.Infrastructure
                         if (!string.IsNullOrEmpty(json) && json != "[]")
                         {
                             var dict = JsonParser.ParseDict(json);
-                            if (dict != null && dict.TryGetValue("rimlife_knowledge", out string kmJson))
+                            if (dict != null)
                             {
-                                var entries = JsonParser.ParseObjectArray(kmJson);
-                                if (entries != null)
-                                    entryCount = entries.Count;
+                                string kmJson = null;
+                                dict.TryGetValue("npclife_knowledge", out kmJson);
+
+                                if (kmJson != null)
+                                {
+                                    var entries = JsonParser.ParseObjectArray(kmJson);
+                                    if (entries != null)
+                                        entryCount = entries.Count;
+                                }
                             }
                         }
                     }

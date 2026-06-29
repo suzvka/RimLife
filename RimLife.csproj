@@ -31,10 +31,13 @@
 	<ItemGroup>
 	  <Compile Remove="Source\RimLife\**" />
 	  <Compile Remove="RimLife.Tests\**" />
+	  <Compile Remove="ext\NPCLife\**\*.cs" />
 	  <EmbeddedResource Remove="Source\RimLife\**" />
 	  <EmbeddedResource Remove="RimLife.Tests\**" />
+	  <EmbeddedResource Remove="ext\NPCLife\**" />
 	  <None Remove="Source\RimLife\**" />
 	  <None Remove="RimLife.Tests\**" />
+	  <None Remove="ext\NPCLife\**" />
 	</ItemGroup>
 
 	<!-- Reference NPCLife framework (Git submodule) -->
