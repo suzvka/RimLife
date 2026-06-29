@@ -115,7 +115,11 @@ namespace RimLife.Infrastructure
             get
             {
                 if (_frameworkFactory == null)
+                {
+                    var dc = DriverConfig;
+                    Logger?.Message($"[RimLife.DIAG] FrameworkFactory: creating new DefaultFrameworkFactory. DirectorTimerInterval={dc?.DirectorTimerInterval ?? -1}, ImproviserTimerInterval={dc?.ImproviserTimerInterval ?? -1}");
                     _frameworkFactory = new NPCLife.Infrastructure.DefaultFrameworkFactory(DriverConfig);
+                }
                 return _frameworkFactory;
             }
         }
@@ -180,7 +184,11 @@ namespace RimLife.Infrastructure
             _frameworkConfig = config;
 
             // 同步到各子系统
-            _driverConfig = config.Driver;
+            // 关键：mutate 现有 DriverConfig 对象而非替换引用。
+            // WorkspaceManager → WorkspaceEventPool 在创建时捕获了 DriverConfig 的引用，
+            // 替换引用会导致 EventPool 使用过时阈值（见 CheckThreshold），
+            // 而 TickTimerPulses 使用新阈值，引发阈值不匹配。
+            ApplyDriverConfigInPlace(config.Driver);
             var d = config.Driver;
             Logger?.Message($"[RimLife.Core] Configure: timerInterval={d?.DirectorTimerInterval ?? 0}s, countThreshold={d?.DirectorCountThreshold ?? 0}, importanceThreshold={d?.DirectorImportanceThreshold ?? 0:F1}");
             _timerConfigLogged = false; // 配置变更后重新打印定时器摘要
@@ -254,10 +262,21 @@ namespace RimLife.Infrastructure
         /// </summary>
         public static void EnsureSkillRegistryInitialized()
         {
-            if (_skillRegistryInitialized) return;
+            // [DIAG] 入口日志：记录调用栈和当前状态
+            Logger?.Message($"[RimLife.DIAG] EnsureSkillRegistryInitialized called. _skillRegistryInitialized={_skillRegistryInitialized}, _frameworkFactory={_frameworkFactory != null}, SaveStore={SaveStore != null}");
+
+            if (_skillRegistryInitialized)
+            {
+                Logger?.Message("[RimLife.DIAG] EnsureSkillRegistryInitialized: SKIPPED (already initialized).");
+                return;
+            }
             lock (_skillRegistryLock)
             {
-                if (_skillRegistryInitialized) return;
+                if (_skillRegistryInitialized)
+                {
+                    Logger?.Message("[RimLife.DIAG] EnsureSkillRegistryInitialized: SKIPPED after lock (already initialized).");
+                    return;
+                }
 
                 // 提前置位以阻断重入：RegisterHookProvider 可能回调本方法。
                 _skillRegistryInitialized = true;
@@ -266,26 +285,59 @@ namespace RimLife.Infrastructure
                 {
                     Logger?.Message("[RimLife.Core] EnsureSkillRegistryInitialized: starting...");
 
-                    FrameworkFactory.Skills.InitializeDefaults();
-                    Logger?.Message("[RimLife.Core] McpSkillRegistry.InitializeDefaults completed.");
+                    var ff = FrameworkFactory;
+                    Logger?.Message($"[RimLife.DIAG] FrameworkFactory obtained. Skills={ff.Skills != null}, SkillCount(before)={ff.Skills.SkillCount}");
 
-                    int count = RegisterHookProvider(new SystemMcpProvider(() => Workspaces, () => TimeProvider?.Invoke() ?? "", Logger));
-                    count += RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeService, Logger));
-                    count += RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
-                    count += RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
-                    count += RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
+                    ff.Skills.InitializeDefaults();
+                    Logger?.Message($"[RimLife.Core] McpSkillRegistry.InitializeDefaults completed. SkillCount(after)={ff.Skills.SkillCount}");
+
+                    int count = 0;
+                    int sysCount = RegisterHookProvider(new SystemMcpProvider(() => Workspaces, () => TimeProvider?.Invoke() ?? "", Logger));
+                    Logger?.Message($"[RimLife.DIAG] SystemMcpProvider registered: {sysCount} tools.");
+                    count += sysCount;
+
+                    int knCount = RegisterHookProvider(new KnowledgeMcpProvider(() => KnowledgeService, Logger));
+                    Logger?.Message($"[RimLife.DIAG] KnowledgeMcpProvider registered: {knCount} tools.");
+                    count += knCount;
+
+                    int dirCount = RegisterHookProvider(new DirectionMcpProvider(() => Workspaces, Logger));
+                    Logger?.Message($"[RimLife.DIAG] DirectionMcpProvider registered: {dirCount} tools.");
+                    count += dirCount;
+
+                    int wriCount = RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
+                    Logger?.Message($"[RimLife.DIAG] WritingMcpProvider registered: {wriCount} tools.");
+                    count += wriCount;
+
+                    int freeCount = RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
+                    Logger?.Message($"[RimLife.DIAG] FreelancerMcpProvider registered: {freeCount} tools.");
+                    count += freeCount;
 
                     // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
-                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
-                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.CharacterQueryProvider());
-                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.RelationshipQueryProvider());
-                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.EnvironmentQueryProvider());
-                    count += RegisterHookProvider(new RimLife.Infrastructure.Mcp.PawnMemoryProvider());
+                    int colCount = RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
+                    Logger?.Message($"[RimLife.DIAG] ColonyOverviewProvider registered: {colCount} tools.");
+                    count += colCount;
 
-                    Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {FrameworkFactory.Skills.SkillCount} skills, {count} tools registered.");
+                    int charCount = RegisterHookProvider(new RimLife.Infrastructure.Mcp.CharacterQueryProvider());
+                    Logger?.Message($"[RimLife.DIAG] CharacterQueryProvider registered: {charCount} tools.");
+                    count += charCount;
+
+                    int relCount = RegisterHookProvider(new RimLife.Infrastructure.Mcp.RelationshipQueryProvider());
+                    Logger?.Message($"[RimLife.DIAG] RelationshipQueryProvider registered: {relCount} tools.");
+                    count += relCount;
+
+                    int envCount = RegisterHookProvider(new RimLife.Infrastructure.Mcp.EnvironmentQueryProvider());
+                    Logger?.Message($"[RimLife.DIAG] EnvironmentQueryProvider registered: {envCount} tools.");
+                    count += envCount;
+
+                    int memCount = RegisterHookProvider(new RimLife.Infrastructure.Mcp.PawnMemoryProvider());
+                    Logger?.Message($"[RimLife.DIAG] PawnMemoryProvider registered: {memCount} tools.");
+                    count += memCount;
+
+                    Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {FrameworkFactory.Skills.SkillCount} skills, {count} tools registered. TotalToolCount={FrameworkFactory.Skills.TotalToolCount}");
                 }
                 catch (Exception ex)
                 {
+                    _skillRegistryInitialized = false; // 回退标记，允许后续重试
                     Logger?.Warning($"[RimLife.Core] SkillRegistry initialization failed: {ex.Message}");
                     Logger?.Warning($"[RimLife.Core] Stack: {ex.StackTrace}");
                     throw;
@@ -422,18 +474,25 @@ namespace RimLife.Infrastructure
         /// </summary>
         public static int RegisterHookProvider(IMcpHookProvider provider)
         {
-            if (provider == null) return 0;
+            if (provider == null)
+            {
+                Logger?.Message("[RimLife.DIAG] RegisterHookProvider called with null provider.");
+                return 0;
+            }
 
             try
             {
+                Logger?.Message($"[RimLife.DIAG] RegisterHookProvider: entering '{provider.HookId}', _frameworkFactory={_frameworkFactory != null}");
                 EnsureSkillRegistryInitialized();
-                int count = FrameworkFactory.Skills.RegisterFromProvider(provider);
-                Logger?.Message($"[RimLife.Core] HookProvider '{provider.HookId}' registered: {count} tools.");
+                var ff = FrameworkFactory;
+                int count = ff.Skills.RegisterFromProvider(provider);
+                Logger?.Message($"[RimLife.Core] HookProvider '{provider.HookId}' registered: {count} tools. TotalToolCount now={ff.Skills.TotalToolCount}");
                 return count;
             }
             catch (System.Exception e)
             {
                 Logger?.Warning($"[RimLife.Core] RegisterHookProvider({provider.HookId}) failed: {e.Message}");
+                Logger?.Warning($"[RimLife.Core] Stack: {e.StackTrace}");
                 return 0;
             }
         }
@@ -479,6 +538,10 @@ namespace RimLife.Infrastructure
                     _frameworkConfig = null;    // 重新从新 CacheStore 加载
                     _promptAdditions = null;    // 重新从新 CacheStore 加载
                     _frameworkFactory = null;   // 重新以新 DriverConfig 创建
+
+                    // [DIAG] 关键观察：_skillRegistryInitialized 未被重置！
+                    // 如果之前注册失败或只部分成功，后续调用 EnsureSkillRegistryInitialized 会被短路
+                    Logger?.Message($"[RimLife.DIAG] SaveStore reset: _frameworkFactory=null, _skillRegistryInitialized={_skillRegistryInitialized} (NOT reset!)");
 
                     if (_saveStore != null)
                     {
@@ -674,6 +737,7 @@ namespace RimLife.Infrastructure
                     {
                         if (_workspaces == null && SaveStore != null)
                         {
+                            Logger?.Message($"[RimLife.DIAG] Workspaces: creating. _skillRegistryInitialized={_skillRegistryInitialized}, _frameworkFactory={_frameworkFactory != null}");
                             _workspaces = FrameworkFactory.CreateWorkspaceManager(SaveStore, Logger,
                                 () => TimeProvider?.Invoke() ?? "",
                                 onWorkspaceReady: wsId => EnsureAgentForWorkspace(wsId));
@@ -681,6 +745,7 @@ namespace RimLife.Infrastructure
                             // 为存档中已加载的活跃工作空间补齐对应 Agent
                             // （LoadFromStore 期间 _workspaces 尚未赋值，回调无法生效，此处补调）
                             var actives = _workspaces.GetActive();
+                            Logger?.Message($"[RimLife.DIAG] Workspaces: GetActive returned {actives?.Count ?? 0} workspaces.");
                             foreach (var ws in actives)
                             {
                                 EnsureAgentForWorkspace(ws.Id);

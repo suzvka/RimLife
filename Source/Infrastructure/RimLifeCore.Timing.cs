@@ -180,10 +180,18 @@ namespace RimLife.Infrastructure
             GetDirectorAgent();
 
             var events = _eventBuffer.Drain();
+            int pendingBefore = directorWs.EventPool.PendingCount;
             foreach (var evt in events)
+            {
+                int before = directorWs.EventPool.PendingCount;
                 directorWs.EventPool.Append(evt);
+                int after = directorWs.EventPool.PendingCount;
+                if (after == before)
+                    Logger?.Message($"[RimLife.DIAG] Event DEDUPED: id={evt.EventID}, def={evt.DefName}");
+            }
+            int pendingAfter = directorWs.EventPool.PendingCount;
 
-            Logger?.Message($"[RimLife.Core] EventBuffer flushed: {events.Count} events → Director workspace (pending={directorWs.EventPool.PendingCount}, importance={directorWs.EventPool.TotalImportance:F1})");
+            Logger?.Message($"[RimLife.Core] EventBuffer flushed: {events.Count} events → Director workspace (pending={pendingBefore}→{pendingAfter}, importance={directorWs.EventPool.TotalImportance:F1}, deduped={events.Count - (pendingAfter - pendingBefore)})");
         }
 
         /// <summary>

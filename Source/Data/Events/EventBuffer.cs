@@ -1,4 +1,5 @@
 using NPCLife.Cards;
+using RimLife.UI;
 using System.Collections.Generic;
 
 namespace RimLife
@@ -39,8 +40,22 @@ namespace RimLife
             if (currentTick > _lastEventTick)
                 _lastEventTick = currentTick;
             
-            // 诊断日志：记录事件进入缓冲
-            Verse.Log.Message($"[RimLife.EventBuffer] Event appended: {evt.EventID} (pending={_pending.Count})");
+            // 诊断日志：记录事件进入缓冲，包括 EventID 和 Payload 摘要
+            var payloadSummary = "";
+            if (evt.Payload != null && evt.Payload.Count > 0)
+            {
+                var parts = new List<string>();
+                foreach (var kv in evt.Payload)
+                    parts.Add($"{kv.Key}={Truncate(kv.Value, 30)}");
+                payloadSummary = string.Join(", ", parts);
+            }
+            RimLifeLogger.Message($"[RimLife.DIAG] EventBuffer.Append: id={evt.EventID}, def={evt.DefName}, imp={evt.Importance:F1}, payload=[{payloadSummary}]");
+        }
+
+        private static string Truncate(string s, int maxLen)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Length <= maxLen ? s : s.Substring(0, maxLen) + "...";
         }
 
         /// <summary>

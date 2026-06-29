@@ -1,5 +1,6 @@
 using HarmonyLib;
 using NPCLife.Framework;
+using RimLife.UI;
 using Verse;
 
 namespace RimLife.Infrastructure
@@ -15,17 +16,47 @@ namespace RimLife.Infrastructure
 
         static RimLifeHarmony()
         {
+            // RimLifeLogger 直接写 LogBuffer，无外部依赖，从第一行就可用
+            RimLifeLogger.Message("[RimLife.DIAG] ===== Static constructor: START =====");
+
+            // ---- Step 1: 清理临时缓存 ----
             try
             {
-                // 清理上次会话遗留的临时缓存文件（崩溃或未保存退出）
                 LocalFileStore.CleanupTempCache();
+                RimLifeLogger.Message("[RimLife.DIAG] Step 1 OK: CleanupTempCache");
+            }
+            catch (System.Exception e)
+            {
+                RimLifeLogger.Error($"[RimLife.DIAG] Step 1 FAILED: CleanupTempCache: {e}");
+            }
 
-                // 创建 UI 日志适配器，将框架日志重定向到调试窗口
+            // ---- Step 2: 注入 Logger ----
+            try
+            {
                 var logger = new UiLoggerAdapter();
                 RimLifeCore.Logger = logger;
                 MainThreadDispatcher.Logger = logger;
 
-                // 注册人物卡维度内容提供者（钩子模式）
+                // 注入时间提供者：基于 RimWorld 游戏时间和季节
+                RimLifeCore.TimeProvider = () =>
+                {
+                    int tick = Find.TickManager?.TicksGame ?? 0;
+                    int year = 5500 + tick / 3600000;
+                    int day = (tick / 60000) % 60;
+                    int hour = (tick / 2500) % 24;
+                    return $"第{year}年·第{day + 1}天·{hour:D2}时";
+                };
+
+                RimLifeLogger.Message("[RimLife.DIAG] Step 2 OK: Logger injected");
+            }
+            catch (System.Exception e)
+            {
+                RimLifeLogger.Error($"[RimLife.DIAG] Step 2 FAILED: Logger injection: {e}");
+            }
+
+            // ---- Step 3: 注册 ContentProviders ----
+            try
+            {
                 RimLifeCore.RegisterContentProvider(new HealthContentProvider());
                 RimLifeCore.RegisterContentProvider(new MoodContentProvider());
                 RimLifeCore.RegisterContentProvider(new SkillsContentProvider());
@@ -37,26 +68,51 @@ namespace RimLife.Infrastructure
                 RimLifeCore.RegisterContentProvider(new PsychologyContentProvider());
                 RimLifeCore.RegisterContentProvider(new PerspectiveContentProvider());
                 RimLifeCore.RegisterContentProvider(new MemoryContentProvider());
-
-                Instance = new Harmony("RimLife.Core");
-                Instance.PatchAll();
-                logger.Message("[RimLife.Infrastructure] Harmony patches registered.");
-
-                // 初始化 MCP Skill 注册表（扫描所有工具类，建立 Skill → Tool 映射）
-                RimLifeCore.EnsureSkillRegistryInitialized();
-
-                // 触发凭证管理器延迟加载（从 ModSettings 加载持久化状态）
-                var _ = RimLifeCore.CredentialManager;
-
-                logger.Message("[RimLife.Infrastructure] Startup complete.");
+                RimLifeLogger.Message("[RimLife.DIAG] Step 3 OK: 11 ContentProviders registered");
             }
             catch (System.Exception e)
             {
-                Log.Error($"[RimLife.Infrastructure] FATAL: Static constructor failed: {e}");
-                if (e.InnerException != null)
-                    Log.Error($"[RimLife.Infrastructure] Inner: {e.InnerException}");
-                throw;
+                RimLifeLogger.Error($"[RimLife.DIAG] Step 3 FAILED: ContentProviders: {e}");
             }
+
+            // ---- Step 4: Harmony PatchAll ----
+            try
+            {
+                Instance = new Harmony("RimLife.Core");
+                Instance.PatchAll();
+                RimLifeLogger.Message("[RimLife.DIAG] Step 4 OK: Harmony PatchAll");
+            }
+            catch (System.Exception e)
+            {
+                RimLifeLogger.Error($"[RimLife.DIAG] Step 4 FAILED: Harmony PatchAll: {e}");
+            }
+
+            // ---- Step 5: MCP Skill 注册表（关键步骤）----
+            try
+            {
+                RimLifeLogger.Message("[RimLife.DIAG] Step 5: calling EnsureSkillRegistryInitialized...");
+                RimLifeCore.EnsureSkillRegistryInitialized();
+                RimLifeLogger.Message("[RimLife.DIAG] Step 5 OK: EnsureSkillRegistryInitialized returned");
+            }
+            catch (System.Exception e)
+            {
+                RimLifeLogger.Error($"[RimLife.DIAG] Step 5 FAILED: EnsureSkillRegistryInitialized: {e}");
+                if (e.InnerException != null)
+                    RimLifeLogger.Error($"[RimLife.DIAG] Step 5 Inner: {e.InnerException}");
+            }
+
+            // ---- Step 6: 凭证管理器 ----
+            try
+            {
+                var _ = RimLifeCore.CredentialManager;
+                RimLifeLogger.Message("[RimLife.DIAG] Step 6 OK: CredentialManager loaded");
+            }
+            catch (System.Exception e)
+            {
+                RimLifeLogger.Error($"[RimLife.DIAG] Step 6 FAILED: CredentialManager: {e}");
+            }
+
+            RimLifeLogger.Message("[RimLife.DIAG] ===== Static constructor: END =====");
         }
     }
 }

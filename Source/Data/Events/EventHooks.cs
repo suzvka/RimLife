@@ -11,7 +11,7 @@ using Verse.AI;
 namespace RimLife
 {
     // ================================================================
-    // 统一信封 Hook（替代逐个事件 Hook，覆盖所有 RimWorld 信封事件）
+    // 统一信封 Hook
     // Letter 自带叙事文案（label / text），天然适配编剧 agent 消费。
     // ================================================================
     
@@ -64,14 +64,68 @@ namespace RimLife
             try
             {
                 if (let == null) return;
-                // Letter 的属性可能不同，使用 def 和默认值
+                
+                // Letter.Label 是 TaggedString 类型
+                string label = let.Label.ToString();
+                
+                // StandardLetter 等子类把文本存在不同名字的字段中，用反射兼容所有子类
+                string text = ExtractLetterText(let);
+                
+                // 诊断日志
+                RimLife.UI.RimLifeLogger.Message($"[RimLife.DIAG] Letter hook: def={let.def?.defName}, label='{TruncateForLog(label, 60)}', text='{TruncateForLog(text, 60)}', type={let.GetType().Name}");
+                
                 RimLifeCore.EventBuffer?.Append(
-                    EventCardMapper.FromLetter(let.def, let.def?.label ?? "Letter", "", default, null));
+                    EventCardMapper.FromLetter(let.def, label, text, let.lookTargets, let.relatedFaction));
             }
             catch (Exception e)
             {
                 Log.Warning($"[RimLife:EventHooks] Letter hook (letter) failed: {e.Message}");
             }
+        }
+
+        private static string ExtractLetterText(Letter let)
+        {
+            try
+            {
+                // StandardLetter: 文本存在 <text> 字段 (TaggedString 或 string)
+                var textField = let.GetType().GetField("text",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic);
+                if (textField != null)
+                {
+                    var val = textField.GetValue(let);
+                    if (val != null)
+                    {
+                        string s = val.ToString();
+                        if (!string.IsNullOrEmpty(s) && s != let.Label.ToString())
+                            return s;
+                    }
+                }
+
+                // ChoiceLetter: 文本在 <text> 或 <baseText>
+                var baseTextField = let.GetType().GetField("baseText",
+                    System.Reflection.BindingFlags.Instance |
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.NonPublic);
+                if (baseTextField != null)
+                {
+                    var val = baseTextField.GetValue(let);
+                    if (val != null)
+                    {
+                        string s = val.ToString();
+                        if (!string.IsNullOrEmpty(s)) return s;
+                    }
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        private static string TruncateForLog(string s, int maxLen)
+        {
+            if (string.IsNullOrEmpty(s)) return "(empty)";
+            return s.Length <= maxLen ? s : s.Substring(0, maxLen) + "...";
         }
     }
 
@@ -80,54 +134,23 @@ namespace RimLife
     // 覆盖 Hediff 阶段变化、任务目标更新、商人到达、驯服结果等
     // 不生成 Letter 的叙事性短通知，全量接入。
     // ================================================================
-    [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
-        new Type[] { typeof(string), typeof(MessageTypeDef), typeof(LookTargets), typeof(bool) })]
-    internal static class Patch_Messages_Message
-    {
-        static void Postfix(string text, MessageTypeDef msgType, LookTargets lookTargets)
-        {
-            try
-            {
-                RimLifeCore.EventBuffer?.Append(
-                    EventCardMapper.FromMessage(text, msgType, lookTargets));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] Messages.Message hook failed: {e.Message}");
-            }
-        }
-    }
+    // RimWorld 1.6 实际签名（无 TaggedString 重载）：
+    //   Message(string, MessageTypeDef, bool)
+    //   Message(string, LookTargets, MessageTypeDef, bool)
+    //   Message(string, LookTargets, MessageTypeDef, Quest, bool)
+    //   Message(Message, bool)
 
-    // 消息通知 TaggedString 重载
-    [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
-        new Type[] { typeof(TaggedString), typeof(MessageTypeDef), typeof(LookTargets), typeof(bool) })]
-    internal static class Patch_Messages_Message_Tagged
-    {
-        static void Postfix(TaggedString text, MessageTypeDef msgType, LookTargets lookTargets)
-        {
-            try
-            {
-                RimLifeCore.EventBuffer?.Append(
-                    EventCardMapper.FromMessage(text.ToString(), msgType, lookTargets));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] Messages.Message (tagged) hook failed: {e.Message}");
-            }
-        }
-    }
-
-    // 消息通知 string 无 LookTargets 重载
+    // Hook: Message(string text, MessageTypeDef def, bool historical)
     [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
         new Type[] { typeof(string), typeof(MessageTypeDef), typeof(bool) })]
     internal static class Patch_Messages_Message_Simple
     {
-        static void Postfix(string text, MessageTypeDef msgType)
+        static void Postfix(string text, MessageTypeDef def)
         {
             try
             {
                 RimLifeCore.EventBuffer?.Append(
-                    EventCardMapper.FromMessage(text, msgType, null));
+                    EventCardMapper.FromMessage(text, def, null));
             }
             catch (Exception e)
             {
@@ -136,21 +159,21 @@ namespace RimLife
         }
     }
 
-    // 消息通知 TaggedString 无 LookTargets 重载
+    // Hook: Message(string text, LookTargets lookTargets, MessageTypeDef def, bool historical)
     [HarmonyPatch(typeof(Messages), nameof(Messages.Message),
-        new Type[] { typeof(TaggedString), typeof(MessageTypeDef), typeof(bool) })]
-    internal static class Patch_Messages_Message_TaggedSimple
+        new Type[] { typeof(string), typeof(LookTargets), typeof(MessageTypeDef), typeof(bool) })]
+    internal static class Patch_Messages_Message_WithLookTargets
     {
-        static void Postfix(TaggedString text, MessageTypeDef msgType)
+        static void Postfix(string text, LookTargets lookTargets, MessageTypeDef def)
         {
             try
             {
                 RimLifeCore.EventBuffer?.Append(
-                    EventCardMapper.FromMessage(text.ToString(), msgType, null));
+                    EventCardMapper.FromMessage(text, def, lookTargets));
             }
             catch (Exception e)
             {
-                Log.Warning($"[RimLife:EventHooks] Messages.Message (tagged simple) hook failed: {e.Message}");
+                Log.Warning($"[RimLife:EventHooks] Messages.Message (lookTargets) hook failed: {e.Message}");
             }
         }
     }

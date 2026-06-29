@@ -61,6 +61,32 @@ namespace RimLife.Infrastructure
             }
         }
 
+        /// <summary>
+        /// 将新 DriverConfig 的值写入现有 DriverConfig 实例（如果存在），
+        /// 而非替换引用。此举确保 WorkspaceManager → WorkspaceEventPool
+        /// 持有的 DriverConfig 引用能同步感知配置变更，避免 EventPool
+        /// 使用过时阈值而导致 TimerPulse 无法触发 Agent 激活。
+        /// </summary>
+        private static void ApplyDriverConfigInPlace(DriverConfig newConfig)
+        {
+            if (newConfig == null) return;
+
+            // 确保现有实例已加载（DriverConfig 属性会延迟加载）
+            var current = DriverConfig;
+            if (current == newConfig) return; // 同一个实例无需复制
+
+            current.DirectorCountThreshold = newConfig.DirectorCountThreshold;
+            current.DirectorImportanceThreshold = newConfig.DirectorImportanceThreshold;
+            current.ImproviserCountThreshold = newConfig.ImproviserCountThreshold;
+            current.ImproviserImportanceThreshold = newConfig.ImproviserImportanceThreshold;
+            current.ScreenwriterCountThreshold = newConfig.ScreenwriterCountThreshold;
+            current.ScreenwriterImportanceThreshold = newConfig.ScreenwriterImportanceThreshold;
+            current.DirectorTimerInterval = newConfig.DirectorTimerInterval;
+            current.ImproviserTimerInterval = newConfig.ImproviserTimerInterval;
+            current.RecentHistoryCapacity = newConfig.RecentHistoryCapacity;
+            current.MaxAgentRounds = newConfig.MaxAgentRounds;
+        }
+
         // ================================================================
         // 配置加载 / 保存
         // ================================================================

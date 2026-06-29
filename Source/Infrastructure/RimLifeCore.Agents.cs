@@ -90,10 +90,15 @@ namespace RimLife.Infrastructure
                         var improviserWs = GetImproviserWorkspace();
                         if (improviserWs != null)
                         {
-                            _improviserAgent = new AgentLoop(
-                                workspace: improviserWs,
-                                deps: BuildAgentDeps(),
-                                systemPrompt: BuildImproviserSystemPrompt(improviserWs));
+                            // 重检：GetImproviserWorkspace 可能通过 onWorkspaceReady
+                            // 回调重入本方法并已完成创建（C# lock 可重入）。
+                            if (_improviserAgent == null)
+                            {
+                                _improviserAgent = new AgentLoop(
+                                    workspace: improviserWs,
+                                    deps: BuildAgentDeps(),
+                                    systemPrompt: BuildImproviserSystemPrompt(improviserWs));
+                            }
                         }
                     }
                 }
@@ -127,12 +132,17 @@ namespace RimLife.Infrastructure
                         var directorWs = GetDirectorWorkspace();
                         if (directorWs != null)
                         {
-                            _directorAgent = new AgentLoop(
-                                workspace: directorWs,
-                                deps: BuildAgentDeps(),
-                                systemPrompt: BuildDirectorSystemPrompt(),
-                                contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces));
-                            Logger?.Message("[RimLife.Core] DirectorAgent created and subscribed to EventPool");
+                            // 重检：GetDirectorWorkspace 可能通过 onWorkspaceReady
+                            // 回调重入本方法并已完成创建（C# lock 可重入）。
+                            if (_directorAgent == null)
+                            {
+                                _directorAgent = new AgentLoop(
+                                    workspace: directorWs,
+                                    deps: BuildAgentDeps(),
+                                    systemPrompt: BuildDirectorSystemPrompt(),
+                                    contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces));
+                                Logger?.Message("[RimLife.Core] DirectorAgent created and subscribed to EventPool");
+                            }
                         }
                         else
                         {
