@@ -9,6 +9,7 @@ namespace RimLife.Settings
     /// RimLife 模组设置。
     /// 直接在 Mod Settings 窗口中显示完整的配置界面。
     /// 通过 ExposeData() 持久化 LLM 凭证等全局配置（不绑定存档）。
+    /// 所有全局配置均通过此 ModSettings 持久化，切换存档不影响。
     /// </summary>
     public class RimLifeModSettings : ModSettings
     {
@@ -20,6 +21,24 @@ namespace RimLife.Settings
         /// </summary>
         public string LlmCredentialsJson;
 
+        /// <summary>
+        /// Agent 驱动配置的 JSON 序列化字符串。
+        /// 由 RimLifeCore.Config 负责读写。
+        /// </summary>
+        public string DriverConfigJson;
+
+        /// <summary>
+        /// 提示词附加指令的 JSON 序列化字符串。
+        /// 由 RimLifeCore.Config 负责读写。
+        /// </summary>
+        public string PromptAdditionsJson;
+
+        /// <summary>
+        /// 框架全局配置的 JSON 序列化字符串。
+        /// 由 RimLifeCore.Config 负责读写。
+        /// </summary>
+        public string FrameworkConfigJson;
+
         public RimLifeModSettings()
         {
             Instance = this;
@@ -29,6 +48,9 @@ namespace RimLife.Settings
         {
             base.ExposeData();
             Scribe_Values.Look(ref LlmCredentialsJson, "llmCredentialsJson");
+            Scribe_Values.Look(ref DriverConfigJson, "driverConfigJson");
+            Scribe_Values.Look(ref PromptAdditionsJson, "promptAdditionsJson");
+            Scribe_Values.Look(ref FrameworkConfigJson, "frameworkConfigJson");
         }
 
         /// <summary>

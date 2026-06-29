@@ -178,24 +178,20 @@ namespace RimLife.UI
             ref string text,
             ref string[] buffers)
         {
-            if (buffers == null)
+            // 将数组转换为 List，避免在 for 循环中修改数组引用导致索引混乱
+            var lines = new System.Collections.Generic.List<string>();
+            if (buffers != null)
             {
-                if (string.IsNullOrEmpty(text))
-                {
-                    buffers = new string[0];
-                }
-                else
-                {
-                    var lines = text.Split('\n');
-                    buffers = new string[lines.Length];
-                    for (int i = 0; i < lines.Length; i++)
-                        buffers[i] = lines[i];
-                }
+                foreach (var b in buffers)
+                    lines.Add(b ?? "");
+            }
+            else if (!string.IsNullOrEmpty(text))
+            {
+                lines.AddRange(text.Split('\n'));
             }
 
             // 按实际行数动态高度，0 行时仍留一行空间
-            int rowCount = buffers.Length;
-            int displayRows = Mathf.Max(1, rowCount);
+            int displayRows = Mathf.Max(1, lines.Count);
             var totalHeight = displayRows * 28f + 4f;
             var areaRect = listing.GetRect(totalHeight);
             Widgets.DrawBoxSolid(areaRect, new Color(0.18f, 0.18f, 0.18f, 1f));
@@ -208,7 +204,12 @@ namespace RimLife.UI
             const float rowHeight = 26f;
             const float controlsWidth = (btnSize + btnGap) * 3; // ↑ ↓ ×
 
-            for (int i = 0; i < buffers.Length; i++)
+            // 操作收集（每帧最多一个按钮被点击，无需担心冲突）
+            int? deleteIndex = null;
+            int? swapUp = null;
+            int? swapDown = null;
+
+            for (int i = 0; i < lines.Count; i++)
             {
                 float rowY = areaRect.y + 2f + i * 28f;
                 float rowX = areaRect.x + 4f;
@@ -221,11 +222,11 @@ namespace RimLife.UI
                 // 文本框
                 float textFieldX = rowX + numWidth;
                 float textFieldW = usableWidth - numWidth - controlsWidth - btnGap * 2;
-                var content = buffers[i] ?? "";
+                var content = lines[i];
                 var newContent = Widgets.TextField(
                     new Rect(textFieldX, rowY, textFieldW, rowHeight), content);
                 if (newContent != content)
-                    buffers[i] = newContent;
+                    lines[i] = newContent;
 
                 // ↑ 上移
                 float cx = textFieldX + textFieldW + btnGap;
@@ -234,22 +235,18 @@ namespace RimLife.UI
                     if (Widgets.ButtonText(
                         new Rect(cx, rowY, btnSize, rowHeight), "↑"))
                     {
-                        var tmp = buffers[i];
-                        buffers[i] = buffers[i - 1];
-                        buffers[i - 1] = tmp;
+                        swapUp = i;
                     }
                 }
 
                 // ↓ 下移
                 cx += btnSize + btnGap;
-                if (i < buffers.Length - 1)
+                if (i < lines.Count - 1)
                 {
                     if (Widgets.ButtonText(
                         new Rect(cx, rowY, btnSize, rowHeight), "↓"))
                     {
-                        var tmp = buffers[i];
-                        buffers[i] = buffers[i + 1];
-                        buffers[i + 1] = tmp;
+                        swapDown = i;
                     }
                 }
 
@@ -258,13 +255,28 @@ namespace RimLife.UI
                 if (Widgets.ButtonText(
                     new Rect(cx, rowY, btnSize, rowHeight), "×"))
                 {
-                    var nb = new string[buffers.Length - 1];
-                    for (int j = 0, k = 0; j < buffers.Length; j++)
-                    {
-                        if (j != i) nb[k++] = buffers[j];
-                    }
-                    buffers = nb;
+                    deleteIndex = i;
                 }
+            }
+
+            // 渲染后应用操作（每帧最多一个）
+            if (deleteIndex.HasValue)
+            {
+                lines.RemoveAt(deleteIndex.Value);
+            }
+            else if (swapUp.HasValue)
+            {
+                int idx = swapUp.Value;
+                var tmp = lines[idx];
+                lines[idx] = lines[idx - 1];
+                lines[idx - 1] = tmp;
+            }
+            else if (swapDown.HasValue)
+            {
+                int idx = swapDown.Value;
+                var tmp = lines[idx];
+                lines[idx] = lines[idx + 1];
+                lines[idx + 1] = tmp;
             }
 
             // 添加行按钮
@@ -272,22 +284,14 @@ namespace RimLife.UI
             if (Widgets.ButtonText(
                 new Rect(btnRect.x, btnRect.y, BtnWidthSmall, BtnHeight), "+ 添加行"))
             {
-                var nb = new string[buffers.Length + 1];
-                System.Array.Copy(buffers, nb, buffers.Length);
-                nb[buffers.Length] = "";
-                buffers = nb;
+                lines.Add("");
             }
 
-            // 合并回 text
-            int nonEmpty = 0;
-            for (int i = buffers.Length - 1; i >= 0; i--)
-            {
-                if (!string.IsNullOrEmpty(buffers[i])) { nonEmpty = i + 1; break; }
-            }
-            var parts = new string[nonEmpty];
-            for (int i = 0; i < nonEmpty; i++)
-                parts[i] = buffers[i] ?? "";
-            text = nonEmpty > 0 ? string.Join("\n", parts) : "";
+            // 合并回 text（去掉尾部空行）
+            while (lines.Count > 0 && string.IsNullOrEmpty(lines[lines.Count - 1]))
+                lines.RemoveAt(lines.Count - 1);
+            buffers = lines.ToArray();
+            text = lines.Count > 0 ? string.Join("\n", lines) : "";
         }
     }
 }

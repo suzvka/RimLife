@@ -39,8 +39,8 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 获取殖民地全局快照：人口、财富、食物/电力状态、士气、威胁、派系关系、时间季节。
         /// </summary>
-        [McpTool(Name = "get_colony_overview",
-                 Description = "获取殖民地全局快照：人口、财富、食物/电力状态、士气、威胁、派系关系、时间季节。")]
+        //[McpTool(Name = "get_colony_overview",
+        //         Description = "获取殖民地全局快照：人口、财富、食物/电力状态、士气、威胁、派系关系、时间季节。")]
         public static string GetColonyOverview()
         {
             try

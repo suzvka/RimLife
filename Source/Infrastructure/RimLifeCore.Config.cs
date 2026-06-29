@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using NPCLife.Driver;
 using NPCLife.Framework;
+using RimLife.Settings;
 
 namespace RimLife.Infrastructure
 {
@@ -15,7 +16,7 @@ namespace RimLife.Infrastructure
         private static readonly object _driverConfigLock = new object();
 
         /// <summary>
-        /// Agent 驱动配置。从 CacheStore 加载，未配置时返回默认值。
+        /// Agent 驱动配置。从 ModSettings 加载，未配置时返回默认值。
         /// </summary>
         internal static DriverConfig DriverConfig
         {
@@ -31,7 +32,7 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>
-        /// 更新驱动配置并持久化。修改后需调用 RebuildAgents() 才能生效。
+        /// 更新驱动配置并持久化到 ModSettings。修改后需调用 RebuildAgents() 才能生效。
         /// </summary>
         public static void SetDriverConfig(DriverConfig config)
         {
@@ -39,25 +40,35 @@ namespace RimLife.Infrastructure
             lock (_driverConfigLock)
             {
                 _driverConfig = config;
-                try
+                SaveDriverConfig(config);
+            }
+        }
+
+        private static void SaveDriverConfig(DriverConfig config)
+        {
+            try
+            {
+                var w = new NPCLife.Framework.JsonWriter(256);
+                w.Prop("directorCountThreshold", config.DirectorCountThreshold);
+                w.Prop("directorImportanceThreshold", config.DirectorImportanceThreshold, "F2");
+                w.Prop("freelancerCountThreshold", config.ImproviserCountThreshold);
+                w.Prop("freelancerImportanceThreshold", config.ImproviserImportanceThreshold, "F2");
+                w.Prop("screenwriterCountThreshold", config.ScreenwriterCountThreshold);
+                w.Prop("screenwriterImportanceThreshold", config.ScreenwriterImportanceThreshold, "F2");
+                w.Prop("directorTimerInterval", config.DirectorTimerInterval);
+                w.Prop("freelancerTimerInterval", config.ImproviserTimerInterval);
+                w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
+                w.Prop("maxAgentRounds", config.MaxAgentRounds);
+                var settings = RimLifeModSettings.Instance;
+                if (settings != null)
                 {
-                    var w = new NPCLife.Framework.JsonWriter(256);
-                    w.Prop("directorCountThreshold", config.DirectorCountThreshold);
-                    w.Prop("directorImportanceThreshold", config.DirectorImportanceThreshold, "F2");
-                    w.Prop("freelancerCountThreshold", config.ImproviserCountThreshold);
-                    w.Prop("freelancerImportanceThreshold", config.ImproviserImportanceThreshold, "F2");
-                    w.Prop("screenwriterCountThreshold", config.ScreenwriterCountThreshold);
-                    w.Prop("screenwriterImportanceThreshold", config.ScreenwriterImportanceThreshold, "F2");
-                    w.Prop("directorTimerInterval", config.DirectorTimerInterval);
-                    w.Prop("freelancerTimerInterval", config.ImproviserTimerInterval);
-                    w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
-                    w.Prop("maxAgentRounds", config.MaxAgentRounds);
-                    CacheStore?.Cache("rimlife_driver_config", w.Close());
+                    settings.DriverConfigJson = w.Close();
+                    settings.SaveNow();
                 }
-                catch (Exception e)
-                {
-                    Logger?.Warning($"[RimLife.Core] Failed to save DriverConfig: {e.Message}");
-                }
+            }
+            catch (Exception e)
+            {
+                Logger?.Warning($"[RimLife.Core] Failed to save DriverConfig: {e.Message}");
             }
         }
 
@@ -95,11 +106,12 @@ namespace RimLife.Infrastructure
         {
             try
             {
-                var json = CacheStore?.FetchCache<string>("rimlife_framework_config", null);
+                var settings = RimLifeModSettings.Instance;
+                var json = settings?.FrameworkConfigJson;
                 if (!string.IsNullOrEmpty(json) && json.TrimStart().StartsWith("{"))
                 {
                     var loaded = FrameworkConfig.FromJson(json);
-                    Logger?.Message("[RimLife.Core] FrameworkConfig loaded from CacheStore.");
+                    Logger?.Message("[RimLife.Core] FrameworkConfig loaded from ModSettings.");
                     return loaded;
                 }
             }
@@ -114,8 +126,12 @@ namespace RimLife.Infrastructure
         {
             try
             {
-                var json = config.ToJson();
-                CacheStore?.Cache("rimlife_framework_config", json);
+                var settings = RimLifeModSettings.Instance;
+                if (settings != null)
+                {
+                    settings.FrameworkConfigJson = config.ToJson();
+                    settings.SaveNow();
+                }
             }
             catch (Exception e)
             {
@@ -127,7 +143,8 @@ namespace RimLife.Infrastructure
         {
             try
             {
-                var json = CacheStore?.FetchCache<string>("rimlife_driver_config", null);
+                var settings = RimLifeModSettings.Instance;
+                var json = settings?.DriverConfigJson;
                 if (!string.IsNullOrEmpty(json) && json.StartsWith("{"))
                 {
                     var dict = NPCLife.Framework.JsonParser.ParseDict(json);
@@ -152,6 +169,7 @@ namespace RimLife.Infrastructure
                         dc.RecentHistoryCapacity = rhcv;
                     if (dict.TryGetValue("maxAgentRounds", out var mar) && int.TryParse(mar, out var marv))
                         dc.MaxAgentRounds = marv;
+                    Logger?.Message("[RimLife.Core] DriverConfig loaded from ModSettings.");
                     return dc;
                 }
             }
@@ -183,7 +201,8 @@ namespace RimLife.Infrastructure
         {
             try
             {
-                var json = CacheStore?.FetchCache<string>("rimlife_prompt_additions", null);
+                var settings = RimLifeModSettings.Instance;
+                var json = settings?.PromptAdditionsJson;
                 if (!string.IsNullOrEmpty(json))
                     return PromptAdditions.FromJson(json);
             }
@@ -198,7 +217,12 @@ namespace RimLife.Infrastructure
         {
             try
             {
-                CacheStore?.Cache("rimlife_prompt_additions", additions.ToJson());
+                var settings = RimLifeModSettings.Instance;
+                if (settings != null)
+                {
+                    settings.PromptAdditionsJson = additions.ToJson();
+                    settings.SaveNow();
+                }
             }
             catch (Exception e)
             {
