@@ -6,6 +6,8 @@ using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
 using NPCLife.Framework.Script;
 using NPCLife.Workspace;
+using RimLife.Infrastructure.Mcp;
+using RimLife.Mappers;
 
 namespace RimLife.Infrastructure
 {
@@ -192,7 +194,8 @@ namespace RimLife.Infrastructure
                 var agent = new AgentLoop(
                     workspace: ws,
                     deps: BuildAgentDeps(),
-                    systemPrompt: BuildScreenwriterSystemPrompt(ws));
+                    systemPrompt: BuildScreenwriterSystemPrompt(ws),
+                    contextProvider: () => BuildScreenwriterContext(ws));
 
                 _screenwriters[workspaceId] = agent;
                 Logger?.Message($"[RimLife.Core] ScreenwriterAgent created for workspace '{ws.Label}' ({workspaceId})");
@@ -254,6 +257,68 @@ namespace RimLife.Infrastructure
         {
             if (string.IsNullOrEmpty(text)) return "";
             return text.Length <= maxLen ? text : text.Substring(0, maxLen) + "...";
+        }
+
+        /// <summary>
+        /// 构建编剧激活时的动态上下文：殖民地快照、当前时间、聚焦角色摘要。
+        /// 每轮激活时注入，替代 get_colony_overview / get_current_time 等工具查询。
+        /// </summary>
+        private static string BuildScreenwriterContext(NPCLife.Workspace.IWorkspace ws)
+        {
+            var sb = new StringBuilder();
+
+            // 当前时间
+            try
+            {
+                var timeStr = TimeProvider?.Invoke();
+                if (!string.IsNullOrEmpty(timeStr))
+                {
+                    sb.AppendLine($"当前时间：{timeStr}");
+                    sb.AppendLine();
+                }
+            }
+            catch { }
+
+            // 殖民地快照
+            try
+            {
+                var ctx = ColonyContextMapper.Create();
+                if (ctx != null)
+                {
+                    sb.AppendLine("## 殖民地快照");
+                    sb.AppendLine(CardSerializer.Default.SerializeColonyContext(ctx));
+                    sb.AppendLine();
+                }
+            }
+            catch { }
+
+            // 聚焦角色摘要（导演指定的关联角色，static view）
+            if (ws.FocusCharacterIds != null && ws.FocusCharacterIds.Count > 0)
+            {
+                try
+                {
+                    var cards = new List<string>();
+                    foreach (var id in ws.FocusCharacterIds)
+                    {
+                        var pawn = PawnQueryHelper.FindPawnById(id);
+                        if (pawn != null)
+                        {
+                            var card = PawnQueryHelper.BuildCharacterCard(pawn, "static");
+                            var json = CardSerializer.Default.SerializeCharacterCard(card, "static", ContentProviders);
+                            cards.Add(json);
+                        }
+                    }
+                    if (cards.Count > 0)
+                    {
+                        sb.AppendLine("## 导演指定聚焦角色");
+                        sb.AppendLine(PawnQueryHelper.SerializeJsonArray(cards));
+                        sb.AppendLine();
+                    }
+                }
+                catch { }
+            }
+
+            return sb.ToString();
         }
 
         private static string BuildScreenwriterSystemPrompt(NPCLife.Workspace.IWorkspace ws)
