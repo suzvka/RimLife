@@ -35,8 +35,9 @@ namespace RimLife
         {
             if (evt == null) return;
             _pending.Add(evt);
-            if (evt.Tick > _lastEventTick)
-                _lastEventTick = evt.Tick;
+            int currentTick = Verse.Find.TickManager?.TicksGame ?? 0;
+            if (currentTick > _lastEventTick)
+                _lastEventTick = currentTick;
             
             // 诊断日志：记录事件进入缓冲
             Verse.Log.Message($"[RimLife.EventBuffer] Event appended: {evt.EventID} (pending={_pending.Count})");

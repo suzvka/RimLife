@@ -84,6 +84,7 @@ namespace RimLife.Mappers
                 {
                     ctx.TimeOfDay = "Unknown";
                     ctx.Hour = -1;
+                    ctx.Timestamp = "Unknown";
                     return;
                 }
 
@@ -98,6 +99,11 @@ namespace RimLife.Mappers
                 try { ctx.Hour = GenDate.HourInteger(absTick, longitude); } catch { ctx.Hour = -1; }
 
                 ctx.TimeOfDay = ctx.Hour >= 0 ? MapTimeOfDay(ctx.Hour) : "Unknown";
+
+                // 格式化人类可读时间字符串，由框架原样透传给 LLM
+                ctx.Timestamp = ctx.Hour >= 0
+                    ? $"第{ctx.Year}年·{ctx.Season}·{ctx.Hour:D2}时"
+                    : $"第{ctx.Year}年·{ctx.Season}";
             }
             catch (Exception e)
             {

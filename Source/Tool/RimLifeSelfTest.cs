@@ -381,7 +381,6 @@ namespace RimLife.Tool
                 {
                     DumpObject("EventID", latest.EventID);
                     DumpObject("DefName", latest.DefName);
-                    DumpObject("Tick", latest.Tick);
                     DumpObject("Importance", latest.Importance);
                     DumpObject("MapHint", latest.MapHint);
                     if (latest.Actors != null)
@@ -1446,7 +1445,6 @@ namespace RimLife.Tool
             {
                 EventID = id,
                 DefName = "SelftestEvent",
-                Tick = tick,
                 Importance = importance,
                 Actors = new List<EventActorRef>
                 {
@@ -1461,13 +1459,10 @@ namespace RimLife.Tool
         {
             public string EventID { get; set; }
             public string DefName { get; set; }
-            public int Tick { get; set; }
-            public string TimeLabel { get; set; }
             public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }
-            public IReadOnlyList<string> Keywords { get; set; } = new List<string>();
         }
     }
 

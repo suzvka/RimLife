@@ -37,7 +37,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"incident_{def?.defName}_{tick}",
                 DefName = def?.defName ?? "Unknown",
-                Tick = tick,
                 Importance = importance,
                 Actors = actors,
                 MapHint = parms?.spawnCenter.IsValid ?? false
@@ -79,7 +78,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"death_{victim?.ThingID}_{tick}",
                 DefName = "PawnDeath",
-                Tick = tick,
                 Importance = importance,
                 Actors = actors,
                 MapHint = victim?.Map != null ? $"Map:{victim.Map.uniqueID}" : "",
@@ -119,7 +117,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"mental_{pawn?.ThingID}_{tick}",
                 DefName = breakDef?.defName ?? "MentalBreak",
-                Tick = tick,
                 Importance = importance,
                 Actors = actors,
                 MapHint = pawn?.Map != null ? $"Map:{pawn.Map.uniqueID}" : "",
@@ -154,7 +151,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"social_{initiator?.ThingID}_{recipient?.ThingID}_{tick}",
                 DefName = intDef?.defName ?? "SocialInteraction",
-                Tick = tick,
                 Importance = importance,
                 Actors = actors,
                 MapHint = initiator?.Map != null ? $"Map:{initiator.Map.uniqueID}" : "",
@@ -181,7 +177,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"quest_{quest?.id}_{tick}",
                 DefName = "Quest",
-                Tick = tick,
                 Importance = importance,
                 Actors = new List<EventActorRef>(),
                 MapHint = "",
@@ -232,7 +227,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"factionchange_{pawn?.ThingID}_{tick}",
                 DefName = "FactionChange",
-                Tick = tick,
                 Importance = importance,
                 Actors = actors,
                 MapHint = pawn?.Map != null ? $"Map:{pawn.Map.uniqueID}" : "",
@@ -272,8 +266,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"letter_{letterDef?.defName ?? "unknown"}_{tick}",
                 DefName = letterDef?.defName ?? "Letter",
-                Tick = tick,
-                TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
                 Importance = importance,
                 Actors = actors,
                 MapHint = mapHint,
@@ -300,8 +292,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"timer_pulse_{role.ToString().ToLowerInvariant()}_{tick}",
                 DefName = "TimerPulse",
-                Tick = tick,
-                TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
                 Importance = importance,
                 Actors = new List<EventActorRef>(),
                 MapHint = "",
@@ -340,8 +330,6 @@ namespace RimLife.Mappers
             {
                 EventID = $"message_{msgDef?.defName ?? "unknown"}_{tick}",
                 DefName = msgDef?.defName ?? "Message",
-                Tick = tick,
-                TimeLabel = RimLife.Infrastructure.RimLifeCore.TimeProvider?.Invoke() ?? "",
                 Importance = 1f,
                 Actors = actors,
                 MapHint = mapHint,
@@ -357,13 +345,10 @@ namespace RimLife.Mappers
         {
             public string EventID { get; set; }
             public string DefName { get; set; }
-            public int Tick { get; set; }
-            public string TimeLabel { get; set; }
             public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }
-            public IReadOnlyList<string> Keywords { get; set; } = new List<string>();
         }
 
         // ================================================================
