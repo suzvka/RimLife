@@ -131,7 +131,7 @@ namespace RimLife.UI
 
             if (btnResults[0])
             {
-                // 保存 DriverConfig
+                // 构建 DriverConfig
                 var dc = new DriverConfig
                 {
                     DirectorCountThreshold = _directorCountThreshold,
@@ -145,12 +145,15 @@ namespace RimLife.UI
                     RecentHistoryCapacity = _recentHistoryCapacity,
                     MaxAgentRounds = _maxAgentRounds,
                 };
+
+                // 先保存 DriverConfig（独立缓存键，用于单独加载 Driver）
                 RimLifeCore.SetDriverConfig(dc);
 
-                // 保存 Diagnostics
+                // 克隆当前 FrameworkConfig 并注入新 Driver，确保 Configure 不会用旧 Driver 覆盖
                 var config = CloneCurrentConfig();
                 if (config != null)
                 {
+                    config.Driver = dc;
                     config.Diagnostics.EnableVerboseLogging = _enableVerboseLogging;
                     config.Diagnostics.EnableToolCallTracing = _enableToolCallTracing;
                     config.Diagnostics.EnableEventTracing = _enableEventTracing;
@@ -160,7 +163,7 @@ namespace RimLife.UI
                 RimLifeCore.RebuildAgents();
                 _statusMessage = "已保存并重建 Agent";
                 _statusMessageTime = Time.time;
-                Log.Message("[RimLife.UI] Run strategy settings saved");
+                Log.Message($"[RimLife.UI] Run strategy saved (timerInterval={_directorTimerInterval}s, countThreshold={_directorCountThreshold})");
             }
 
             if (btnResults[1])

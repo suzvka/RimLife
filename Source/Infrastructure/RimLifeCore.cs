@@ -181,6 +181,9 @@ namespace RimLife.Infrastructure
 
             // 同步到各子系统
             _driverConfig = config.Driver;
+            var d = config.Driver;
+            Logger?.Message($"[RimLife.Core] Configure: timerInterval={d?.DirectorTimerInterval ?? 0}s, countThreshold={d?.DirectorCountThreshold ?? 0}, importanceThreshold={d?.DirectorImportanceThreshold ?? 0:F1}");
+            _timerConfigLogged = false; // 配置变更后重新打印定时器摘要
             ErrorHandler.DiagnosticMode = config.Diagnostics?.EnableVerboseLogging ?? false;
 
             config.Freeze();

@@ -31,6 +31,9 @@ namespace RimLife.Infrastructure
         /// <summary>即兴编剧脉冲积分累加器（现实秒）。</summary>
         private static float _improviserAccumSec;
 
+        /// <summary>是否已输出定时器配置摘要（仅首次打印防止日志洪水）。</summary>
+        private static bool _timerConfigLogged;
+
         /// <summary>
         /// 每帧脉冲驱动函数。由 RimWorldAgentDriver.GameComponentUpdate() 调用。
         ///
@@ -55,6 +58,13 @@ namespace RimLife.Infrastructure
             var dc = DriverConfig;
             if (dc == null) return;
 
+            // 首次打印定时器配置摘要
+            if (!_timerConfigLogged)
+            {
+                _timerConfigLogged = true;
+                Logger?.Message($"[RimLife.Timing] Timer config: directorInterval={dc.DirectorTimerInterval}s, improviserInterval={dc.ImproviserTimerInterval}s, directorCountThreshold={dc.DirectorCountThreshold}, directorImportanceThreshold={dc.DirectorImportanceThreshold:F1}");
+            }
+
             // 事件缓冲 flush 检查（空闲超时 → 批量推送到 EventPool）
             FlushEventBuffer(currentTicks);
 
@@ -69,6 +79,7 @@ namespace RimLife.Infrastructure
             {
                 _directorAccumSec += addedScore;
                 float dirThreshold = dirInterval;
+                float dirImportanceThreshold = dc.GetEffectiveImportanceThreshold(NPCLife.Workspace.WorkspaceRole.Director);
                 while (_directorAccumSec >= dirThreshold)
                 {
                     _directorAccumSec -= dirThreshold;
@@ -76,8 +87,9 @@ namespace RimLife.Infrastructure
                     if (directorWs != null)
                     {
                         var pulseEvt = EventCardMapper.CreateTimerPulse(
-                            NPCLife.Workspace.WorkspaceRole.Director, currentTicks);
+                            NPCLife.Workspace.WorkspaceRole.Director, currentTicks, dirImportanceThreshold);
                         directorWs.EventPool.Append(pulseEvt);
+                        Logger?.Message($"[RimLife.Timing] TimerPulse injected (role=Director, interval={dirInterval}s, importance={dirImportanceThreshold:F1}, pending={directorWs.EventPool.PendingCount})");
                     }
                 }
             }
@@ -88,6 +100,7 @@ namespace RimLife.Infrastructure
             {
                 _improviserAccumSec += addedScore;
                 float freeThreshold = freeInterval;
+                float freeImportanceThreshold = dc.GetEffectiveImportanceThreshold(NPCLife.Workspace.WorkspaceRole.Improviser);
                 while (_improviserAccumSec >= freeThreshold)
                 {
                     _improviserAccumSec -= freeThreshold;
@@ -95,8 +108,9 @@ namespace RimLife.Infrastructure
                     if (improviserWs != null)
                     {
                         var pulseEvt = EventCardMapper.CreateTimerPulse(
-                            NPCLife.Workspace.WorkspaceRole.Improviser, currentTicks);
+                            NPCLife.Workspace.WorkspaceRole.Improviser, currentTicks, freeImportanceThreshold);
                         improviserWs.EventPool.Append(pulseEvt);
+                        Logger?.Message($"[RimLife.Timing] TimerPulse injected (role=Improviser, interval={freeInterval}s, importance={freeImportanceThreshold:F1}, pending={improviserWs.EventPool.PendingCount})");
                     }
                 }
             }
@@ -137,6 +151,7 @@ namespace RimLife.Infrastructure
             _lastTicksGame = Find.TickManager?.TicksGame ?? 0;
             _directorAccumSec = 0f;
             _improviserAccumSec = 0f;
+            _timerConfigLogged = false;
             _eventBuffer?.Reset();
         }
 
