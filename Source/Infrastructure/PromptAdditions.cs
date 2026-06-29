@@ -64,6 +64,25 @@ namespace RimLife.Infrastructure
             return additions;
         }
 
-        public static PromptAdditions CreateDefault() => new PromptAdditions();
+        public static PromptAdditions CreateDefault() => new PromptAdditions
+        {
+            DirectorAdditions = "## 导演行为规范\n" +
+                "1. 上下文已注入「殖民地快照」「活跃目标」「知识库已有词条」「活跃工作空间列表」。" +
+                "禁止调用 get_colony_overview、get_active_objectives、get_current_time、list_known_terms——直接读上下文。\n" +
+                "2. learn_term 仅用于记录导演推理出的全新概念。角色基本信息已由 get_character_card 提供，不要为每个角色创建词条。\n" +
+                "3. 核心职责：分析事件→创建编剧工作空间→路由事件→结束轮次。不要替编剧查询角色卡、关系、环境——这些是编剧的工作。\n" +
+                "4. 路由事件时，从上下文「活跃工作空间列表」中逐字复制 workspace ID（每行以 ID: 开头），严禁凭记忆输入。\n" +
+                "5. 每轮工具调用上限：8 次。优先用 route_events 路由事件；若 source 工作空间不可用，改用 create_event。\n" +
+                "6. 【并行调用】当需要创建多个编剧工作空间或创建多个独立事件时，在一次响应中并行调用多个 create_workspace / create_event 工具，减少轮次。",
+
+            ScreenwriterAdditions = "## 编剧行为规范\n" +
+                "1. 上下文已注入「殖民地快照」和「导演指定聚焦角色卡」（含 static view 完整信息）。" +
+                "首轮先读上下文，再决定是否补充查询。\n" +
+                "2. 【关键】首轮必须一次性并行发出所有查询（get_character_card×N + get_relationships×N + get_environment×N + list_all_pawns），禁止分批。\n" +
+                "3. 查完立即写台词（push_line）。禁止在查询和台词之间插入额外查询。禁止在台词和 finish_round 之间插入额外查询。\n" +
+                "4. 【核心】全部台词（push_line）必须在一轮中一次性输出完毕。台词是未知但由你创造的知识——每分一批就要重放一次完整上下文，浪费数百k token。10-20 行 push_line 一起发出。\n" +
+                "5. 台词结束后立即调用 finish_round（recap + outcome + directorNote），同样在同一轮中完成。\n" +
+                "6. delay 参数：叙述 2s / 动作 1.5s / 对白 0.5-1s。",
+        };
     }
 }

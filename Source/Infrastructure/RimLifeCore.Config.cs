@@ -157,9 +157,26 @@ namespace RimLife.Infrastructure
             }
             catch
             {
-                // 加载失败，返回默认
+                // 加载失败，返回优化默认值
             }
-            return DriverConfig.CreateDefault();
+            return CreateOptimizedDriverConfig();
+        }
+
+        /// <summary>
+        /// 创建针对首次使用优化的默认驱动配置。
+        /// 相比 DriverConfig.CreateDefault()，降低了事件积累阈值并启用了定时器脉冲，
+        /// 避免导演在事件稀疏时长时间空转等待。
+        /// 用户可通过 UI（RunStrategyPage）随时调整。
+        /// </summary>
+        private static DriverConfig CreateOptimizedDriverConfig()
+        {
+            var dc = DriverConfig.CreateDefault();
+            dc.DirectorCountThreshold = 3;        // 5→3：3 个事件即可触发导演
+            dc.DirectorImportanceThreshold = 8f;   // 15→8：一个 ThreatBig(5)+两个普通事件即可触发
+            dc.DirectorTimerInterval = 90;          // 0→90s：即使事件不足，每90秒也强制唤醒导演
+            dc.ScreenwriterCountThreshold = 2;      // 5→2：导演路由2个事件即可触发编剧
+            dc.ScreenwriterImportanceThreshold = 6f; // 15→6：降低编剧激活门槛
+            return dc;
         }
 
         private static PromptAdditions LoadPromptAdditions()

@@ -304,6 +304,10 @@ namespace RimLife.Infrastructure
                     Logger?.Message($"[RimLife.DIAG] DirectionMcpProvider registered: {dirCount} tools.");
                     count += dirCount;
 
+                    int dirSlimCount = RegisterHookProvider(new DirectionMcpSlimProvider(() => Workspaces, Logger));
+                    Logger?.Message($"[RimLife.DIAG] DirectionMcpSlimProvider registered: {dirSlimCount} tools.");
+                    count += dirSlimCount;
+
                     int wriCount = RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
                     Logger?.Message($"[RimLife.DIAG] WritingMcpProvider registered: {wriCount} tools.");
                     count += wriCount;

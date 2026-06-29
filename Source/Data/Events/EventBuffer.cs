@@ -24,9 +24,10 @@ namespace RimLife
 
         /// <summary>
         /// 缓冲空闲超时（游戏 tick）。自最后一个事件到达起，
-        /// 经过此 tick 数无新事件到达，即触发推送。默认 600（10 秒）。
+        /// 经过此 tick 数无新事件到达，即触发推送。默认 300（5 秒@1×速度）。
+        /// 较低的超时值可减少事件等待延迟，让导演更快感知到新事件。
         /// </summary>
-        public int IdleTimeoutTicks { get; set; } = 600;
+        public int IdleTimeoutTicks { get; set; } = 300;
 
         public int Count => _pending.Count;
         public bool HasEvents => _pending.Count > 0;

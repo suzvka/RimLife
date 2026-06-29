@@ -1,6 +1,9 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using NPCLife.Agent;
+using NPCLife.Cards;
 using NPCLife.Core;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
@@ -235,21 +238,107 @@ namespace RimLife.Infrastructure
 
         private static string BuildDirectorWorkspaceSummary(IWorkspaceManager manager)
         {
-            if (manager == null) return "## 当前活跃工作空间\n（无）";
+            var sb = new StringBuilder();
 
-            var workspaces = manager.GetActive();
-            if (workspaces == null || workspaces.Count == 0)
-                return "## 当前活跃工作空间\n（无）";
-
-            var sb = new System.Text.StringBuilder("## 当前活跃工作空间");
-            foreach (var ws in workspaces)
+            // 当前时间
+            try
             {
-                sb.AppendLine();
-                sb.Append($"- {ws.Label} (id={ws.Id})");
-                sb.Append($" rounds={ws.Rounds?.Count ?? 0}");
-                if (!string.IsNullOrEmpty(ws.DirectorMessage))
-                    sb.Append($" msg={TruncateForSummary(ws.DirectorMessage, 60)}");
+                var timeStr = TimeProvider?.Invoke();
+                if (!string.IsNullOrEmpty(timeStr))
+                {
+                    sb.AppendLine("## 当前时间");
+                    sb.AppendLine(timeStr);
+                    sb.AppendLine();
+                }
             }
+            catch { }
+
+            // 殖民地快照
+            try
+            {
+                var ctx = ColonyContextMapper.Create();
+                if (ctx != null)
+                {
+                    sb.AppendLine("## 殖民地快照");
+                    sb.AppendLine(CardSerializer.Default.SerializeColonyContext(ctx));
+                    sb.AppendLine();
+                }
+            }
+            catch { }
+
+            // 活跃目标
+            try
+            {
+                var objectives = ObjectiveCardMapper.GetActive();
+                if (objectives != null && objectives.Count > 0)
+                {
+                    sb.AppendLine("## 活跃目标");
+                    sb.AppendLine(CardSerializer.Default.SerializeObjectiveList(objectives));
+                    sb.AppendLine();
+                }
+            }
+            catch { }
+
+            // 知识库已有词条（仅列词条名，避免重复创建）
+            try
+            {
+                var knSvc = KnowledgeService;
+                if (knSvc != null)
+                {
+                    var all = knSvc.ListAll();
+                    if (all != null && all.Count > 0)
+                    {
+                        sb.AppendLine("## 知识库已有词条");
+                        int limit = 50;
+                        var shown = all.Take(limit);
+                        foreach (var entry in shown)
+                        {
+                            sb.Append("- ");
+                            sb.Append(entry.Term ?? "?");
+                            if (!string.IsNullOrEmpty(entry.Source))
+                            {
+                                sb.Append(" (`");
+                                sb.Append(entry.Source);
+                                sb.Append("`)");
+                            }
+                            sb.AppendLine();
+                        }
+                        if (all.Count > limit)
+                            sb.AppendLine($"  （共 {all.Count} 条，仅显示前 {limit} 条）");
+                        sb.AppendLine();
+                    }
+                }
+            }
+            catch { }
+
+            // 当前活跃工作空间
+            if (manager == null)
+            {
+                sb.AppendLine("## 当前活跃工作空间\n（无）");
+            }
+            else
+            {
+                var workspaces = manager.GetActive();
+                if (workspaces == null || workspaces.Count == 0)
+                {
+                    sb.AppendLine("## 当前活跃工作空间\n（无）");
+                }
+                else
+                {
+                    sb.AppendLine("## 当前活跃工作空间（路由事件时从此处复制 ID）");
+                    foreach (var ws in workspaces)
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine($"### {ws.Label}");
+                        sb.AppendLine($"ID: `{ws.Id}`");
+                        sb.Append($"rounds={ws.Rounds?.Count ?? 0}");
+                        if (!string.IsNullOrEmpty(ws.DirectorMessage))
+                            sb.Append($" | msg={TruncateForSummary(ws.DirectorMessage, 60)}");
+                    }
+                    sb.AppendLine();
+                }
+            }
+
             return sb.ToString();
         }
 
