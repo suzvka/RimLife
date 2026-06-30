@@ -31,6 +31,9 @@ namespace RimLife.Infrastructure
         /// <summary>即兴编剧脉冲积分累加器（现实秒）。</summary>
         private static float _improviserAccumSec;
 
+        /// <summary>编剧兜底定时器积分累加器（现实秒）。</summary>
+        private static float _screenwriterAccumSec;
+
         /// <summary>是否已输出定时器配置摘要（仅首次打印防止日志洪水）。</summary>
         private static bool _timerConfigLogged;
 
@@ -62,7 +65,7 @@ namespace RimLife.Infrastructure
             if (!_timerConfigLogged)
             {
                 _timerConfigLogged = true;
-                Logger?.Message($"[RimLife.Timing] Timer config: directorInterval={dc.DirectorTimerInterval}s, improviserInterval={dc.ImproviserTimerInterval}s, directorCountThreshold={dc.DirectorCountThreshold}, directorImportanceThreshold={dc.DirectorImportanceThreshold:F1}");
+                Logger?.Message($"[RimLife.Timing] Timer config: directorInterval={dc.DirectorTimerInterval}s, improviserInterval={dc.ImproviserTimerInterval}s, screenwriterInterval={dc.ScreenwriterTimerInterval}s, directorCountThreshold={dc.DirectorCountThreshold}, directorImportanceThreshold={dc.DirectorImportanceThreshold:F1}");
             }
 
             // 事件缓冲 flush 检查（空闲超时 → 批量推送到 EventPool）
@@ -114,6 +117,32 @@ namespace RimLife.Infrastructure
                     }
                 }
             }
+
+            // 编剧兜底定时器（有 pending 事件才触发）
+            int swInterval = dc.GetTimerInterval(NPCLife.Workspace.WorkspaceRole.Screenwriter);
+            if (swInterval > 0)
+            {
+                _screenwriterAccumSec += addedScore;
+                while (_screenwriterAccumSec >= swInterval)
+                {
+                    _screenwriterAccumSec -= swInterval;
+                    // 遍历所有活跃的编剧工作空间
+                    var activeWss = Workspaces?.List(NPCLife.Workspace.WorkspaceStatus.Active);
+                    if (activeWss != null)
+                    {
+                        foreach (var ws in activeWss)
+                        {
+                            if (ws.CreatedByRole != NPCLife.Workspace.WorkspaceRole.Screenwriter) continue;
+                            if (ws.EventPool == null || ws.EventPool.PendingCount == 0) continue;
+
+                            var pulseEvt = EventCardMapper.CreateTimerPulse(
+                                NPCLife.Workspace.WorkspaceRole.Screenwriter, currentTicks, 0f);
+                            ws.EventPool.Append(pulseEvt);
+                            Logger?.Message($"[RimLife.Timing] TimerPulse injected (role=Screenwriter, interval={swInterval}s, pending={ws.EventPool.PendingCount})");
+                        }
+                    }
+                }
+            }
         }
 
         /// <summary>
@@ -151,6 +180,7 @@ namespace RimLife.Infrastructure
             _lastTicksGame = Find.TickManager?.TicksGame ?? 0;
             _directorAccumSec = 0f;
             _improviserAccumSec = 0f;
+            _screenwriterAccumSec = 0f;
             _timerConfigLogged = false;
             _eventBuffer?.Reset();
         }

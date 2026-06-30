@@ -57,6 +57,7 @@ namespace RimLife.Infrastructure
                 w.Prop("screenwriterImportanceThreshold", config.ScreenwriterImportanceThreshold, "F2");
                 w.Prop("directorTimerInterval", config.DirectorTimerInterval);
                 w.Prop("freelancerTimerInterval", config.ImproviserTimerInterval);
+                w.Prop("screenwriterTimerInterval", config.ScreenwriterTimerInterval);
                 w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
                 w.Prop("maxAgentRounds", config.MaxAgentRounds);
                 var settings = RimLifeModSettings.Instance;
@@ -94,6 +95,7 @@ namespace RimLife.Infrastructure
             current.ScreenwriterImportanceThreshold = newConfig.ScreenwriterImportanceThreshold;
             current.DirectorTimerInterval = newConfig.DirectorTimerInterval;
             current.ImproviserTimerInterval = newConfig.ImproviserTimerInterval;
+            current.ScreenwriterTimerInterval = newConfig.ScreenwriterTimerInterval;
             current.RecentHistoryCapacity = newConfig.RecentHistoryCapacity;
             current.MaxAgentRounds = newConfig.MaxAgentRounds;
         }
@@ -165,6 +167,8 @@ namespace RimLife.Infrastructure
                         dc.DirectorTimerInterval = dtiv;
                     if (dict.TryGetValue("freelancerTimerInterval", out var fti) && int.TryParse(fti, out var ftiv))
                         dc.ImproviserTimerInterval = ftiv;
+                    if (dict.TryGetValue("screenwriterTimerInterval", out var swti) && int.TryParse(swti, out var swtiv))
+                        dc.ScreenwriterTimerInterval = swtiv;
                     if (dict.TryGetValue("recentHistoryCapacity", out var rhc) && int.TryParse(rhc, out var rhcv))
                         dc.RecentHistoryCapacity = rhcv;
                     if (dict.TryGetValue("maxAgentRounds", out var mar) && int.TryParse(mar, out var marv))
@@ -191,9 +195,11 @@ namespace RimLife.Infrastructure
             var dc = DriverConfig.CreateDefault();
             dc.DirectorCountThreshold = 3;        // 5→3：3 个事件即可触发导演
             dc.DirectorImportanceThreshold = 8f;   // 15→8：一个 ThreatBig(5)+两个普通事件即可触发
-            dc.DirectorTimerInterval = 90;          // 0→90s：即使事件不足，每90秒也强制唤醒导演
+            dc.DirectorTimerInterval = 0;           // 90→0：导演不再定时唤醒，纯事件驱动
             dc.ScreenwriterCountThreshold = 2;      // 5→2：导演路由2个事件即可触发编剧
             dc.ScreenwriterImportanceThreshold = 6f; // 15→6：降低编剧激活门槛
+            dc.ScreenwriterTimerInterval = 120;     // 兜底定时器：pending 事件未达阈值时，120秒后强制触发编剧
+            dc.ImproviserTimerInterval = 180;       // 即兴编剧强制唤醒：180秒主动巡逻
             return dc;
         }
 

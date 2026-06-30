@@ -282,12 +282,26 @@ namespace RimLife.Mappers
         /// 向导演/即兴编剧工作空间注入一条无外部依赖的系统事件。
         /// 重要度对齐该角色的重要性阈值，确保单次脉冲即可唤醒 Agent。
         /// </summary>
-        /// <param name="role">触发此脉冲的角色（Director 或 Improviser）。</param>
+        /// <param name="role">触发此脉冲的角色（Director / Improviser / Screenwriter）。</param>
         /// <param name="tick">当前游戏 tick。</param>
         /// <param name="importance">脉冲重要度，应设置为该角色的 EffectiveImportanceThreshold，
         /// 以保证单次定时器到期立即触发 Agent。</param>
         public static IGameEvent CreateTimerPulse(NPCLife.Workspace.WorkspaceRole role, int tick, float importance)
         {
+            string description;
+            switch (role)
+            {
+                case NPCLife.Workspace.WorkspaceRole.Improviser:
+                    description = "当前系统闲置，请开始主动收集信息并创作叙事。可查询殖民地概览、角色状态、最近事件等，发现值得描写的日常细节。";
+                    break;
+                case NPCLife.Workspace.WorkspaceRole.Screenwriter:
+                    description = "兜底定时器触发：事件池中有待处理事件，请开始本轮创作。";
+                    break;
+                default:
+                    description = "定时器脉冲";
+                    break;
+            }
+
             return new EventCardImpl
             {
                 EventID = $"timer_pulse_{role.ToString().ToLowerInvariant()}_{tick}",
@@ -298,7 +312,8 @@ namespace RimLife.Mappers
                 Payload = new Dictionary<string, string>
                 {
                     ["sourceRole"] = role.ToString(),
-                    ["pulseTick"] = tick.ToString()
+                    ["pulseTick"] = tick.ToString(),
+                    ["description"] = description
                 }
             };
         }
