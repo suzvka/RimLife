@@ -39,9 +39,6 @@ namespace RimLife.Mappers
                 DefName = def?.defName ?? "Unknown",
                 Importance = importance,
                 Actors = actors,
-                MapHint = parms?.spawnCenter.IsValid ?? false
-                    ? $"Map position ({parms.spawnCenter.x},{parms.spawnCenter.z})"
-                    : "",
                 Payload = payload
             };
         }
@@ -80,7 +77,6 @@ namespace RimLife.Mappers
                 DefName = "PawnDeath",
                 Importance = importance,
                 Actors = actors,
-                MapHint = victim?.Map != null ? $"Map:{victim.Map.uniqueID}" : "",
                 Payload = payload
             };
         }
@@ -119,7 +115,6 @@ namespace RimLife.Mappers
                 DefName = breakDef?.defName ?? "MentalBreak",
                 Importance = importance,
                 Actors = actors,
-                MapHint = pawn?.Map != null ? $"Map:{pawn.Map.uniqueID}" : "",
                 Payload = payload
             };
         }
@@ -153,7 +148,6 @@ namespace RimLife.Mappers
                 DefName = intDef?.defName ?? "SocialInteraction",
                 Importance = importance,
                 Actors = actors,
-                MapHint = initiator?.Map != null ? $"Map:{initiator.Map.uniqueID}" : "",
                 Payload = payload
             };
         }
@@ -179,7 +173,6 @@ namespace RimLife.Mappers
                 DefName = "Quest",
                 Importance = importance,
                 Actors = new List<EventActorRef>(),
-                MapHint = "",
                 Payload = payload
             };
         }
@@ -229,7 +222,6 @@ namespace RimLife.Mappers
                 DefName = "FactionChange",
                 Importance = importance,
                 Actors = actors,
-                MapHint = pawn?.Map != null ? $"Map:{pawn.Map.uniqueID}" : "",
                 Payload = payload
             };
         }
@@ -249,7 +241,6 @@ namespace RimLife.Mappers
 
             float importance = MapLetterImportance(letterDef);
             var actors = ExtractActorsFromLookTargets(lookTargets, relatedFaction);
-            string mapHint = ExtractMapHintFromLookTargets(lookTargets);
 
             var payload = new Dictionary<string, string>
             {
@@ -268,7 +259,6 @@ namespace RimLife.Mappers
                 DefName = letterDef?.defName ?? "Letter",
                 Importance = importance,
                 Actors = actors,
-                MapHint = mapHint,
                 Payload = payload
             };
         }
@@ -308,7 +298,6 @@ namespace RimLife.Mappers
                 DefName = "TimerPulse",
                 Importance = importance,
                 Actors = new List<EventActorRef>(),
-                MapHint = "",
                 Payload = new Dictionary<string, string>
                 {
                     ["sourceRole"] = role.ToString(),
@@ -333,7 +322,6 @@ namespace RimLife.Mappers
             int tick = Find.TickManager?.TicksGame ?? 0;
 
             var actors = ExtractActorsFromLookTargets(lookTargets, null);
-            string mapHint = ExtractMapHintFromLookTargets(lookTargets);
 
             var payload = new Dictionary<string, string>
             {
@@ -347,7 +335,6 @@ namespace RimLife.Mappers
                 DefName = msgDef?.defName ?? "Message",
                 Importance = 1f,
                 Actors = actors,
-                MapHint = mapHint,
                 Payload = payload
             };
         }
@@ -362,7 +349,6 @@ namespace RimLife.Mappers
             public string DefName { get; set; }
             public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
-            public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }
         }
 
@@ -454,25 +440,6 @@ namespace RimLife.Mappers
             }
 
             return actors;
-        }
-
-        /// <summary>
-        /// 从 LookTargets 推导位置提示。
-        /// </summary>
-        private static string ExtractMapHintFromLookTargets(LookTargets lookTargets)
-        {
-            if (lookTargets == null || !lookTargets.IsValid)
-                return "";
-
-            try
-            {
-                var target = lookTargets.PrimaryTarget;
-                if (target.HasThing && target.Thing?.Map != null)
-                    return $"Map:{target.Thing.Map.uniqueID}";
-            }
-            catch { }
-
-            return "";
         }
     }
 }

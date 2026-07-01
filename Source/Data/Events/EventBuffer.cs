@@ -20,6 +20,7 @@ namespace RimLife
     public class EventBuffer
     {
         private readonly List<IGameEvent> _pending = new List<IGameEvent>();
+        private readonly HashSet<string> _pendingEventIds = new HashSet<string>();
         private int _lastEventTick = -1;
 
         /// <summary>
@@ -36,6 +37,15 @@ namespace RimLife
         public void Append(IGameEvent evt)
         {
             if (evt == null) return;
+
+            // EventID 去重：同一事件可能被多个 Harmony 补丁注入（LetterStack.ReceiveLetter 有多个重载），
+            // 在此层拦截重复 EventID，避免同一事件在缓冲中重复出现。
+            if (!string.IsNullOrEmpty(evt.EventID) && !_pendingEventIds.Add(evt.EventID))
+            {
+                RimLifeLogger.Message($"[RimLife.DIAG] EventBuffer SKIP (duplicate EventID): id={evt.EventID}, def={evt.DefName}");
+                return;
+            }
+
             _pending.Add(evt);
             int currentTick = Verse.Find.TickManager?.TicksGame ?? 0;
             if (currentTick > _lastEventTick)
@@ -77,6 +87,7 @@ namespace RimLife
 
             var drained = new List<IGameEvent>(_pending);
             _pending.Clear();
+            _pendingEventIds.Clear();
             _lastEventTick = -1;
             return drained;
         }
@@ -85,6 +96,7 @@ namespace RimLife
         public void Reset()
         {
             _pending.Clear();
+            _pendingEventIds.Clear();
             _lastEventTick = -1;
         }
     }

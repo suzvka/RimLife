@@ -382,7 +382,6 @@ namespace RimLife.Tool
                     DumpObject("EventID", latest.EventID);
                     DumpObject("DefName", latest.DefName);
                     DumpObject("Importance", latest.Importance);
-                    DumpObject("MapHint", latest.MapHint);
                     if (latest.Actors != null)
                         Log.Message($"    Actors: {latest.Actors.Count} 个");
                     if (latest.Payload != null)
@@ -977,10 +976,10 @@ namespace RimLife.Tool
                 DumpObject("已注册 Skill 数", RimLifeCore.FrameworkFactory.Skills.SkillCount);
                 DumpObject("已注册工具总数", RimLifeCore.FrameworkFactory.Skills.TotalToolCount);
 
-                if (RimLifeCore.FrameworkFactory.Skills.SkillCount >= 7)
+                if (RimLifeCore.FrameworkFactory.Skills.SkillCount >= 6)
                     Pass($"Skill 注册表: {RimLifeCore.FrameworkFactory.Skills.SkillCount} skills, {RimLifeCore.FrameworkFactory.Skills.TotalToolCount} tools");
                 else
-                    Fail("Skill 注册数不足", $"expected >=7, got {RimLifeCore.FrameworkFactory.Skills.SkillCount}");
+                    Fail("Skill 注册数不足", $"expected >=6, got {RimLifeCore.FrameworkFactory.Skills.SkillCount}");
             }
             catch (Exception e) { Fail("Skill 注册表状态异常", e.Message); }
 
@@ -1450,7 +1449,6 @@ namespace RimLife.Tool
                 {
                     EventActorRef.Pawn("test_pawn_001", "TestPawn", "Initiator")
                 },
-                MapHint = "SelftestLocation",
                 Payload = new Dictionary<string, string> { ["test"] = "true" }
             };
         }
@@ -1461,7 +1459,6 @@ namespace RimLife.Tool
             public string DefName { get; set; }
             public float Importance { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
-            public string MapHint { get; set; }
             public IDictionary<string, string> Payload { get; set; }
         }
     }

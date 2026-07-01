@@ -110,6 +110,8 @@ namespace RimLife.Infrastructure
             {
                 // 新游戏：清除旧 SaveId，使用临时缓存文件
                 SaveIdResolver.Clear();
+                // 清理上一个会话残留的临时缓存，避免跨会话知识库累积污染
+                LocalFileStore.CleanupTempCache();
             }
             else
             {

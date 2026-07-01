@@ -87,7 +87,7 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>时间字符串提供者。游戏侧注入，返回当前游戏时间的格式化字符串。
-        /// 框架只原样透传，不解析语义。Agent 可通过 get_current_time 工具获取。</summary>
+        /// 框架只原样透传，不解析语义。时间信息随事件注入，Agent 无需主动查询。</summary>
         public static Func<string> TimeProvider { get; internal set; }
 
         /// <summary>
@@ -312,10 +312,6 @@ namespace RimLife.Infrastructure
                     Logger?.Message($"[RimLife.DIAG] WritingMcpProvider registered: {wriCount} tools.");
                     count += wriCount;
 
-                    int freeCount = RegisterHookProvider(new FreelancerMcpProvider(() => Workspaces, Logger));
-                    Logger?.Message($"[RimLife.DIAG] FreelancerMcpProvider registered: {freeCount} tools.");
-                    count += freeCount;
-
                     // Hook Providers（游戏侧通过 IMcpHookProvider 实现）
                     int colCount = RegisterHookProvider(new RimLife.Infrastructure.Mcp.ColonyOverviewProvider());
                     Logger?.Message($"[RimLife.DIAG] ColonyOverviewProvider registered: {colCount} tools.");
@@ -385,6 +381,15 @@ namespace RimLife.Infrastructure
                 FrameworkFactory.Status.RegisterCapability("event_bus", true);
                 FrameworkFactory.Status.RegisterCapability("agent_pipeline", true);
                 FrameworkFactory.Status.RegisterCapability("lifecycle_hooks", true);
+
+                // ---- 知识上下文自动注入 ----
+                // 扫描事件 Payload 中的 knowledge_tags，自动查询知识库并注入到 LLM 提示词。
+                // 优先级 10（低于度量的 100），确保在度量采集前完成上下文构建。
+                FrameworkFactory.Pipeline.AddInterceptor(
+                    new NPCLife.Infrastructure.KnowledgeContextInterceptor(
+                        () => KnowledgeService,
+                        Logger),
+                    priority: 10);
 
                 // ---- 运行时度量系统（永久启用） ----
                 {

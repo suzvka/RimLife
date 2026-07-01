@@ -19,14 +19,14 @@ namespace RimLife.Infrastructure.Mcp
     {
         public string HookId => "character_query";
         public string HookName => "角色查询";
-        public string HookDescription => "获取角色完整人物卡、按条件筛选殖民者、列出全部角色";
+        public string HookDescription => "获取角色信息";
 
         public IReadOnlyList<McpTool> GetTools()
         {
             return new McpTool[]
             {
                 McpTool.FromMethod(typeof(CharacterQueryProvider).GetMethod(nameof(GetCharacterCard))),
-                McpTool.FromMethod(typeof(CharacterQueryProvider).GetMethod(nameof(FindCharacters))),
+                //McpTool.FromMethod(typeof(CharacterQueryProvider).GetMethod(nameof(FindCharacters))),
                 McpTool.FromMethod(typeof(CharacterQueryProvider).GetMethod(nameof(ListAllPawns))),
             };
         }
@@ -39,10 +39,10 @@ namespace RimLife.Infrastructure.Mcp
         /// 获取指定角色的完整人物卡，按 view 分层控制数据量。
         /// </summary>
         [McpTool(Name = "get_character_card",
-                 Description = "获取指定角色的完整人物卡。view 控制数据层级：\"static\"（默认）= 客观属性；\"dynamic\" = + 视角/记忆快照；\"full\" = + 完整记忆流水账。")]
+                 Description = "获取指定角色的人物卡")]
         public static string GetCharacterCard(
-            [McpParam(Description = "角色唯一 ID（ThingID）")] string pawnId,
-            [McpParam(Description = "数据层级：static（默认，客观属性）/ dynamic（+视角/记忆快照）/ full（+完整记忆流水）",
+            [McpParam(Description = "角色ID")] string pawnId,
+            [McpParam(Description = "数据层级：static(从第三人称视角审视时用)/ dynamic(深入人物内心世界用)/ full(超级深度挖掘时用)",
                       Required = McpRequired.False)] string view = null)
         {
             try
@@ -64,7 +64,7 @@ namespace RimLife.Infrastructure.Mcp
         /// 按条件筛选殖民者。
         /// </summary>
         [McpTool(Name = "find_characters",
-                 Description = "按条件筛选殖民者。可用于查找特定技能、心情状态或健康状态的角色。")]
+                 Description = "按条件筛选角色")]
         public static string FindCharacters(
             [McpParam(Description = "最低技能等级筛选，格式：技能名=等级，如 Shooting=10",
                       Required = McpRequired.False)] string minSkill = null,

@@ -18,17 +18,17 @@ namespace RimLife.Infrastructure.Mcp
     public class ColonyOverviewProvider : IMcpHookProvider
     {
         public string HookId => "colony_overview";
-        public string HookName => "殖民地全局";
-        public string HookDescription => "殖民地概览、近期事件、活跃目标、资源库存";
+        public string HookName => "无";
+        public string HookDescription => "";
 
         public IReadOnlyList<McpTool> GetTools()
         {
             return new McpTool[]
             {
-                McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetColonyOverview))),
-                McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetRecentEvents))),
-                McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetActiveObjectives))),
-                McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetResourceInventory))),
+                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetColonyOverview))),
+                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetRecentEvents))),
+                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetActiveObjectives))),
+                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetResourceInventory))),
             };
         }
 

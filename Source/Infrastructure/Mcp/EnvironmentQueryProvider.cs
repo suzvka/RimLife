@@ -7,13 +7,14 @@ using Verse;
 namespace RimLife.Infrastructure.Mcp
 {
     /// <summary>
-    /// 环境感知 Skill 的 Hook Provider。
+    /// 角色与环境查询 Skill 的 Hook Provider（环境感知工具）。
     /// 提供角色当前所处环境信息查询。
+    /// 注入到 character_query skill，与 CharacterQueryProvider 共用同一 HookId。
     /// </summary>
     public class EnvironmentQueryProvider : IMcpHookProvider
     {
-        public string HookId => "environment_query";
-        public string HookName => "环境感知";
+        public string HookId => "character_query";
+        public string HookName => "角色与环境查询";
         public string HookDescription => "查询角色当前所处的环境信息（室内外、温光、天气、房间）";
 
         public IReadOnlyList<McpTool> GetTools()

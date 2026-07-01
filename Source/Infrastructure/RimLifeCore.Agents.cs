@@ -311,31 +311,30 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 当前活跃工作空间
+            // 当前活跃剧情线（复用 DirectionMcpProvider.ListWorkspaces 的完整数据）
             if (manager == null)
             {
-                sb.AppendLine("## 当前活跃工作空间\n（无）");
+                sb.AppendLine("## 当前活跃剧情线\n（无）");
             }
             else
             {
-                var workspaces = manager.GetActive();
-                if (workspaces == null || workspaces.Count == 0)
+                try
                 {
-                    sb.AppendLine("## 当前活跃工作空间\n（无）");
-                }
-                else
-                {
-                    sb.AppendLine("## 当前活跃工作空间（路由事件时从此处复制 ID）");
-                    foreach (var ws in workspaces)
+                    var provider = new NPCLife.Workspace.DirectionMcpProvider(() => manager, Logger);
+                    var storylinesJson = provider.ListWorkspaces();
+                    if (string.IsNullOrEmpty(storylinesJson) || storylinesJson == "[]")
                     {
-                        sb.AppendLine();
-                        sb.AppendLine($"### {ws.Label}");
-                        sb.AppendLine($"ID: `{ws.Id}`");
-                        sb.Append($"rounds={ws.Rounds?.Count ?? 0}");
-                        if (!string.IsNullOrEmpty(ws.DirectorMessage))
-                            sb.Append($" | msg={TruncateForSummary(ws.DirectorMessage, 60)}");
+                        sb.AppendLine("## 当前活跃剧情线\n（无）");
                     }
-                    sb.AppendLine();
+                    else
+                    {
+                        sb.AppendLine("## 当前活跃剧情线（路由事件时从此处复制 ID）");
+                        sb.AppendLine(storylinesJson);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"## 当前活跃剧情线\n（获取失败：{ex.Message}）");
                 }
             }
 
@@ -350,7 +349,7 @@ namespace RimLife.Infrastructure
 
         /// <summary>
         /// 构建编剧激活时的动态上下文：殖民地快照、当前时间、聚焦角色摘要。
-        /// 每轮激活时注入，替代 get_colony_overview / get_current_time 等工具查询。
+        /// 每轮激活时注入，替代 get_colony_overview 等工具查询。
         /// </summary>
         private static string BuildScreenwriterContext(NPCLife.Workspace.IWorkspace ws)
         {

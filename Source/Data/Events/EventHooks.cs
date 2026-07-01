@@ -15,44 +15,7 @@ namespace RimLife
     // Letter 自带叙事文案（label / text），天然适配编剧 agent 消费。
     // ================================================================
     
-    // 补丁重载 1：完整参数版本
-    [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter),
-        new Type[] { typeof(TaggedString), typeof(TaggedString), typeof(LetterDef), typeof(LookTargets), typeof(Faction), typeof(Quest), typeof(List<ThingDef>), typeof(string), typeof(int), typeof(bool) })]
-    internal static class Patch_LetterStack_ReceiveLetter_Full
-    {
-        static void Postfix(LetterStack __instance, TaggedString label, TaggedString text,
-                             LetterDef textLetterDef, LookTargets lookTargets, Faction relatedFaction)
-        {
-            try
-            {
-                RimLifeCore.EventBuffer?.Append(
-                    EventCardMapper.FromLetter(textLetterDef, label, text, lookTargets, relatedFaction));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] Letter hook (full) failed: {e.Message}");
-            }
-        }
-    }
-
-    // 补丁重载 2：简化参数版本（无 LookTargets）
-    [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter),
-        new Type[] { typeof(TaggedString), typeof(TaggedString), typeof(LetterDef), typeof(string), typeof(int), typeof(bool) })]
-    internal static class Patch_LetterStack_ReceiveLetter_Simple
-    {
-        static void Postfix(LetterStack __instance, TaggedString label, TaggedString text, LetterDef textLetterDef)
-        {
-            try
-            {
-                RimLifeCore.EventBuffer?.Append(
-                    EventCardMapper.FromLetter(textLetterDef, label, text, default, null));
-            }
-            catch (Exception e)
-            {
-                Log.Warning($"[RimLife:EventHooks] Letter hook (simple) failed: {e.Message}");
-            }
-        }
-    }
+    
 
     // 补丁重载 3：Letter 对象版本
     [HarmonyPatch(typeof(LetterStack), nameof(LetterStack.ReceiveLetter),
