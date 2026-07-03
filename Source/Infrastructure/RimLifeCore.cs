@@ -213,21 +213,8 @@ namespace RimLife.Infrastructure
             FrameworkFactory.Status.Clear();
             ErrorHandler.ClearHandlers();
 
-            // 清理编剧 Agent
-            lock (_screenwritersLock)
-            {
-                foreach (var kv in _screenwriters)
-                    kv.Value?.Dispose();
-                _screenwriters.Clear();
-            }
-
-            // 清理导演 Agent
-            _directorAgent?.Dispose();
-            _directorAgent = null;
-
-            // 清理即兴编剧 Agent
-            _improviserAgent?.Dispose();
-            _improviserAgent = null;
+            // 清理所有 Agent（委托给 Orchestrator）
+            Orchestrator?.DisposeAll();
 
             _frameworkConfig = null;
             _promptAdditions = null;
@@ -534,13 +521,8 @@ namespace RimLife.Infrastructure
                     (_workspaces as IDisposable)?.Dispose();
                     _llmAccessor?.Dispose();
 
-                    // 清理所有编剧 Agent
-                    lock (_screenwritersLock)
-                    {
-                        foreach (var kv in _screenwriters)
-                            kv.Value?.Dispose();
-                        _screenwriters.Clear();
-                    }
+                    // 清理所有 Agent（委托给 Orchestrator）
+                    Orchestrator?.DisposeAll();
 
                     _saveStore = value;
                     _workspaces = null;
@@ -755,15 +737,23 @@ namespace RimLife.Infrastructure
                             Logger?.Message($"[RimLife.DIAG] Workspaces: creating. _skillRegistryInitialized={_skillRegistryInitialized}, _frameworkFactory={_frameworkFactory != null}");
                             _workspaces = FrameworkFactory.CreateWorkspaceManager(SaveStore, Logger,
                                 () => TimeProvider?.Invoke() ?? "",
-                                onWorkspaceReady: wsId => EnsureAgentForWorkspace(wsId));
+                                onWorkspaceReady: wsId =>
+                                {
+                                    // 直接访问 _orchestrator 字段避免触发 Orchestrator 属性 getter，
+                                    // 后者会在 WorkspaceManager 构造期间造成循环依赖。
+                                    var orch = _orchestrator;
+                                    if (orch != null)
+                                        orch.OnWorkspaceReady(wsId);
+                                });
 
                             // 为存档中已加载的活跃工作空间补齐对应 Agent
-                            // （LoadFromStore 期间 _workspaces 尚未赋值，回调无法生效，此处补调）
+                            // （LoadFromStore 期间 _orchestrator 尚未初始化，回调无法生效，此处补调）
+                            InitializeAgentOrchestrator();
                             var actives = _workspaces.GetActive();
                             Logger?.Message($"[RimLife.DIAG] Workspaces: GetActive returned {actives?.Count ?? 0} workspaces.");
                             foreach (var ws in actives)
                             {
-                                EnsureAgentForWorkspace(ws.Id);
+                                _orchestrator.OnWorkspaceReady(ws.Id);
                             }
                         }
                     }

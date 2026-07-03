@@ -1250,7 +1250,7 @@ namespace RimLife.Tool
             // --- 11.5 DirectorAgent 状态 ---
             try
             {
-                var director = RimLifeCore.GetDirectorAgent();
+                var director = RimLifeCore.Orchestrator?.GetAgent(NPCLife.Workspace.WorkspaceRole.Director);
                 if (director != null)
                 {
                     Pass("DirectorAgent 已创建");

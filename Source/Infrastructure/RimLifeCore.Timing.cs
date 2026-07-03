@@ -86,7 +86,7 @@ namespace RimLife.Infrastructure
                 while (_directorAccumSec >= dirThreshold)
                 {
                     _directorAccumSec -= dirThreshold;
-                    var directorWs = GetDirectorWorkspace();
+                    var directorWs = Orchestrator.GetOrCreateWorkspace(NPCLife.Workspace.WorkspaceRole.Director);
                     if (directorWs != null)
                     {
                         var pulseEvt = EventCardMapper.CreateTimerPulse(
@@ -107,7 +107,7 @@ namespace RimLife.Infrastructure
                 while (_improviserAccumSec >= freeThreshold)
                 {
                     _improviserAccumSec -= freeThreshold;
-                    var improviserWs = GetImproviserWorkspace();
+                    var improviserWs = Orchestrator.GetOrCreateWorkspace(NPCLife.Workspace.WorkspaceRole.Improviser);
                     if (improviserWs != null)
                     {
                         var pulseEvt = EventCardMapper.CreateTimerPulse(
@@ -198,7 +198,7 @@ namespace RimLife.Infrastructure
             if (_eventBuffer == null || !_eventBuffer.HasEvents) return;
             if (!force && !_eventBuffer.ShouldFlush(currentTick)) return;
 
-            var directorWs = GetDirectorWorkspace();
+            var directorWs = Orchestrator.GetOrCreateWorkspace(NPCLife.Workspace.WorkspaceRole.Director);
             if (directorWs == null)
             {
                 Logger?.Warning("[RimLife.Core] FlushEventBuffer: DirectorWorkspace is null");
@@ -207,7 +207,7 @@ namespace RimLife.Infrastructure
 
             // 确保 Director Agent 已创建并订阅 OnThresholdReached，
             // 必须在 Append 之前完成，否则阈值回调会在无订阅者时触发而丢失。
-            GetDirectorAgent();
+            Orchestrator.GetAgent(NPCLife.Workspace.WorkspaceRole.Director);
 
             var events = _eventBuffer.Drain();
             int pendingBefore = directorWs.EventPool.PendingCount;

@@ -10,8 +10,11 @@ using NPCLife.Framework.Llm;
 using NPCLife.Framework.Mcp;
 using NPCLife.Framework.Script;
 using NPCLife.Workspace;
+using RimLife.Data;
 using RimLife.Infrastructure.Mcp;
 using RimLife.Mappers;
+using RimWorld;
+using Verse;
 
 namespace RimLife.Infrastructure
 {
@@ -21,16 +24,106 @@ namespace RimLife.Infrastructure
     /// </summary>
     public static partial class RimLifeCore
     {
-        private static AgentLoop _directorAgent;
-        private static readonly object _directorAgentLock = new object();
-        private static AgentLoop _improviserAgent;
-        private static readonly object _improviserAgentLock = new object();
-        private static readonly Dictionary<string, AgentLoop> _screenwriters = new Dictionary<string, AgentLoop>();
-        private static readonly object _screenwritersLock = new object();
+        private static IAgentOrchestrator _orchestrator;
+        private static readonly object _orchestratorLock = new object();
 
-        /// <summary>线程本地：当前上下文中收集的推荐角色 ID，供 preQueriedProvider 读取。</summary>
-        [ThreadStatic]
+        /// <summary>当前上下文中收集的推荐角色 ID，供 preQueriedProvider 读取。</summary>
         private static HashSet<string> _currentPawnIds;
+
+        /// <summary>
+        /// Agent 编排器。框架负责 Agent 生命周期，游戏侧通过 InitializeAgentOrchestrator
+        /// 注册 AgentFactory 委托（注入系统提示词、动态上下文等游戏特定内容）。
+        /// </summary>
+        public static IAgentOrchestrator Orchestrator
+        {
+            get
+            {
+                if (_orchestrator == null)
+                {
+                    lock (_orchestratorLock)
+                    {
+                        if (_orchestrator == null)
+                            InitializeAgentOrchestrator();
+                    }
+                }
+                return _orchestrator;
+            }
+        }
+
+        /// <summary>
+        /// 初始化 Agent 编排器。注册三种角色的 AgentFactory 委托。
+        /// 必须在 Workspaces 和 LlmAccessor 就绪后调用。
+        /// </summary>
+        internal static void InitializeAgentOrchestrator()
+        {
+            if (_orchestrator != null) return;
+
+            var orchestrator = FrameworkFactory.CreateAgentOrchestrator(Workspaces);
+
+            // 导演 Agent 工厂
+            orchestrator.Register(WorkspaceRole.Director, (ws, mgr) =>
+            {
+                if (SaveStore == null || LlmAccessor == null) return null;
+                return new AgentLoop(
+                    workspace: ws,
+                    deps: BuildAgentDeps(),
+                    systemPrompt: BuildDirectorSystemPrompt(),
+                    contextProvider: () => BuildDirectorWorkspaceSummary(mgr),
+                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
+            });
+
+            // 即兴编剧 Agent 工厂
+            orchestrator.Register(WorkspaceRole.Improviser, (ws, mgr) =>
+            {
+                if (SaveStore == null || LlmAccessor == null) return null;
+                return new AgentLoop(
+                    workspace: ws,
+                    deps: BuildAgentDeps(),
+                    systemPrompt: BuildImproviserSystemPrompt(ws),
+                    contextProvider: () => BuildImproviserContext(ws),
+                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
+            });
+
+            // 编剧 Agent 工厂
+            orchestrator.Register(WorkspaceRole.Screenwriter, (ws, mgr) =>
+            {
+                if (SaveStore == null || LlmAccessor == null) return null;
+                return new AgentLoop(
+                    workspace: ws,
+                    deps: BuildAgentDeps(),
+                    systemPrompt: BuildScreenwriterSystemPrompt(ws),
+                    contextProvider: () => BuildScreenwriterContext(ws),
+                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
+            });
+
+            _orchestrator = orchestrator;
+
+            // 初始化即兴剧情线的标题和简介
+            var improWs = orchestrator.GetOrCreateWorkspace(WorkspaceRole.Improviser);
+            if (improWs != null && Workspaces != null)
+            {
+                Workspaces.SetLabel(improWs.Id, "即兴剧情");
+                Workspaces.SetDirectorMessage(improWs.Id, "无长期记忆的常驻剧情线，可根据任意一组事件创作剧情。无论事件数量每个推送轮次都会触发");
+            }
+
+            Logger?.Message("[RimLife.Core] AgentOrchestrator initialized with 3 role factories.");
+        }
+
+        /// <summary>
+        /// 获取导演工作空间（兼容旧 API，委托给 Orchestrator）。
+        /// </summary>
+        public static NPCLife.Workspace.IWorkspace GetDirectorWorkspace()
+        {
+            return Orchestrator?.GetOrCreateWorkspace(WorkspaceRole.Director);
+        }
+
+        /// <summary>
+        /// 获取即兴编剧工作空间（兼容旧 API，委托给 Orchestrator）。
+        /// </summary>
+        public static NPCLife.Workspace.IWorkspace GetImproviserWorkspace()
+        {
+            return Orchestrator?.GetOrCreateWorkspace(WorkspaceRole.Improviser);
+        }
 
         /// <summary>
         /// 构建 AgentLoop 共享基础设施依赖。
@@ -47,189 +140,6 @@ namespace RimLife.Infrastructure
                 MaxRounds = DriverConfig.MaxAgentRounds,
                 Temperature = PromptAdditions.Temperature
             };
-        }
-
-        /// <summary>
-        /// 获取导演所在工作空间。
-        /// 按 CreatedByRole == Director &amp;&amp; Status == Active 查找，不存在时自动创建。
-        /// </summary>
-        public static NPCLife.Workspace.IWorkspace GetDirectorWorkspace()
-        {
-            if (Workspaces == null) return null;
-
-            var actives = Workspaces.GetActive();
-            foreach (var ws in actives)
-            {
-                if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Director)
-                    return ws;
-            }
-
-            return Workspaces.Create("Director", NPCLife.Workspace.WorkspaceRole.Director);
-        }
-
-        /// <summary>
-        /// 获取即兴编剧所在工作空间。
-        /// 按 CreatedByRole == Improviser &amp;&amp; Status == Active 查找，不存在时自动创建。
-        /// </summary>
-        public static NPCLife.Workspace.IWorkspace GetImproviserWorkspace()
-        {
-            if (Workspaces == null) return null;
-
-            var actives = Workspaces.GetActive();
-            foreach (var ws in actives)
-            {
-                if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Improviser)
-                    return ws;
-            }
-
-            return Workspaces.Create("Improviser", NPCLife.Workspace.WorkspaceRole.Improviser);
-        }
-
-        /// <summary>
-        /// 获取即兴编剧 AgentLoop 实例。绑定即兴编剧工作空间的 EventPool。
-        /// 存档未加载或 LLM 未配置时返回 null。
-        /// </summary>
-        public static AgentLoop GetImproviserAgent()
-        {
-            if (_improviserAgent == null)
-            {
-                lock (_improviserAgentLock)
-                {
-                    if (_improviserAgent == null && SaveStore != null && LlmAccessor != null)
-                    {
-                        var improviserWs = GetImproviserWorkspace();
-                        if (improviserWs != null)
-                        {
-                            // 重检：GetImproviserWorkspace 可能通过 onWorkspaceReady
-                            // 回调重入本方法并已完成创建（C# lock 可重入）。
-                            if (_improviserAgent == null)
-                            {
-                                _improviserAgent = new AgentLoop(
-                                    workspace: improviserWs,
-                                    deps: BuildAgentDeps(),
-                                    systemPrompt: BuildImproviserSystemPrompt(improviserWs),
-                                    contextProvider: () => BuildImproviserContext(improviserWs),
-                                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
-                            }
-                        }
-                    }
-                }
-            }
-            return _improviserAgent;
-        }
-
-        /// <summary>
-        /// 获取导演 AgentLoop 实例。绑定导演工作空间的 EventPool。
-        /// 存档未加载或 LLM 未配置时返回 null。
-        /// </summary>
-        public static AgentLoop GetDirectorAgent()
-        {
-            if (_directorAgent == null)
-            {
-                lock (_directorAgentLock)
-                {
-                    if (_directorAgent == null)
-                    {
-                        if (SaveStore == null)
-                        {
-                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: SaveStore is null (no save loaded?)");
-                            return null;
-                        }
-                        if (LlmAccessor == null)
-                        {
-                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: LlmAccessor is null");
-                            return null;
-                        }
-
-                        var directorWs = GetDirectorWorkspace();
-                        if (directorWs != null)
-                        {
-                            // 重检：GetDirectorWorkspace 可能通过 onWorkspaceReady
-                            // 回调重入本方法并已完成创建（C# lock 可重入）。
-                            if (_directorAgent == null)
-                            {
-                                _directorAgent = new AgentLoop(
-                                    workspace: directorWs,
-                                    deps: BuildAgentDeps(),
-                                    systemPrompt: BuildDirectorSystemPrompt(),
-                                    contextProvider: () => BuildDirectorWorkspaceSummary(Workspaces),
-                                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
-                                Logger?.Message("[RimLife.Core] DirectorAgent created and subscribed to EventPool");
-                            }
-                        }
-                        else
-                        {
-                            Logger?.Warning("[RimLife.Core] GetDirectorAgent: DirectorWorkspace is null");
-                        }
-                    }
-                }
-            }
-            return _directorAgent;
-        }
-
-        /// <summary>
-        /// 根据工作空间角色创建对应类型的 Agent。
-        /// Director 工作空间 → Director Agent；Improviser → Improviser Agent；其他 → Screenwriter。
-        /// </summary>
-        private static void EnsureAgentForWorkspace(string workspaceId)
-        {
-            if (string.IsNullOrEmpty(workspaceId)) return;
-            var ws = Workspaces?.Get(workspaceId);
-            if (ws == null) return;
-
-            if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Director)
-                GetDirectorAgent();
-            else if (ws.CreatedByRole == NPCLife.Workspace.WorkspaceRole.Improviser)
-                GetImproviserAgent();
-            else
-                GetScreenwriter(workspaceId);
-        }
-
-        /// <summary>
-        /// 获取或创建指定工作空间的编剧 Agent。
-        /// 由 WorkspaceManager 的 onWorkspaceReady 回调触发。
-        /// </summary>
-        public static AgentLoop GetScreenwriter(string workspaceId)
-        {
-            if (string.IsNullOrEmpty(workspaceId)) return null;
-
-            lock (_screenwritersLock)
-            {
-                if (_screenwriters.TryGetValue(workspaceId, out var existing) && existing != null)
-                    return existing;
-
-                if (Workspaces == null || LlmAccessor == null) return null;
-                var ws = Workspaces.Get(workspaceId);
-                if (ws == null) return null;
-
-                var agent = new AgentLoop(
-                    workspace: ws,
-                    deps: BuildAgentDeps(),
-                    systemPrompt: BuildScreenwriterSystemPrompt(ws),
-                    contextProvider: () => BuildScreenwriterContext(ws),
-                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
-
-                _screenwriters[workspaceId] = agent;
-                Logger?.Message($"[RimLife.Core] ScreenwriterAgent created for workspace '{ws.Label}' ({workspaceId})");
-                return agent;
-            }
-        }
-
-        /// <summary>
-        /// 释放指定工作空间的编剧 Agent。
-        /// </summary>
-        public static void DisposeScreenwriter(string workspaceId)
-        {
-            if (string.IsNullOrEmpty(workspaceId)) return;
-            lock (_screenwritersLock)
-            {
-                if (_screenwriters.TryGetValue(workspaceId, out var agent))
-                {
-                    agent?.Dispose();
-                    _screenwriters.Remove(workspaceId);
-                    Logger?.Message($"[RimLife.Core] ScreenwriterAgent disposed for workspace {workspaceId}");
-                }
-            }
         }
 
         // ================================================================
@@ -275,49 +185,32 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 当前角色列表（仅本轮事件相关角色；无事件时回退到全量摘要）
+            // 推荐角色：随机选取 1-3 个可见角色作为叙事引子
+            // 不依赖事件关联，让编剧自行从推荐角色出发探索周围角色构建场景
             try
             {
-                var directorWs = GetDirectorWorkspace();
-                var pawnIds = new HashSet<string>();
-
-                if (directorWs != null)
+                var rng = new System.Random();
+                var allPawns = new List<Pawn>();
+                foreach (var map in Find.Maps)
                 {
-                    var events = directorWs.EventPool.Query(EventQuery.All);
-                    foreach (var evt in events)
-                    {
-                        if (evt.Actors == null) continue;
-                        foreach (var actor in evt.Actors)
-                        {
-                            if (actor.RefType == "Pawn" && !string.IsNullOrEmpty(actor.ID))
-                                pawnIds.Add(actor.ID);
-                        }
-                    }
+                    if (map?.mapPawns?.AllPawnsSpawned == null) continue;
+                    allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p =>
+                        p != null && !p.Dead && (p.RaceProps.Humanlike || p.RaceProps.Animal)));
+                }
+                // 随机洗牌取 1-3 个
+                var selected = allPawns.OrderBy(_ => rng.Next()).Take(rng.Next(1, 4)).ToList();
+                var pawnIds = new HashSet<string>(selected.Select(p => p.ThingID));
+
+                var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
+                if (!string.IsNullOrEmpty(summary) && summary != "[]")
+                {
+                    sb.AppendLine("## 推荐本轮叙事主角");
+                    sb.AppendLine(summary);
+                    sb.AppendLine();
                 }
 
-                if (pawnIds.Count > 0)
-                {
-                    var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
-                    if (!string.IsNullOrEmpty(summary) && summary != "[]")
-                    {
-                        sb.AppendLine("## 推荐本轮叙事主角");
-                        sb.AppendLine(summary);
-                        sb.AppendLine();
-                    }
-                }
-                else
-                {
-                    var allCondensed = CharacterQueryProvider.GetAllPawnsCondensed(8);
-                    if (!string.IsNullOrEmpty(allCondensed) && allCondensed != "[]")
-                    {
-                        sb.AppendLine("## 推荐本轮叙事主角");
-                        sb.AppendLine(allCondensed);
-                        sb.AppendLine();
-                    }
-                }
-
-                // === Phase 1 预注入：角色卡 + 关系（系统已查询，无需 LLM 再调工具） ===
                 _currentPawnIds = pawnIds;
+                AppendRelationshipSummary(sb, pawnIds);
             }
             catch { }
 
@@ -366,7 +259,7 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 当前活跃剧情线（仅编剧工作空间，过滤导演和即兴编剧）
+            // 当前活跃剧情线（通过框架 GetStorylines 获取，角色可见性由框架封装）
             if (manager == null)
             {
                 sb.AppendLine("## 当前活跃剧情线\n（无）");
@@ -375,10 +268,7 @@ namespace RimLife.Infrastructure
             {
                 try
                 {
-                    var storylines = manager.GetActive()
-                        .Where(ws => ws.CreatedByRole != WorkspaceRole.Director
-                                  && ws.CreatedByRole != WorkspaceRole.Improviser)
-                        .ToList();
+                    var storylines = manager.GetStorylines(WorkspaceStatus.Active);
 
                     if (storylines.Count == 0)
                     {
@@ -401,7 +291,7 @@ namespace RimLife.Infrastructure
                                 w.Prop("directorMessage", ws.DirectorMessage.Length > 120 ? ws.DirectorMessage.Substring(0, 120) + "..." : ws.DirectorMessage);
                             items.Add(w.Close());
                         }
-                        sb.AppendLine("## 当前活跃剧情线（路由事件时从此处复制 ID）");
+                        sb.AppendLine("## 当前活跃剧情线");
                         sb.AppendLine("[" + string.Join(",", items) + "]");
                     }
                 }
@@ -453,49 +343,32 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 当前角色列表（仅本轮事件相关角色；无事件时回退到全量摘要）
+            // 推荐角色：随机选取 1-3 个可见角色作为叙事引子
+            // 不依赖事件关联，让编剧自行从推荐角色出发探索周围角色构建场景
             try
             {
-                var directorWs = GetDirectorWorkspace();
-                var pawnIds = new HashSet<string>();
-
-                if (directorWs != null)
+                var rng = new System.Random();
+                var allPawns = new List<Pawn>();
+                foreach (var map in Find.Maps)
                 {
-                    var events = directorWs.EventPool.Query(EventQuery.All);
-                    foreach (var evt in events)
-                    {
-                        if (evt.Actors == null) continue;
-                        foreach (var actor in evt.Actors)
-                        {
-                            if (actor.RefType == "Pawn" && !string.IsNullOrEmpty(actor.ID))
-                                pawnIds.Add(actor.ID);
-                        }
-                    }
+                    if (map?.mapPawns?.AllPawnsSpawned == null) continue;
+                    allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p =>
+                        p != null && !p.Dead && (p.RaceProps.Humanlike || p.RaceProps.Animal)));
+                }
+                // 随机洗牌取 1-3 个
+                var selected = allPawns.OrderBy(_ => rng.Next()).Take(rng.Next(1, 4)).ToList();
+                var pawnIds = new HashSet<string>(selected.Select(p => p.ThingID));
+
+                var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
+                if (!string.IsNullOrEmpty(summary) && summary != "[]")
+                {
+                    sb.AppendLine("## 推荐本轮叙事主角");
+                    sb.AppendLine(summary);
+                    sb.AppendLine();
                 }
 
-                if (pawnIds.Count > 0)
-                {
-                    var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
-                    if (!string.IsNullOrEmpty(summary) && summary != "[]")
-                    {
-                        sb.AppendLine("## 推荐本轮叙事主角");
-                        sb.AppendLine(summary);
-                        sb.AppendLine();
-                    }
-                }
-                else
-                {
-                    var allCondensed = CharacterQueryProvider.GetAllPawnsCondensed(8);
-                    if (!string.IsNullOrEmpty(allCondensed) && allCondensed != "[]")
-                    {
-                        sb.AppendLine("## 推荐本轮叙事主角");
-                        sb.AppendLine(allCondensed);
-                        sb.AppendLine();
-                    }
-                }
-
-                // === Phase 1 预注入：角色卡 + 关系（系统已查询，无需 LLM 再调工具） ===
                 _currentPawnIds = pawnIds;
+                AppendRelationshipSummary(sb, pawnIds);
             }
             catch { }
 
@@ -534,16 +407,8 @@ namespace RimLife.Infrastructure
             var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultScreenwriterPrompt);
             AppendAdditions(sb, pa.ScreenwriterAdditions, "RimWorld 编剧附加指令");
 
-            // 将工作空间上下文（ID、关联角色、格式规范）注入系统提示词。
-            sb.AppendLine();
-            sb.AppendLine();
-            sb.AppendLine($"工作空间 ID：{ws.Id}");
-            sb.AppendLine($"工作空间：{ws.Label ?? "Unnamed"}");
-            var directorWs = GetDirectorWorkspace();
-            if (directorWs != null)
-                sb.AppendLine($"导演工作空间 ID：{directorWs.Id}");
-            if (ws.FocusCharacterIds != null && ws.FocusCharacterIds.Count > 0)
-                sb.AppendLine($"关联角色：{string.Join(", ", ws.FocusCharacterIds)}");
+            // 编剧侧不再注入工作空间信息。事件统一通过 route_events 工具发送，
+            // 无需知晓导演工作空间 ID 或自身工作空间 ID。
             sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();
@@ -558,14 +423,8 @@ namespace RimLife.Infrastructure
             var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultImproviserPrompt);
             AppendAdditions(sb, pa.ImproviserAdditions, "RimWorld 即兴编剧附加指令");
 
-            // 将工作空间上下文（ID、关联角色、格式规范）注入系统提示词。
-            sb.AppendLine();
-            sb.AppendLine();
-            sb.AppendLine($"工作空间 ID：{ws.Id}");
-            sb.AppendLine($"工作空间：{ws.Label ?? "Improviser"}");
-            var directorWs = GetDirectorWorkspace();
-            if (directorWs != null)
-                sb.AppendLine($"导演工作空间 ID：{directorWs.Id}");
+            // 即兴编剧侧同样不注入工作空间信息。
+            // 事件统一通过 route_events 工具发送。
             sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();
@@ -607,49 +466,32 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 当前角色列表（仅本轮事件相关角色；无事件时回退到全量摘要）
+            // 推荐角色：随机选取 1-3 个可见角色作为叙事引子
+            // 不依赖事件关联，让编剧自行从推荐角色出发探索周围角色构建场景
             try
             {
-                var directorWs = GetDirectorWorkspace();
-                var pawnIds = new HashSet<string>();
-
-                if (directorWs != null)
+                var rng = new System.Random();
+                var allPawns = new List<Pawn>();
+                foreach (var map in Find.Maps)
                 {
-                    var events = directorWs.EventPool.Query(EventQuery.All);
-                    foreach (var evt in events)
-                    {
-                        if (evt.Actors == null) continue;
-                        foreach (var actor in evt.Actors)
-                        {
-                            if (actor.RefType == "Pawn" && !string.IsNullOrEmpty(actor.ID))
-                                pawnIds.Add(actor.ID);
-                        }
-                    }
+                    if (map?.mapPawns?.AllPawnsSpawned == null) continue;
+                    allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p =>
+                        p != null && !p.Dead && (p.RaceProps.Humanlike || p.RaceProps.Animal)));
+                }
+                // 随机洗牌取 1-3 个
+                var selected = allPawns.OrderBy(_ => rng.Next()).Take(rng.Next(1, 4)).ToList();
+                var pawnIds = new HashSet<string>(selected.Select(p => p.ThingID));
+
+                var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
+                if (!string.IsNullOrEmpty(summary) && summary != "[]")
+                {
+                    sb.AppendLine("## 推荐本轮叙事主角");
+                    sb.AppendLine(summary);
+                    sb.AppendLine();
                 }
 
-                if (pawnIds.Count > 0)
-                {
-                    var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
-                    if (!string.IsNullOrEmpty(summary) && summary != "[]")
-                    {
-                        sb.AppendLine("## 推荐本轮叙事主角");
-                        sb.AppendLine(summary);
-                        sb.AppendLine();
-                    }
-                }
-                else
-                {
-                    var allCondensed = CharacterQueryProvider.GetAllPawnsCondensed(8);
-                    if (!string.IsNullOrEmpty(allCondensed) && allCondensed != "[]")
-                    {
-                        sb.AppendLine("## 推荐本轮叙事主角");
-                        sb.AppendLine(allCondensed);
-                        sb.AppendLine();
-                    }
-                }
-
-                // === Phase 1 预注入：角色卡 + 关系（系统已查询，无需 LLM 再调工具） ===
                 _currentPawnIds = pawnIds;
+                AppendRelationshipSummary(sb, pawnIds);
             }
             catch { }
 
@@ -703,6 +545,70 @@ namespace RimLife.Infrastructure
                 sb.AppendLine("## 叙事风格");
                 sb.AppendLine(pa.StyleInstruction);
             }
+        }
+
+        // ================================================================
+        // 关系/交互摘要：一行文本替代 get_relationships + get_interaction_history
+        // ================================================================
+
+        /// <summary>
+        /// 为推荐角色追加一行紧凑的交互摘要。
+        /// 替代 LLM 手动调用 get_relationships + get_interaction_history，消除 1 轮工具调用开销。
+        /// </summary>
+        private static void AppendRelationshipSummary(StringBuilder sb, HashSet<string> pawnIds)
+        {
+            if (pawnIds == null || pawnIds.Count == 0) return;
+
+            var parts = new List<string>();
+            foreach (var id in pawnIds)
+            {
+                try
+                {
+                    var pawn = PawnQueryHelper.FindPawnById(id);
+                    if (pawn == null) continue;
+                    string name = pawn.Name?.ToStringShort ?? pawn.LabelShortCap ?? "?";
+                    string opinion = GetColonyOpinion(pawn);
+                    int histCount = GetInteractionCount(pawn);
+                    string hist = histCount > 0 ? $"{histCount}条交互" : "无";
+                    parts.Add($"{name}({opinion},{hist})");
+                }
+                catch { }
+            }
+
+            if (parts.Count > 0)
+            {
+                sb.Append("角色关系/交互: ");
+                sb.AppendLine(string.Join("; ", parts));
+                sb.AppendLine();
+            }
+        }
+
+        private static string GetColonyOpinion(Pawn p)
+        {
+            try
+            {
+                var colonists = PawnsFinder.AllMaps_FreeColonistsSpawned;
+                if (colonists == null || colonists.Count == 0) return "?";
+                float sum = 0f; int cnt = 0;
+                foreach (var c in colonists)
+                {
+                    if (c == p || c?.relations == null) continue;
+                    try { sum += c.relations.OpinionOf(p); cnt++; } catch { }
+                }
+                if (cnt == 0) return "?";
+                return SemanticLabels.MapOpinionTier(sum / cnt);
+            }
+            catch { return "?"; }
+        }
+
+        private static int GetInteractionCount(Pawn p)
+        {
+            try
+            {
+                if (p?.interactions == null) return 0;
+                return 0; // RimWorld 1.6 交互历史需通过 InteractionLog 查询，留作占位
+            }
+            catch { return 0; }
         }
 
         // ================================================================
@@ -852,39 +758,12 @@ namespace RimLife.Infrastructure
 
         /// <summary>
         /// 重建所有 Agent。修改提示词或驱动参数后调用，
-        /// 销毁现有 Agent 实例，下次事件触发时用新参数自动重建。
+        /// 委托给 AgentOrchestrator 执行销毁 + 重建。
         /// </summary>
         public static void RebuildAgents()
         {
             Logger?.Message("[RimLife.Core] Rebuilding agents...");
-
-            lock (_directorAgentLock)
-            {
-                _directorAgent?.Dispose();
-                _directorAgent = null;
-            }
-
-            lock (_improviserAgentLock)
-            {
-                _improviserAgent?.Dispose();
-                _improviserAgent = null;
-            }
-
-            lock (_screenwritersLock)
-            {
-                foreach (var kv in _screenwriters)
-                    kv.Value?.Dispose();
-                _screenwriters.Clear();
-            }
-
-            // 如果工作空间管理器已就绪，立即为活跃工作空间重建 Agent
-            if (Workspaces != null)
-            {
-                var actives = Workspaces.GetActive();
-                foreach (var ws in actives)
-                    EnsureAgentForWorkspace(ws.Id);
-            }
-
+            Orchestrator?.RebuildAll();
             Logger?.Message("[RimLife.Core] Agents rebuilt successfully.");
         }
     }

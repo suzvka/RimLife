@@ -29,11 +29,32 @@ namespace RimLife.Infrastructure.Knowledge
             // PawnKindDef: 生物/人形/动物种类
             Register<PawnKindDef>();
 
+            // XenotypeDef: 异种人定义（尼人种/魔人/高角人等，Biotech DLC）
+            Register<XenotypeDef>();
+
+            // GeneDef: 基因定义（Biotech DLC）
+            Register<GeneDef>();
+
             // HediffDef: 健康状态（疾病/伤口/植入物/成瘾等）
             Register<HediffDef>();
 
+            // BodyPartDef: 身体部位（躯干/腿/手臂等）
+            Register<BodyPartDef>();
+
+            // DamageDef: 伤害类型（割伤/烧伤/瘀伤等）
+            Register<DamageDef>();
+
             // TraitDef: 性格特征
             Register<TraitDef>();
+
+            // MentalStateDef: 精神状态（暴怒/悲伤徘徊/纵火狂等）
+            Register<MentalStateDef>();
+
+            // ThoughtDef: 想法/记忆定义（心情影响因素，如"吃了没有桌子的饭"）
+            Register<ThoughtDef>();
+
+            // NeedDef: 需求定义（心情/饮食/休息/娱乐等）
+            Register<NeedDef>();
 
             // RecipeDef: 配方/工作台工序
             Register<RecipeDef>();

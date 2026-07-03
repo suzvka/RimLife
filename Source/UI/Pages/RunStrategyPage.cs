@@ -37,9 +37,9 @@ namespace RimLife.UI
         // 剧情编剧专用
         private int _screenwriterCountThreshold;
         private int _screenwriterImportanceThreshold;
+        private int _screenwriterTimerInterval;
 
         // 通用
-        private int _recentHistoryCapacity;
         private int _maxAgentRounds;
 
         // ---- 诊断开关（原 AdvancedPage） ----
@@ -62,12 +62,12 @@ namespace RimLife.UI
 
             listing.Gap(GapTiny);
 
-            DrawLabeledIntRow(listing, "导演专用事件数阈值:", ref _directorCountThreshold, 1, 999,
-                "pending 事件数达到此值时触发导演 Agent");
-            DrawLabeledIntRow(listing, "导演专用重要度阈值:", ref _directorImportanceThreshold, 1, 999,
-                "pending 事件总重要度达到此值时触发导演 Agent");
-            DrawLabeledIntRow(listing, "导演定时器间隔 (秒):", ref _directorTimerInterval, 0, 999999,
-                "0 = 禁用定时器；每 N 现实秒注入一个 TimerPulse 事件（与游戏速度无关）");
+            DrawLabeledIntRow(listing, "事件数阈值:", ref _directorCountThreshold, 1, 999,
+                "");
+            DrawLabeledIntRow(listing, "重要度阈值:", ref _directorImportanceThreshold, 1, 999,
+                "");
+            DrawLabeledIntRow(listing, "定时器间隔 (秒):", ref _directorTimerInterval, 0, 999999,
+                "0 = 禁用");
 
             listing.Gap(GapTiny);
             EndSection(listing);
@@ -77,12 +77,12 @@ namespace RimLife.UI
             // ================================================================
             BeginSection(listing, "即兴编剧策略");
 
-            DrawLabeledIntRow(listing, "即兴编剧专用事件数阈值:", ref _improviserCountThreshold, 1, 999,
-                "pending 事件数达到此值时触发即兴编剧 Agent");
-            DrawLabeledIntRow(listing, "即兴编剧专用重要度阈值:", ref _improviserImportanceThreshold, 1, 999,
-                "pending 事件总重要度达到此值时触发即兴编剧 Agent");
-            DrawLabeledIntRow(listing, "即兴编剧定时器间隔 (秒):", ref _improviserTimerInterval, 0, 999999,
-                "0 = 禁用定时器；每 N 现实秒注入一个 TimerPulse 事件（与游戏速度无关）");
+            DrawLabeledIntRow(listing, "事件数阈值:", ref _improviserCountThreshold, 1, 999,
+                "");
+            DrawLabeledIntRow(listing, "重要度阈值:", ref _improviserImportanceThreshold, 1, 999,
+                "");
+            DrawLabeledIntRow(listing, "定时器间隔 (秒):", ref _improviserTimerInterval, 0, 999999,
+                "0 = 禁用");
 
             listing.Gap(GapTiny);
             EndSection(listing);
@@ -92,10 +92,12 @@ namespace RimLife.UI
             // ================================================================
             BeginSection(listing, "剧情编剧策略");
 
-            DrawLabeledIntRow(listing, "剧情编剧专用事件数阈值:", ref _screenwriterCountThreshold, 1, 999,
-                "pending 事件数达到此值时触发编剧 Agent；剧情编剧创作叙事内容，无定时器");
-            DrawLabeledIntRow(listing, "剧情编剧专用重要度阈值:", ref _screenwriterImportanceThreshold, 1, 999,
-                "pending 事件总重要度达到此值时触发编剧 Agent");
+            DrawLabeledIntRow(listing, "事件数阈值:", ref _screenwriterCountThreshold, 1, 999,
+                "");
+            DrawLabeledIntRow(listing, "重要度阈值:", ref _screenwriterImportanceThreshold, 1, 999,
+                "");
+            DrawLabeledIntRow(listing, "定时器间隔 (秒):", ref _screenwriterTimerInterval, 0, 999999,
+                "0 = 禁用");
 
             listing.Gap(GapTiny);
             EndSection(listing);
@@ -105,10 +107,8 @@ namespace RimLife.UI
             // ================================================================
             BeginSection(listing, "通用设置");
 
-            DrawLabeledIntRow(listing, "历史缓冲区容量:", ref _recentHistoryCapacity, 10, 9999,
-                "保留在内存中的近期事件数量上限");
             DrawLabeledIntRow(listing, "Agent 最大轮数:", ref _maxAgentRounds, 1, 100,
-                "单次激活中工具调用的最大轮数（防死循环）");
+                "");
 
             listing.Gap(GapTiny);
             EndSection(listing);
@@ -142,7 +142,7 @@ namespace RimLife.UI
                     ImproviserTimerInterval = _improviserTimerInterval,
                     ScreenwriterCountThreshold = _screenwriterCountThreshold,
                     ScreenwriterImportanceThreshold = _screenwriterImportanceThreshold,
-                    RecentHistoryCapacity = _recentHistoryCapacity,
+                    ScreenwriterTimerInterval = _screenwriterTimerInterval,
                     MaxAgentRounds = _maxAgentRounds,
                 };
 
@@ -177,7 +177,7 @@ namespace RimLife.UI
                 _improviserTimerInterval = defaultDc.ImproviserTimerInterval;
                 _screenwriterCountThreshold = defaultDc.ScreenwriterCountThreshold;
                 _screenwriterImportanceThreshold = (int)defaultDc.ScreenwriterImportanceThreshold;
-                _recentHistoryCapacity = defaultDc.RecentHistoryCapacity;
+                _screenwriterTimerInterval = defaultDc.ScreenwriterTimerInterval;
                 _maxAgentRounds = defaultDc.MaxAgentRounds;
                 _enableVerboseLogging = false;
                 _enableToolCallTracing = false;
@@ -205,7 +205,7 @@ namespace RimLife.UI
             _improviserTimerInterval = dc.ImproviserTimerInterval;
             _screenwriterCountThreshold = dc.ScreenwriterCountThreshold;
             _screenwriterImportanceThreshold = (int)dc.ScreenwriterImportanceThreshold;
-            _recentHistoryCapacity = dc.RecentHistoryCapacity;
+            _screenwriterTimerInterval = dc.ScreenwriterTimerInterval;
             _maxAgentRounds = dc.MaxAgentRounds;
 
             // Diagnostics

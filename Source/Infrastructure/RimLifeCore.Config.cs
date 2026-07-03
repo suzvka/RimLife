@@ -58,7 +58,6 @@ namespace RimLife.Infrastructure
                 w.Prop("directorTimerInterval", config.DirectorTimerInterval);
                 w.Prop("freelancerTimerInterval", config.ImproviserTimerInterval);
                 w.Prop("screenwriterTimerInterval", config.ScreenwriterTimerInterval);
-                w.Prop("recentHistoryCapacity", config.RecentHistoryCapacity);
                 w.Prop("maxAgentRounds", config.MaxAgentRounds);
                 var settings = RimLifeModSettings.Instance;
                 if (settings != null)
@@ -96,7 +95,6 @@ namespace RimLife.Infrastructure
             current.DirectorTimerInterval = newConfig.DirectorTimerInterval;
             current.ImproviserTimerInterval = newConfig.ImproviserTimerInterval;
             current.ScreenwriterTimerInterval = newConfig.ScreenwriterTimerInterval;
-            current.RecentHistoryCapacity = newConfig.RecentHistoryCapacity;
             current.MaxAgentRounds = newConfig.MaxAgentRounds;
         }
 
@@ -169,8 +167,6 @@ namespace RimLife.Infrastructure
                         dc.ImproviserTimerInterval = ftiv;
                     if (dict.TryGetValue("screenwriterTimerInterval", out var swti) && int.TryParse(swti, out var swtiv))
                         dc.ScreenwriterTimerInterval = swtiv;
-                    if (dict.TryGetValue("recentHistoryCapacity", out var rhc) && int.TryParse(rhc, out var rhcv))
-                        dc.RecentHistoryCapacity = rhcv;
                     if (dict.TryGetValue("maxAgentRounds", out var mar) && int.TryParse(mar, out var marv))
                         dc.MaxAgentRounds = marv;
                     Logger?.Message("[RimLife.Core] DriverConfig loaded from ModSettings.");
