@@ -23,13 +23,7 @@ namespace RimLife.Infrastructure.Mcp
 
         public IReadOnlyList<McpTool> GetTools()
         {
-            return new McpTool[]
-            {
-                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetColonyOverview))),
-                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetRecentEvents))),
-                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetActiveObjectives))),
-                //McpTool.FromMethod(typeof(ColonyOverviewProvider).GetMethod(nameof(GetResourceInventory))),
-            };
+            return Array.Empty<McpTool>();
         }
 
         // ================================================================
@@ -38,9 +32,8 @@ namespace RimLife.Infrastructure.Mcp
 
         /// <summary>
         /// 获取殖民地全局快照：人口、财富、食物/电力状态、士气、威胁、派系关系、时间季节。
+        /// 已由上下文注入替代，保留供测试调用。
         /// </summary>
-        //[McpTool(Name = "get_colony_overview",
-        //         Description = "获取殖民地全局快照：人口、财富、食物/电力状态、士气、威胁、派系关系、时间季节。")]
         public static string GetColonyOverview()
         {
             try

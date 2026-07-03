@@ -26,8 +26,6 @@ namespace RimLife.Infrastructure.Mcp
             return new McpTool[]
             {
                 McpTool.FromMethod(typeof(CharacterQueryProvider).GetMethod(nameof(GetCharacterCard))),
-                //McpTool.FromMethod(typeof(CharacterQueryProvider).GetMethod(nameof(FindCharacters))),
-                McpTool.FromMethod(typeof(CharacterQueryProvider).GetMethod(nameof(ListAllPawns))),
             };
         }
 
@@ -39,7 +37,7 @@ namespace RimLife.Infrastructure.Mcp
         /// 获取指定角色的完整人物卡，按 view 分层控制数据量。
         /// </summary>
         [McpTool(Name = "get_character_card",
-                 Description = "获取指定角色的人物卡")]
+                 Description = "[评分-2] 获取指定角色的人物卡")]
         public static string GetCharacterCard(
             [McpParam(Description = "角色ID")] string pawnId,
             [McpParam(Description = "数据层级：static(从第三人称视角审视时用)/ dynamic(深入人物内心世界用)/ full(超级深度挖掘时用)",
@@ -196,6 +194,110 @@ namespace RimLife.Infrastructure.Mcp
         // 内部辅助
         // ================================================================
 
+        /// <summary>
+        /// 获取所有可见角色的极简摘要（供上下文注入使用）。
+        /// 返回 JSON 数组字符串，包含 id、name、pawnType、factionLabel、isDead、isDowned。
+        /// </summary>
+        public static string GetAllPawnsSummary(int limit = 50)
+        {
+            try
+            {
+                var allPawns = new List<Pawn>();
+                foreach (var map in Find.Maps)
+                {
+                    if (map?.mapPawns?.AllPawnsSpawned == null) continue;
+                    allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p => p != null));
+                }
+
+                // 按分类排序：殖民者 > 囚犯 > 访客 > 动物 > 机械体
+                allPawns.Sort((a, b) =>
+                {
+                    int typeOrderA = GetPawnTypeOrder(a);
+                    int typeOrderB = GetPawnTypeOrder(b);
+                    if (typeOrderA != typeOrderB) return typeOrderA.CompareTo(typeOrderB);
+                    return string.Compare(a.LabelShortCap, b.LabelShortCap, StringComparison.OrdinalIgnoreCase);
+                });
+
+                if (allPawns.Count > limit)
+                    allPawns = allPawns.Take(limit).ToList();
+
+                var summaries = new List<string>();
+                foreach (var p in allPawns)
+                    summaries.Add(SerializePawnSummary(p));
+
+                return PawnQueryHelper.SerializeJsonArray(summaries);
+            }
+            catch (Exception e)
+            {
+                RimLifeCore.Logger?.Warning($"[RimLife.CharacterQueryProvider] GetAllPawnsSummary failed: {e.Message}");
+                return "[]";
+            }
+        }
+
+        /// <summary>
+        /// 按 ID 列表获取角色精简卡。用于上下文注入时只列出事件相关角色。
+        /// 每卡约 150-200 Token，包含健康/心情/Top3技能。
+        /// </summary>
+        public static string GetPawnsByIds(IEnumerable<string> ids)
+        {
+            try
+            {
+                var summaries = new List<string>();
+                foreach (var id in ids)
+                {
+                    if (string.IsNullOrEmpty(id)) continue;
+                    var pawn = PawnQueryHelper.FindPawnById(id);
+                    if (pawn == null) continue;
+                    summaries.Add(SerializePawnCondensed(pawn));
+                }
+                return PawnQueryHelper.SerializeJsonArray(summaries);
+            }
+            catch (Exception e)
+            {
+                RimLifeCore.Logger?.Warning($"[RimLife.CharacterQueryProvider] GetPawnsByIds failed: {e.Message}");
+                return "[]";
+            }
+        }
+
+        /// <summary>
+        /// 获取所有可见角色的精简卡（供上下文注入使用）。
+        /// 与 GetAllPawnsSummary 的区别：每卡附带健康/心情/Top3技能，帮助 LLM 做出更好的初始判断。
+        /// </summary>
+        public static string GetAllPawnsCondensed(int limit = 8)
+        {
+            try
+            {
+                var allPawns = new List<Pawn>();
+                foreach (var map in Find.Maps)
+                {
+                    if (map?.mapPawns?.AllPawnsSpawned == null) continue;
+                    allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p => p != null));
+                }
+
+                allPawns.Sort((a, b) =>
+                {
+                    int typeOrderA = GetPawnTypeOrder(a);
+                    int typeOrderB = GetPawnTypeOrder(b);
+                    if (typeOrderA != typeOrderB) return typeOrderA.CompareTo(typeOrderB);
+                    return string.Compare(a.LabelShortCap, b.LabelShortCap, StringComparison.OrdinalIgnoreCase);
+                });
+
+                if (allPawns.Count > limit)
+                    allPawns = allPawns.Take(limit).ToList();
+
+                var cards = new List<string>();
+                foreach (var p in allPawns)
+                    cards.Add(SerializePawnCondensed(p));
+
+                return PawnQueryHelper.SerializeJsonArray(cards);
+            }
+            catch (Exception e)
+            {
+                RimLifeCore.Logger?.Warning($"[RimLife.CharacterQueryProvider] GetAllPawnsCondensed failed: {e.Message}");
+                return "[]";
+            }
+        }
+
         private static bool MatchesPawnType(Pawn p, string typeFilter)
         {
             if (p == null) return false;
@@ -244,6 +346,32 @@ namespace RimLife.Infrastructure.Mcp
             else pawnType = "Other";
 
             var w = new NPCLife.Framework.JsonWriter(128);
+            w.Prop("id", p.ThingID ?? "");
+            w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
+            w.Prop("pawnType", pawnType);
+            w.Prop("factionLabel", p.Faction?.Name ?? "None");
+            w.Prop("isDead", p.Dead);
+            w.Prop("isDowned", p.Downed);
+            return w.Close();
+        }
+
+        /// <summary>
+        /// 序列化角色的极简摘要卡，供上下文注入使用。
+        /// 仅含 id + name（~25 Token），其他数据通过伪造工具调用链注入。
+        /// </summary>
+        private static string SerializePawnCondensed(Pawn p)
+        {
+            var w = new NPCLife.Framework.JsonWriter(96);
+
+            string pawnType;
+            if (p.IsColonist && !p.IsPrisoner) pawnType = "Colonist";
+            else if (p.IsPrisoner) pawnType = "Prisoner";
+            else if (p.RaceProps.Animal) pawnType = "Animal";
+            else if (p.RaceProps.IsMechanoid) pawnType = "Mechanoid";
+            else if (p.RaceProps.Humanlike)
+                pawnType = p.Faction != null && p.Faction.HostileTo(Faction.OfPlayer) ? "Enemy" : "Guest";
+            else pawnType = "Other";
+
             w.Prop("id", p.ThingID ?? "");
             w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
             w.Prop("pawnType", pawnType);

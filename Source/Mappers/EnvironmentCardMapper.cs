@@ -68,6 +68,42 @@ namespace RimLife.Mappers
         }
 
         /// <summary>
+        /// 创建地图级别的环境卡片（温度、天气、光照），不依赖特定 Pawn。
+        /// 用于殖民地整体环境感知，避免对多个 Pawn 重复查询相同数据。
+        /// </summary>
+        public static EnvironmentCard CreateForMap(int mapId = 0)
+        {
+            try
+            {
+                Map map = mapId == 0 ? Find.CurrentMap
+                    : Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
+                if (map == null)
+                    return new EnvironmentCard { ThingSummary = new Dictionary<string, int>() };
+
+                // 使用地图中心点作为参考位置
+                var center = new IntVec3(map.Size.x / 2, 0, map.Size.z / 2);
+                float temperature = GenTemperature.GetTemperatureForCell(center, map);
+                float lightLevel = map.glowGrid.GroundGlowAt(center);
+
+                return new EnvironmentCard
+                {
+                    Type = "Colony",
+                    Temperature = temperature,
+                    LightLevel = lightLevel,
+                    ThermalComfort = SemanticLabels.MapThermalComfort(temperature),
+                    LightLabel = SemanticLabels.MapLightLevel(lightLevel),
+                    Weather = MapWeather(map),
+                    ThingSummary = new Dictionary<string, int>()
+                };
+            }
+            catch (Exception e)
+            {
+                Log.Warning($"[RimLife] EnvironmentCardMapper.CreateForMap failed: {e.Message}");
+                return new EnvironmentCard { ThingSummary = new Dictionary<string, int>() };
+            }
+        }
+
+        /// <summary>
         /// 异步创建 EnvironmentCard。
         /// </summary>
         public static Task<EnvironmentCard> CreateFromAsync(Pawn p)

@@ -19,31 +19,25 @@ namespace RimLife.Infrastructure.Mcp
 
         public IReadOnlyList<McpTool> GetTools()
         {
-            return new McpTool[]
-            {
-                McpTool.FromMethod(typeof(EnvironmentQueryProvider).GetMethod(nameof(GetEnvironment))),
-            };
+            return Array.Empty<McpTool>();
         }
 
         /// <summary>
-        /// 获取指定角色当前所处环境信息。
+        /// 获取殖民地整体环境信息（温度、天气、光照）。
+        /// 已由上下文注入替代，保留供测试调用。
         /// </summary>
-        [McpTool(Name = "get_environment",
-                 Description = "获取指定角色当前所处环境信息：室内外、温光、天气、房间评分。")]
-        public static string GetEnvironment(
-            [McpParam(Description = "角色唯一 ID")] string pawnId)
+        public static string GetColonyEnvironment(
+            [McpParam(Description = "地图 ID，0=当前地图",
+                      Required = McpRequired.False)] int mapId = 0)
         {
             try
             {
-                var pawn = PawnQueryHelper.FindPawnById(pawnId);
-                if (pawn == null) return "{}";
-
-                var env = EnvironmentCardMapper.CreateFrom(pawn);
+                var env = EnvironmentCardMapper.CreateForMap(mapId);
                 return CardSerializer.Default.SerializeEnvironment(env);
             }
             catch (Exception e)
             {
-                RimLifeCore.Logger?.Warning($"[RimLife.EnvironmentQueryProvider] get_environment({pawnId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.EnvironmentQueryProvider] get_colony_environment failed: {e.Message}");
                 return "{}";
             }
         }

@@ -50,30 +50,49 @@ namespace RimLife
         {
             try
             {
-                // StandardLetter: 文本存在 <text> 字段 (TaggedString 或 string)
-                var textField = let.GetType().GetField("text",
-                    System.Reflection.BindingFlags.Instance |
-                    System.Reflection.BindingFlags.Public |
-                    System.Reflection.BindingFlags.NonPublic);
-                if (textField != null)
+                var type = let.GetType();
+                var flags = System.Reflection.BindingFlags.Instance |
+                            System.Reflection.BindingFlags.Public |
+                            System.Reflection.BindingFlags.NonPublic;
+
+                // 依次尝试多个可能的字段/属性名
+                string[] candidates = { "text", "baseText", "description", "bodyText" };
+
+                foreach (var name in candidates)
                 {
-                    var val = textField.GetValue(let);
-                    if (val != null)
+                    // 先尝试字段
+                    var field = type.GetField(name, flags);
+                    if (field != null)
                     {
-                        string s = val.ToString();
-                        if (!string.IsNullOrEmpty(s) && s != let.Label.ToString())
-                            return s;
+                        var val = field.GetValue(let);
+                        if (val != null)
+                        {
+                            string s = val.ToString();
+                            if (!string.IsNullOrEmpty(s))
+                                return s;
+                        }
+                    }
+
+                    // 再尝试属性
+                    var prop = type.GetProperty(name, flags);
+                    if (prop != null && prop.CanRead)
+                    {
+                        var val = prop.GetValue(let);
+                        if (val != null)
+                        {
+                            string s = val.ToString();
+                            if (!string.IsNullOrEmpty(s))
+                                return s;
+                        }
                     }
                 }
 
-                // ChoiceLetter: 文本在 <text> 或 <baseText>
-                var baseTextField = let.GetType().GetField("baseText",
-                    System.Reflection.BindingFlags.Instance |
-                    System.Reflection.BindingFlags.Public |
-                    System.Reflection.BindingFlags.NonPublic);
-                if (baseTextField != null)
+                // 最后尝试 Letter 基类的 GetBodyText() 或类似方法
+                var bodyMethod = type.GetMethod("GetBodyText", flags)
+                              ?? type.GetMethod("GetLetterText", flags);
+                if (bodyMethod != null)
                 {
-                    var val = baseTextField.GetValue(let);
+                    var val = bodyMethod.Invoke(let, null);
                     if (val != null)
                     {
                         string s = val.ToString();
@@ -82,7 +101,9 @@ namespace RimLife
                 }
             }
             catch { }
-            return "";
+            // 回退：无独立正文时用标题作为叙事文本
+            var label = let.Label.ToString();
+            return string.IsNullOrEmpty(label) ? "" : label;
         }
 
         private static string TruncateForLog(string s, int maxLen)

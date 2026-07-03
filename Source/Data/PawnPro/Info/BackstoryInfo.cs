@@ -32,24 +32,56 @@ namespace RimLife
 
         /// <summary>
         /// 从Pawn创建BackstoryInfo快照。必须在主线程中调用。
+        /// 会就地展开描述中的 RimWorld 占位符（[PAWN_nameDef] → 角色名，[PAWN_pronoun] → 他/她 等），
+        /// 避免将无意义的元文本送入 LLM。
         /// </summary>
         public static BackstoryInfo CreateFrom(Pawn p)
         {
             if (p?.story == null) return new BackstoryInfo(null, null);
 
+            string pawnName = p.Name?.ToStringShort ?? p.LabelShort ?? "角色";
+            string pronoun = GetPronoun(p);
+            string possessive = GetPossessive(p);
+
             BackstoryEntry? childhood = p.story.Childhood != null ? new BackstoryEntry
             {
                 Title = p.story.Childhood.title,
-                Description = p.story.Childhood.description
+                Description = ResolvePlaceholders(p.story.Childhood.description, pawnName, pronoun, possessive)
             } : null;
 
             BackstoryEntry? adulthood = p.story.Adulthood != null ? new BackstoryEntry
             {
                 Title = p.story.Adulthood.title,
-                Description = p.story.Adulthood.description
+                Description = ResolvePlaceholders(p.story.Adulthood.description, pawnName, pronoun, possessive)
             } : null;
 
             return new BackstoryInfo(childhood, adulthood);
+        }
+
+        /// <summary>
+        /// 展开 RimWorld 背景故事描述中的标准占位符。
+        /// </summary>
+        private static string ResolvePlaceholders(string description, string name, string pronoun, string possessive)
+        {
+            if (string.IsNullOrEmpty(description)) return description;
+
+            return description
+                .Replace("[PAWN_nameDef]", name)
+                .Replace("[PAWN_pronoun]", pronoun)
+                .Replace("[PAWN_possessive]", possessive)
+                .Replace("[PAWN_objective]", pronoun); // RimWorld 使用 [PAWN_objective] 作为宾格代词
+        }
+
+        private static string GetPronoun(Pawn p)
+        {
+            if (p.gender == Gender.Female) return "她";
+            return "他";
+        }
+
+        private static string GetPossessive(Pawn p)
+        {
+            if (p.gender == Gender.Female) return "她的";
+            return "他的";
         }
 
         public string ToPrompt()

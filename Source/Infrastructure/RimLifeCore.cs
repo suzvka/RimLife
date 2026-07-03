@@ -444,6 +444,12 @@ namespace RimLife.Infrastructure
                     });
 
                     Logger?.Message("[RimLife.Core] RuntimeMetrics enabled.");
+
+                    // ---- 会话追踪（全文记录，供 Dashboard 展示） ----
+                    // 单实例即可，内部用 ThreadStatic 拥有者模式避免 3x 重复采集。
+                    FrameworkFactory.Pipeline.AddInterceptor(
+                        new SessionTraceInterceptor(), priority: 200);
+                    Logger?.Message("[RimLife.Core] SessionTrace enabled.");
                 }
             }
         }

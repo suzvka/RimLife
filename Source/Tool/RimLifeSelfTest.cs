@@ -930,7 +930,7 @@ namespace RimLife.Tool
             {
                 try
                 {
-                    var json = EnvironmentQueryProvider.GetEnvironment(pawnId);
+                    var json = EnvironmentQueryProvider.GetColonyEnvironment(0);
                     if (json.Contains("\"type\""))
                         Pass("get_environment 成功");
                     else

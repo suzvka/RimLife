@@ -88,11 +88,23 @@ namespace RimLife
 
         private static string FormatGearPrompt(GearItem g)
         {
-            string extra = !string.IsNullOrEmpty(g.Quality) ? $"{g.Quality}, {g.ConditionLabel}" : g.ConditionLabel;
-            if (g.Count > 1)
-                return $"{g.Name} ×{g.Count}({extra})";
+            // 物品名称 (thing.LabelCap) 已包含中文品质标签（如 "(一般)"），
+            // 此处仅追加磨损状态，避免中英文品质重复送入 LLM。
+            string extra = !string.IsNullOrEmpty(g.ConditionLabel) ? g.ConditionLabel : null;
+            if (extra != null)
+            {
+                if (g.Count > 1)
+                    return $"{g.Name} ×{g.Count}({extra})";
+                else
+                    return $"{g.Name}({extra})";
+            }
             else
-                return $"{g.Name}({extra})";
+            {
+                if (g.Count > 1)
+                    return $"{g.Name} ×{g.Count}";
+                else
+                    return g.Name;
+            }
         }
     }
 

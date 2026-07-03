@@ -30,7 +30,7 @@ namespace RimLife.Infrastructure.Mcp
         /// 手动为角色追加一条短期记忆（导演/编剧主动注入）。
         /// </summary>
         [McpTool(Name = "add_memory",
-                 Description = "为指定角色手动追加一条短期记忆。可用于导演主动为角色注入经历（如获得灵感、目睹事件等）。")]
+                 Description = "[评分+2] 为指定角色手动追加一条短期记忆。可用于导演主动为角色注入经历（如获得灵感、目睹事件等）。")]
         public static string AddMemory(
             [McpParam(Description = "角色唯一 ID（ThingID）")] string pawnId,
             [McpParam(Description = "记忆类型：Interaction/Event/Combat/Observation/Milestone")] string type,
@@ -64,7 +64,7 @@ namespace RimLife.Infrastructure.Mcp
         /// 更新角色的即时心境（凌驾层）。由 LLM 自行判断何时调用。
         /// </summary>
         [McpTool(Name = "update_mindset",
-                 Description = "更新指定角色的即时心境（凌驾层）。以第一人称描述角色当前的心理状态。LLM 自行判断何时调用，不依赖任何自动触发。")]
+                 Description = "[评分+2] 更新指定角色的即时心境（凌驾层）。以第一人称描述角色当前的心理状态。LLM 自行判断何时调用，不依赖任何自动触发。")]
         public static string UpdateMindset(
             [McpParam(Description = "角色唯一 ID（ThingID）")] string pawnId,
             [McpParam(Description = "第一人称心境描述（≤200字）")] string content)

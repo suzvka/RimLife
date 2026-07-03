@@ -179,7 +179,7 @@ namespace RimLife.Infrastructure.Mcp
         /// 包含社交关系、牵绊动物、机械体从属等，按 Pawn 类型异构返回。
         /// </summary>
         [McpTool(Name = "get_relationships",
-                 Description = "获取指定角色的关系网络：社交关系、牵绊动物、机械体从属。返回结构化 JSON，字段因角色类型而异。")]
+                 Description = "[评分-3] 获取指定角色的关系网络：社交关系、牵绊动物、机械体从属。返回结构化 JSON，字段因角色类型而异。")]
         public static string GetRelationships(
             [McpParam(Description = "角色唯一 ID")] string pawnId)
         {
@@ -207,7 +207,7 @@ namespace RimLife.Infrastructure.Mcp
         /// 获取指定角色近期的社交互动流水记录。
         /// </summary>
         [McpTool(Name = "get_interaction_history",
-                 Description = "获取指定角色近期的社交互动流水记录，用于理解角色间动态。")]
+                 Description = "[评分-2] 获取指定角色近期的社交互动流水记录，用于理解角色间动态。")]
         public static string GetInteractionHistory(
             [McpParam(Description = "角色唯一 ID")] string pawnId,
             [McpParam(Description = "起始 tick（含），默认 5000 ticks 前",
@@ -235,7 +235,7 @@ namespace RimLife.Infrastructure.Mcp
         /// 所有字段均已语义化，零裸数值。
         /// </summary>
         [McpTool(Name = "get_relationship_between",
-                 Description = "获取两个角色之间的关系摘要：社交关系、牵绊、从属、双向好感、兼容度、互动频率。所有信息已语义化。")]
+                 Description = "[评分-3] 获取两个角色之间的关系摘要：社交关系、牵绊、从属、双向好感、兼容度、互动频率。所有信息已语义化。")]
         public static string GetRelationshipBetween(
             [McpParam(Description = "角色 A 的唯一 ID")] string pawnIdA,
             [McpParam(Description = "角色 B 的唯一 ID")] string pawnIdB)
