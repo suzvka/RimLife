@@ -240,7 +240,7 @@ namespace RimLife.Mappers
             int tick = Find.TickManager?.TicksGame ?? 0;
 
             float importance = MapLetterImportance(letterDef);
-            var actors = ExtractActorsFromLookTargets(lookTargets, relatedFaction);
+            var actors = ExtractActorsFromLookTargets(lookTargets, relatedFaction, letterDef);
 
             var payload = new Dictionary<string, string>
             {
@@ -321,7 +321,7 @@ namespace RimLife.Mappers
         {
             int tick = Find.TickManager?.TicksGame ?? 0;
 
-            var actors = ExtractActorsFromLookTargets(lookTargets, null);
+            var actors = ExtractActorsFromLookTargets(lookTargets, null, null);
 
             var payload = new Dictionary<string, string>
             {
@@ -400,10 +400,16 @@ namespace RimLife.Mappers
 
         /// <summary>
         /// 从 LookTargets 和 relatedFaction 提取事件 Actor 列表。
+        /// 根据 LetterDef 派发语义正确的角色标签（贸易商/袭击者/访客等），
+        /// 避免 LLM 将"Target"误解为受害者。
         /// </summary>
-        private static List<EventActorRef> ExtractActorsFromLookTargets(LookTargets lookTargets, Faction relatedFaction)
+        private static List<EventActorRef> ExtractActorsFromLookTargets(LookTargets lookTargets, Faction relatedFaction, LetterDef letterDef)
         {
             var actors = new List<EventActorRef>();
+
+            // 根据信封类型确定角色标签
+            string pawnRole, factionRole;
+            GetLetterActorRoles(letterDef, out pawnRole, out factionRole);
 
             // 从 LookTargets 提取 Pawn
             if (lookTargets != null && lookTargets.IsValid)
@@ -416,7 +422,7 @@ namespace RimLife.Mappers
                         actors.Add(EventActorRef.Pawn(
                             pawn.ThingID ?? "?",
                             pawn.Name?.ToStringShort ?? pawn.LabelShortCap ?? "?",
-                            "Target"));
+                            pawnRole));
                     }
                     else if (target.Thing != null)
                     {
@@ -424,7 +430,7 @@ namespace RimLife.Mappers
                         {
                             ID = target.Thing.ThingID ?? "?",
                             Name = target.Thing.LabelShortCap ?? "?",
-                            Role = "Target",
+                            Role = pawnRole,
                             RefType = "Thing"
                         });
                     }
@@ -436,10 +442,47 @@ namespace RimLife.Mappers
             {
                 actors.Add(EventActorRef.Faction(
                     relatedFaction.Name ?? relatedFaction.def?.label ?? "Unknown",
-                    "Initiator"));
+                    factionRole));
             }
 
             return actors;
+        }
+
+        /// <summary>
+        /// 根据 LetterDef 推导角色标签。
+        /// 威胁→袭击者/进攻方，正面→贸易商/访客/发送方，中性→当事人/相关方。
+        /// </summary>
+        private static void GetLetterActorRoles(LetterDef letterDef, out string pawnRole, out string factionRole)
+        {
+            if (letterDef == null) { pawnRole = "Involved"; factionRole = "RelatedFaction"; return; }
+
+            string defName = letterDef.defName ?? "";
+
+            if (defName == "ThreatBig" || defName == "ThreatSmall")
+            {
+                pawnRole = "Raider";
+                factionRole = "Attacker";
+            }
+            else if (defName == "Death")
+            {
+                pawnRole = "Victim";
+                factionRole = "RelatedFaction";
+            }
+            else if (defName == "PositiveEvent" || defName == "Good")
+            {
+                pawnRole = "Visitor";
+                factionRole = "Sender";
+            }
+            else if (defName == "BadUrgent" || defName == "Bad" || defName == "NegativeEvent")
+            {
+                pawnRole = "Involved";
+                factionRole = "Source";
+            }
+            else
+            {
+                pawnRole = "Involved";
+                factionRole = "RelatedFaction";
+            }
         }
     }
 }

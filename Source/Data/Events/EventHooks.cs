@@ -55,8 +55,8 @@ namespace RimLife
                             System.Reflection.BindingFlags.Public |
                             System.Reflection.BindingFlags.NonPublic;
 
-                // 依次尝试多个可能的字段/属性名
-                string[] candidates = { "text", "baseText", "description", "bodyText" };
+                // 依次尝试多个可能的字段/属性名（RimWorld Letter.Text 是大写 T）
+                string[] candidates = { "Text", "text", "baseText", "description", "bodyText" };
 
                 foreach (var name in candidates)
                 {
@@ -101,9 +101,7 @@ namespace RimLife
                 }
             }
             catch { }
-            // 回退：无独立正文时用标题作为叙事文本
-            var label = let.Label.ToString();
-            return string.IsNullOrEmpty(label) ? "" : label;
+            return ""; // 无独立正文时不注入，避免与 label 重复浪费 Token
         }
 
         private static string TruncateForLog(string s, int maxLen)
