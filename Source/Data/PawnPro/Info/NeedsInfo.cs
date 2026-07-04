@@ -79,7 +79,8 @@ namespace RimLife
             var parts = new List<string>();
             foreach (var need in AllNeeds)
             {
-                if (need.NeedUrgency != "Normal" || need.CurLevel < 0.5f)
+                // 仅当需求显著低于其自然平衡点时输出（ThresholdLow 的 85%），忽略正常/满足态
+                if (need.CurLevel < need.ThresholdLow * 0.85f)
                 {
                     parts.Add($"{need.Label}: {need.NeedUrgency}");
                 }

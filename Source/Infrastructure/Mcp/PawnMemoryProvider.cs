@@ -16,27 +16,29 @@ namespace RimLife.Infrastructure.Mcp
         public string HookId => "pawn_memory";
         public string HookName => "个体记忆";
         public string HookDescription => "追加角色短期记忆，写入即时心境";
+                public string PromptInstruction => "用这些工具，让脚本能够实际影响游戏进程";
 
         public IReadOnlyList<McpTool> GetTools()
         {
             return new McpTool[]
             {
-                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(AddMemory))),
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(AddInteractionMemory))),
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(AddEventMemory))),
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(AddCombatMemory))),
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(AddObservationMemory))),
+                McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(AddMilestoneMemory))),
                 McpTool.FromMethod(typeof(PawnMemoryProvider).GetMethod(nameof(UpdateMindset))),
             };
         }
 
         /// <summary>
-        /// 手动为角色追加一条短期记忆（导演/编剧主动注入）。
+        /// 内部共享实现：为角色追加一条短期记忆。
         /// </summary>
-        [McpTool(Name = "add_memory",
-                 Description = "[评分+2] 为指定角色手动追加一条短期记忆。可用于导演主动为角色注入经历（如获得灵感、目睹事件等）。")]
-        public static string AddMemory(
-            [McpParam(Description = "角色唯一 ID（ThingID）")] string pawnId,
-            [McpParam(Description = "记忆类型：Interaction/Event/Combat/Observation/Milestone")] string type,
-            [McpParam(Description = "记忆摘要（≤200字）")] string summary,
-            [McpParam(Description = "关联角色 ID，可选",
-                      Required = McpRequired.False)] string relatedPawnId = null)
+        private static string AddMemoryInternal(
+            string pawnId,
+            string memoryType,
+            string summary,
+            string relatedPawnId)
         {
             try
             {
@@ -48,26 +50,90 @@ namespace RimLife.Infrastructure.Mcp
                     return "{\"success\":false,\"error\":\"Pawn not found or no memory data\"}";
 
                 int currentTick = Find.TickManager?.TicksGame ?? 0;
-                var memory = new ShortTermMemory(currentTick, type, summary, relatedPawnId);
+                var memory = new ShortTermMemory(currentTick, memoryType, summary, relatedPawnId);
                 comp.AddShortTerm(memory);
 
-                return "{\"success\":true,\"tick\":" + currentTick + ",\"type\":" + JsonHelper.Quote(type ?? "") + "}";
+                return "{\"success\":true,\"tick\":" + currentTick + ",\"type\":" + JsonHelper.Quote(memoryType ?? "") + "}";
             }
             catch (Exception e)
             {
-                RimLifeCore.Logger?.Warning($"[RimLife.PawnMemoryProvider] add_memory({pawnId}) failed: {e.Message}");
+                RimLifeCore.Logger?.Warning($"[RimLife.PawnMemoryProvider] add_memory({pawnId}, {memoryType}) failed: {e.Message}");
                 return "{\"success\":false,\"error\":" + JsonHelper.Quote(e.Message) + "}";
             }
+        }
+
+        /// <summary>
+        /// 为角色追加一条社交互动记忆（导演/编剧主动注入）。
+        /// </summary>
+        [McpTool(Name = "add_interaction_memory",
+                 Description = "[+2] 角色会记住的社交互动")]
+        public static string AddInteractionMemory(
+            [McpParam(Description = "角色ID")] string pawnId,
+            [McpParam(Description = "互动内容描述")] string summary,
+            [McpParam(Description = "互动的对象角色 ID，可选",
+                      Required = McpRequired.False)] string relatedPawnId = null)
+        {
+            return AddMemoryInternal(pawnId, "Interaction", summary, relatedPawnId);
+        }
+
+        /// <summary>
+        /// 为角色追加一条事件记忆（导演/编剧主动注入）。
+        /// </summary>
+        [McpTool(Name = "add_event_memory",
+                 Description = "[+2] 角色会记住的重要事件")]
+        public static string AddEventMemory(
+            [McpParam(Description = "角色ID")] string pawnId,
+            [McpParam(Description = "事件内容描述")] string summary)
+        {
+            return AddMemoryInternal(pawnId, "Event", summary, null);
+        }
+
+        /// <summary>
+        /// 为角色追加一条战斗记忆（导演/编剧主动注入）。
+        /// </summary>
+        [McpTool(Name = "add_combat_memory",
+                 Description = "[+2] 角色会记住的战斗经历")]
+        public static string AddCombatMemory(
+            [McpParam(Description = "角色ID")] string pawnId,
+            [McpParam(Description = "战斗内容描述")] string summary,
+            [McpParam(Description = "交战的角色 ID，可选",
+                      Required = McpRequired.False)] string relatedPawnId = null)
+        {
+            return AddMemoryInternal(pawnId, "Combat", summary, relatedPawnId);
+        }
+
+        /// <summary>
+        /// 为角色追加一条观察记忆（导演/编剧主动注入）。
+        /// </summary>
+        [McpTool(Name = "add_observation_memory",
+                 Description = "[+2] 角色会记住的观察到的现象")]
+        public static string AddObservationMemory(
+            [McpParam(Description = "角色ID")] string pawnId,
+            [McpParam(Description = "观察内容描述")] string summary)
+        {
+            return AddMemoryInternal(pawnId, "Observation", summary, null);
+        }
+
+        /// <summary>
+        /// 为角色追加一条里程碑记忆（导演/编剧主动注入）。
+        /// </summary>
+        [McpTool(Name = "add_milestone_memory",
+                 Description = "[+2] 角色会记住的人生里程碑")]
+        public static string AddMilestoneMemory(
+            [McpParam(Description = "角色ID")] string pawnId,
+            [McpParam(Description = "里程碑内容描述")] string summary)
+        {
+            return AddMemoryInternal(pawnId, "Milestone", summary, null);
         }
 
         /// <summary>
         /// 更新角色的即时心境（凌驾层）。由 LLM 自行判断何时调用。
         /// </summary>
         [McpTool(Name = "update_mindset",
-                 Description = "[评分+2] 更新指定角色的即时心境（凌驾层）。以第一人称描述角色当前的心理状态。LLM 自行判断何时调用，不依赖任何自动触发。")]
+                 Description = "[+2] 覆盖更新角色心境自述")]
         public static string UpdateMindset(
-            [McpParam(Description = "角色唯一 ID（ThingID）")] string pawnId,
-            [McpParam(Description = "第一人称心境描述（≤200字）")] string content)
+            [McpParam(Description = "角色ID")] string pawnId,
+            [McpParam(Description = "内容")] string content)
         {
             try
             {

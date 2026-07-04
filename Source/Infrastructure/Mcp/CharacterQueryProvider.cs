@@ -20,6 +20,9 @@ namespace RimLife.Infrastructure.Mcp
         public string HookId => "character_query";
         public string HookName => "角色查询";
         public string HookDescription => "获取角色信息";
+        
+                /// <summary>首轮并发查询所有需了解的角色（static view），避免逐轮查询浪费 token。</summary>
+                public string PromptInstruction => "";
 
         public IReadOnlyList<McpTool> GetTools()
         {
@@ -350,8 +353,6 @@ namespace RimLife.Infrastructure.Mcp
             w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
             w.Prop("pawnType", pawnType);
             w.Prop("factionLabel", p.Faction?.Name ?? "None");
-            w.Prop("isDead", p.Dead);
-            w.Prop("isDowned", p.Downed);
             return w.Close();
         }
 
@@ -376,8 +377,6 @@ namespace RimLife.Infrastructure.Mcp
             w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
             w.Prop("pawnType", pawnType);
             w.Prop("factionLabel", p.Faction?.Name ?? "None");
-            w.Prop("isDead", p.Dead);
-            w.Prop("isDowned", p.Downed);
             return w.Close();
         }
     }

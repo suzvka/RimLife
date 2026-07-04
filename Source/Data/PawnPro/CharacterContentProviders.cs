@@ -145,9 +145,7 @@ namespace RimLife
                 foreach (var trait in storyTraits)
                 {
                     if (trait?.def?.defName == null) continue;
-                    TraitDef def = DefDatabase<TraitDef>.GetNamedSilentFail(trait.def.defName);
-                    if (def == null) continue;
-                    var ext = def.GetModExtension<PersonalityExtension>();
+                    var ext = trait.def.GetModExtension<PersonalityExtension>();
                     if (ext == null) continue;
                     PersonalityEntry match = ext.GetByDegree(trait.Degree);
                     if (match == null) continue;

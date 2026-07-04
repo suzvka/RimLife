@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using NPCLife.Core;
 using RimWorld;
 using Verse;
@@ -16,6 +17,19 @@ namespace RimLife.Infrastructure.Knowledge
     {
         /// <summary>解析器注册表。核心注册原版类型，DLC 通过 Register&lt;T&gt; 追加。</summary>
         internal static readonly List<DefResolver> Resolvers = new List<DefResolver>();
+
+        /// <summary>
+        /// 反向索引：被引用 defName → 所有引用它的 defName 集合。
+        /// 索引标签即 RimWorld description 中的 [DefName] 超链接。
+        /// </summary>
+        private static Dictionary<string, HashSet<string>> _reverseIndex;
+        private static readonly object _indexLock = new object();
+
+        /// <summary>中文预览截断长度。</summary>
+        private const int PreviewChars = 30;
+        
+        /// <summary>模糊匹配的最小包含度阈值（0-1）。</summary>
+        private const float FuzzyMatchThreshold = 0.6f;
 
         static GameDefKnowledgeBase()
         {
@@ -106,9 +120,15 @@ namespace RimLife.Infrastructure.Knowledge
         public string SourceName => "GameDef";
 
         /// <summary>
-        /// 遍历所有已注册的 Def 类型解析器查询词条。
-        /// 每个解析器内匹配优先级：defName 精确 → label 精确 → label 包含 → description 包含。
-        /// 返回所有匹配结果（跨解析器、跨匹配层）。
+        /// 分层渐进搜索策略：
+        ///   1. defName 精确匹配 → 返回完整详情
+        ///   2. label 精确匹配 → 返回完整详情
+        ///   3. label 模糊匹配（包含度 >= 60%）→ 返回完整详情
+        ///   4. 索引标签命中（[DefName] 超链接反向引用）→ 每个词条截取前 30 字符预览
+        ///   5. description 包含（仅在前 4 层均无结果时触发）→ 仅列词条名，不提供详情
+        /// 
+        /// 模糊匹配说明：Layer 3 使用基于最大连续字符数的包含度算法，阈值 60%，
+        /// 相比简单的字符串包含匹配，能容忍部分拼写错误或缩写。
         /// </summary>
         public IReadOnlyList<KnowledgeEntry> QueryExact(string term)
         {
@@ -118,14 +138,14 @@ namespace RimLife.Infrastructure.Knowledge
             var results = new List<KnowledgeEntry>();
             var collected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            // 渐进匹配策略：defName 精确 → label 精确 → label 包含 → description 包含，从严格到宽松逐级回退。
+            // === Layer 1-3: defName/label 匹配 → 完整详情 ===
             foreach (var resolver in Resolvers)
             {
-                // defName 精确匹配 — 最严格，O(1) DefDatabase 查找
+                // Layer 1: defName 精确匹配 — O(1) DefDatabase 查找
                 var def = resolver.Lookup(term);
                 if (def != null)
                 {
-                    var entry = BuildEntry(def, resolver);
+                    var entry = BuildEntry(def);
                     if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
                         results.Add(entry);
                 }
@@ -133,48 +153,73 @@ namespace RimLife.Infrastructure.Knowledge
                 var allDefs = resolver.AllDefs();
                 if (allDefs == null) continue;
 
-                // label 精确匹配 — 次严格
+                // Layer 2: label 精确匹配
                 foreach (var d in allDefs)
                 {
-                    if (d == null) continue;
-                    if (collected.Contains(d.defName)) continue;
-
-                    string labelStr = (d.label != null) ? d.label.ToString() : null;
+                    if (d == null || collected.Contains(d.defName)) continue;
+                    string labelStr = d.label?.ToString();
                     if (labelStr != null && string.Equals(labelStr, term, StringComparison.OrdinalIgnoreCase))
                     {
-                        var entry = BuildEntry(d, resolver);
+                        var entry = BuildEntry(d);
                         if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
                             results.Add(entry);
                     }
                 }
 
-                // label 包含匹配 — 宽松
+                // Layer 3: label 模糊匹配（扩大搜索范围）
                 foreach (var d in allDefs)
                 {
-                    if (d == null) continue;
-                    if (collected.Contains(d.defName)) continue;
-
-                    string labelStr = (d.label != null) ? d.label.ToString() : null;
-                    if (labelStr != null && labelStr.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (d == null || collected.Contains(d.defName)) continue;
+                    string labelStr = d.label?.ToString();
+                    if (labelStr != null && FuzzyMatch(labelStr, term))
                     {
-                        var entry = BuildEntry(d, resolver);
+                        var entry = BuildEntry(d);
                         if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
                             results.Add(entry);
                     }
                 }
+            }
 
-                // description 包含匹配 — 兜底，最宽松
-                foreach (var d in allDefs)
+            // === Layer 4: 索引标签命中 → 30 字符预览 ===
+            EnsureReverseIndexBuilt();
+            if (_reverseIndex != null && _reverseIndex.TryGetValue(term, out var referencers))
+            {
+                foreach (var defName in referencers)
                 {
-                    if (d == null) continue;
-                    if (collected.Contains(d.defName)) continue;
-
-                    if (d.description != null
-                        && d.description.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (collected.Contains(defName)) continue;
+                    string preview = ResolvePreview(defName);
+                    if (preview == null) continue;
+                    collected.Add(defName);
+                    results.Add(new KnowledgeEntry
                     {
-                        var entry = BuildEntry(d, resolver);
-                        if (!string.IsNullOrEmpty(entry.Definition) && collected.Add(entry.Term))
-                            results.Add(entry);
+                        Term = ResolveLabel(defName) ?? defName,
+                        Definition = preview.Length > PreviewChars ? preview.Substring(0, PreviewChars) : preview,
+                        Source = SourceName
+                    });
+                }
+            }
+
+            // === Layer 5: description 包含（仅当前 4 层均无结果时触发）→ 仅列名 ===
+            if (results.Count == 0)
+            {
+                foreach (var resolver in Resolvers)
+                {
+                    var allDefs = resolver.AllDefs();
+                    if (allDefs == null) continue;
+
+                    foreach (var d in allDefs)
+                    {
+                        if (d == null || collected.Contains(d.defName)) continue;
+                        if (d.description == null) continue;
+                        if (d.description.IndexOf(term, StringComparison.OrdinalIgnoreCase) < 0) continue;
+
+                        collected.Add(d.defName);
+                        results.Add(new KnowledgeEntry
+                        {
+                            Term = DefLabel(d),
+                            Definition = null,  // 仅列名，不提供详情
+                            Source = SourceName
+                        });
                     }
                 }
             }
@@ -186,17 +231,134 @@ namespace RimLife.Infrastructure.Knowledge
         // 内部：词条构建
         // ================================================================
 
-        private static KnowledgeEntry BuildEntry(Def def, DefResolver resolver)
+        /// <summary>计算模糊匹配包含度。返回最大连续匹配字符数与搜索词长度的比值。</summary>
+        private static bool FuzzyMatch(string text, string query)
         {
-            string defLabel = (def.label != null) ? def.label.ToString() : string.Empty;
+            if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(query)) return false;
+            
+            string textLower = text.ToLowerInvariant();
+            string queryLower = query.ToLowerInvariant();
+            
+            // 如果包含完整字符串，直接匹配
+            if (textLower.IndexOf(queryLower) >= 0) return true;
+            
+            // 计算最大连续匹配字符数
+            int maxMatchLength = 0;
+            for (int i = 0; i < textLower.Length; i++)
+            {
+                int matchLen = 0;
+                for (int j = 0; j < queryLower.Length && i + j < textLower.Length; j++)
+                {
+                    if (textLower[i + j] == queryLower[j])
+                        matchLen++;
+                    else
+                        break;
+                }
+                if (matchLen > maxMatchLength) maxMatchLength = matchLen;
+            }
+            
+            // 计算包含度
+            float containmentRatio = (float)maxMatchLength / queryLower.Length;
+            return containmentRatio >= FuzzyMatchThreshold;
+        }
+
+        /// <summary>获取 Def 的本地化显示名，回落 defName。</summary>
+        private static string DefLabel(Def def)
+        {
+            if (def == null) return "?";
+            return (def.label?.ToString()) ?? def.defName ?? "?";
+        }
+
+        /// <summary>通过 defName 反查 Def 的本地化标签，失败返回 null。</summary>
+        private static string ResolveLabel(string defName)
+        {
+            if (string.IsNullOrEmpty(defName)) return null;
+            foreach (var resolver in Resolvers)
+            {
+                var def = resolver.Lookup(defName);
+                if (def != null)
+                {
+                    string label = def.label?.ToString();
+                    if (!string.IsNullOrEmpty(label)) return label;
+                    return defName;
+                }
+            }
+            return null;
+        }
+
+        private static KnowledgeEntry BuildEntry(Def def)
+        {
             string defDescription = def.description ?? "";
 
             return new KnowledgeEntry
             {
-                Term = def.defName ?? defLabel,
+                Term = DefLabel(def),
                 Definition = defDescription,
                 Source = "GameDef"
             };
+        }
+
+        // ================================================================
+        // 内部：反向索引（基于 description 中的 [DefName] 超链接）
+        // ================================================================
+
+        /// <summary>线程安全地构建反向索引。</summary>
+        private static void EnsureReverseIndexBuilt()
+        {
+            if (_reverseIndex != null) return;
+            lock (_indexLock)
+            {
+                if (_reverseIndex != null) return;
+                _reverseIndex = BuildReverseIndex();
+            }
+        }
+
+        private static Dictionary<string, HashSet<string>> BuildReverseIndex()
+        {
+            var index = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var hyperlinkRegex = new Regex(@"\[([^\]]+)\]", RegexOptions.Compiled);
+
+            foreach (var resolver in Resolvers)
+            {
+                var allDefs = resolver.AllDefs();
+                if (allDefs == null) continue;
+
+                foreach (var def in allDefs)
+                {
+                    if (def?.description == null) continue;
+
+                    var matches = hyperlinkRegex.Matches(def.description);
+                    foreach (Match match in matches)
+                    {
+                        var referenced = match.Groups[1].Value.Trim();
+                        if (string.IsNullOrEmpty(referenced)) continue;
+
+                        // 将英文 defName 转为本地化标签作为索引 key，与中文搜索词匹配
+                        string localizedKey = ResolveLabel(referenced) ?? referenced;
+
+                        if (!index.TryGetValue(localizedKey, out var set))
+                        {
+                            set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            index[localizedKey] = set;
+                        }
+                        set.Add(def.defName);
+                    }
+                }
+            }
+
+            return index;
+        }
+
+        /// <summary>通过 defName 查找 Def 并返回其 description，供索引标签预览用。</summary>
+        private static string ResolvePreview(string defName)
+        {
+            foreach (var resolver in Resolvers)
+            {
+                var def = resolver.Lookup(defName);
+                if (def?.description != null)
+                    return def.description;
+            }
+            return null;
         }
 
         // ================================================================

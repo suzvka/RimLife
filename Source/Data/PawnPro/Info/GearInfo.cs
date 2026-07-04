@@ -89,8 +89,9 @@ namespace RimLife
         private static string FormatGearPrompt(GearItem g)
         {
             // 物品名称 (thing.LabelCap) 已包含中文品质标签（如 "(一般)"），
-            // 此处仅追加磨损状态，避免中英文品质重复送入 LLM。
-            string extra = !string.IsNullOrEmpty(g.ConditionLabel) ? g.ConditionLabel : null;
+            // 此处仅追加磨损状态。跳过默认完好态 (Pristine)，避免中英文品质重复送入 LLM。
+            string extra = (!string.IsNullOrEmpty(g.ConditionLabel) && g.ConditionLabel != "Pristine")
+                ? g.ConditionLabel : null;
             if (extra != null)
             {
                 if (g.Count > 1)

@@ -196,7 +196,8 @@ namespace RimLife
 
             foreach (var kv in CapacityTiers)
             {
-                if (kv.Value != "Normal" || (Capacities.TryGetValue(kv.Key, out float v) && v < 0.9f))
+                // 仅显示受损态 (Disabled/Poor/Fair/Normal)，隐藏健康/增益态 (Good/Excellent)
+                if (kv.Value != "Good" && kv.Value != "Excellent")
                 {
                     sb.Append(", ");
                     sb.Append(kv.Key);

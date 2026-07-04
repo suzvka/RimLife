@@ -21,6 +21,7 @@ namespace RimLife.Infrastructure.Mcp
         public string HookId => "relationship_query";
         public string HookName => "关系网络";
         public string HookDescription => "查询角色社交关系、牵绊动物、机械体从属、交互历史流水";
+                public string PromptInstruction => "- 查询角色间关系时并发调用 get_relationship_between，一次获取双方关系。\n- 批量获取角色列表的交互历史，而非逐个查询。\n- 仅当角色间存在特殊关系（非 Neutral）时才深入查询交互详情。";
 
         public IReadOnlyList<McpTool> GetTools()
         {

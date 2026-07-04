@@ -213,8 +213,12 @@ namespace RimLife.Infrastructure
             FrameworkFactory.Status.Clear();
             ErrorHandler.ClearHandlers();
 
-            // 清理所有 Agent（委托给 Orchestrator）
-            Orchestrator?.DisposeAll();
+            // 清理所有 Agent（直接访问字段，避免触发属性 getter）
+            if (_orchestrator != null)
+            {
+                _orchestrator.DisposeAll();
+                _orchestrator = null;
+            }
 
             _frameworkConfig = null;
             _promptAdditions = null;
@@ -521,8 +525,12 @@ namespace RimLife.Infrastructure
                     (_workspaces as IDisposable)?.Dispose();
                     _llmAccessor?.Dispose();
 
-                    // 清理所有 Agent（委托给 Orchestrator）
-                    Orchestrator?.DisposeAll();
+                    // 清理所有 Agent（直接访问字段，避免触发 Orchestrator 属性 getter 导致懒初始化）
+                    if (_orchestrator != null)
+                    {
+                        _orchestrator.DisposeAll();
+                        _orchestrator = null;
+                    }
 
                     _saveStore = value;
                     _workspaces = null;

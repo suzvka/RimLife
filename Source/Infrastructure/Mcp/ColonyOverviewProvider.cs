@@ -20,6 +20,7 @@ namespace RimLife.Infrastructure.Mcp
         public string HookId => "colony_overview";
         public string HookName => "无";
         public string HookDescription => "";
+                public string PromptInstruction => null;
 
         public IReadOnlyList<McpTool> GetTools()
         {

@@ -16,6 +16,7 @@ namespace RimLife.Infrastructure.Mcp
         public string HookId => "character_query";
         public string HookName => "角色与环境查询";
         public string HookDescription => "查询角色当前所处的环境信息（室内外、温光、天气、房间）";
+                public string PromptInstruction => null;
 
         public IReadOnlyList<McpTool> GetTools()
         {

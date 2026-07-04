@@ -72,6 +72,10 @@ namespace RimLife
 			var parts = new List<string>();
 			foreach (var sr in AllSkills)
 			{
+				// 跳过禁用技能以及零级无热情的技能
+				if (sr.TotallyDisabled) continue;
+				if (sr.Level == 0 && !sr.HasPassion) continue;
+
 				string passionStr = sr.Passion switch
 				{
 					"Major" => "🔥",
@@ -79,9 +83,7 @@ namespace RimLife
 					_ => ""
 				};
 		
-				string entry = sr.TotallyDisabled
-					? $"{sr.Label} 禁用"
-					: $"{sr.Label} {sr.Level}{passionStr}";
+				string entry = $"{sr.Label} {sr.Level}{passionStr}";
 				parts.Add(entry);
 			}
 		

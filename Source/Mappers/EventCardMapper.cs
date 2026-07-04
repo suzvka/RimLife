@@ -245,9 +245,7 @@ namespace RimLife.Mappers
             var payload = new Dictionary<string, string>
             {
                 ["letterLabel"] = label.ToString() ?? "",
-                ["letterText"] = text.ToString() ?? "",
-                ["letterDef"] = letterDef?.defName ?? "Unknown",
-                ["letterColor"] = GetLetterColorLabel(letterDef)
+                ["letterText"] = StripRimWorldFormatting(text.ToString() ?? "")
             };
 
             if (relatedFaction != null)
@@ -483,6 +481,17 @@ namespace RimLife.Mappers
                 pawnRole = "Involved";
                 factionRole = "RelatedFaction";
             }
+        }
+
+        /// <summary>
+        /// 剥离 RimWorld 富文本标记，如 (*Faction=Faction_2)流亡帝国(/Faction)，保留内部文本。
+        /// </summary>
+        private static string StripRimWorldFormatting(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            // \(\*[^)]+\) 匹配 (*Tag=Value)，\(/[^)]+\) 匹配 (/Tag)
+            return System.Text.RegularExpressions.Regex.Replace(
+                text, @"\(\*[^)]+\)|\(/[^)]+\)", "");
         }
     }
 }
