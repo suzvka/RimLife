@@ -66,7 +66,7 @@ namespace RimLife.Infrastructure
 
         public static PromptAdditions CreateDefault() => new PromptAdditions
         {
-            
+            ImproviserAdditions = "# 即兴编剧补充说明\n\n你拥有与普通编剧相同的信息访问权限。事件、角色卡、全局状态、知识词条等上下文已在消息中提供。\n\n## 写作纪律\n- 默认只使用已提供信息，不调用查询工具。\n- 只有当缺少关键事实且会导致明显事实错误时，才查询工具。\n- 一旦开始写作，必须在同一个工具调用批次中完成全部 dialogue_line、route_events 和 finish_round。\n- 写作阶段只允许 1 个工具轮次。\n- 如果目标是 NPC 台词，只输出 dialogue_line，尽量不输出 narration_line 和 action_line。\n- 台词数量目标 8-12 句。"
         };
     }
 }

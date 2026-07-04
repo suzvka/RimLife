@@ -57,6 +57,7 @@ namespace RimLife.Infrastructure
         internal static void InitializeAgentOrchestrator()
         {
             if (_orchestrator != null) return;
+            if (Workspaces == null) return; // SaveStore 未就绪，等待 Workspaces 首次创建时自动触发
 
             var orchestrator = FrameworkFactory.CreateAgentOrchestrator(Workspaces);
 
@@ -185,7 +186,7 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 推荐角色：随机选取 1-3 个可见角色作为叙事引子
+            // 推荐角色：随机选取 1-3 个可见人类角色作为叙事引子
             // 不依赖事件关联，让编剧自行从推荐角色出发探索周围角色构建场景
             try
             {
@@ -195,7 +196,7 @@ namespace RimLife.Infrastructure
                 {
                     if (map?.mapPawns?.AllPawnsSpawned == null) continue;
                     allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p =>
-                        p != null && !p.Dead && (p.RaceProps.Humanlike || p.RaceProps.Animal)));
+                        p != null && !p.Dead && p.RaceProps.Humanlike));
                 }
                 // 随机洗牌取 1-3 个
                 var selected = allPawns.OrderBy(_ => rng.Next()).Take(rng.Next(1, 4)).ToList();
@@ -343,7 +344,7 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 推荐角色：随机选取 1-3 个可见角色作为叙事引子
+            // 推荐角色：随机选取 1-3 个可见人类角色作为叙事引子
             // 不依赖事件关联，让编剧自行从推荐角色出发探索周围角色构建场景
             try
             {
@@ -353,7 +354,7 @@ namespace RimLife.Infrastructure
                 {
                     if (map?.mapPawns?.AllPawnsSpawned == null) continue;
                     allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p =>
-                        p != null && !p.Dead && (p.RaceProps.Humanlike || p.RaceProps.Animal)));
+                        p != null && !p.Dead && p.RaceProps.Humanlike));
                 }
                 // 随机洗牌取 1-3 个
                 var selected = allPawns.OrderBy(_ => rng.Next()).Take(rng.Next(1, 4)).ToList();
@@ -407,12 +408,11 @@ namespace RimLife.Infrastructure
             var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultScreenwriterPrompt);
             AppendAdditions(sb, pa.ScreenwriterAdditions, "RimWorld 编剧附加指令");
 
-            // 编剧侧不再注入工作空间信息。事件统一通过 route_events 工具发送，
-            // 无需知晓导演工作空间 ID 或自身工作空间 ID。
             sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();
 
+            AppendSkillPrompts(sb, ws);
             AppendStyleInstruction(sb, pa);
             return sb.ToString();
         }
@@ -423,12 +423,11 @@ namespace RimLife.Infrastructure
             var sb = new System.Text.StringBuilder(NPCLife.Driver.PromptConfig.DefaultImproviserPrompt);
             AppendAdditions(sb, pa.ImproviserAdditions, "RimWorld 即兴编剧附加指令");
 
-            // 即兴编剧侧同样不注入工作空间信息。
-            // 事件统一通过 route_events 工具发送。
             sb.AppendLine();
             sb.AppendLine("---");
             sb.AppendLine();
 
+            AppendSkillPrompts(sb, ws);
             AppendStyleInstruction(sb, pa);
             return sb.ToString();
         }
@@ -466,7 +465,7 @@ namespace RimLife.Infrastructure
             }
             catch { }
 
-            // 推荐角色：随机选取 1-3 个可见角色作为叙事引子
+            // 推荐角色：随机选取 1-3 个可见人类角色作为叙事引子
             // 不依赖事件关联，让编剧自行从推荐角色出发探索周围角色构建场景
             try
             {
@@ -476,7 +475,7 @@ namespace RimLife.Infrastructure
                 {
                     if (map?.mapPawns?.AllPawnsSpawned == null) continue;
                     allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p =>
-                        p != null && !p.Dead && (p.RaceProps.Humanlike || p.RaceProps.Animal)));
+                        p != null && !p.Dead && p.RaceProps.Humanlike));
                 }
                 // 随机洗牌取 1-3 个
                 var selected = allPawns.OrderBy(_ => rng.Next()).Take(rng.Next(1, 4)).ToList();
@@ -547,6 +546,23 @@ namespace RimLife.Infrastructure
             }
         }
 
+        /// <summary>将已激活技能的 PromptInstruction 注入到 system prompt 中。</summary>
+        private static void AppendSkillPrompts(System.Text.StringBuilder sb, NPCLife.Workspace.IWorkspace ws)
+        {
+            try
+            {
+                var activeIds = ws?.SkillSlot?.ActiveSkillIds;
+                if (activeIds == null || activeIds.Count == 0) return;
+                var prompts = McpSkillRegistry.GetActiveSkillPrompts(activeIds);
+                if (!string.IsNullOrEmpty(prompts))
+                {
+                    sb.AppendLine("## 技能使用说明");
+                    sb.AppendLine(prompts);
+                }
+            }
+            catch { }
+        }
+
         // ================================================================
         // 关系/交互摘要：一行文本替代 get_relationships + get_interaction_history
         // ================================================================
@@ -577,6 +593,10 @@ namespace RimLife.Infrastructure
 
             if (parts.Count > 0)
             {
+                // 如果所有推荐角色都是 Neutral 且无交互，该行无信息量，直接跳过
+                bool allNeutral = parts.TrueForAll(p => p.Contains("(Neutral,") || p.Contains("(?,无)"));
+                if (allNeutral) return;
+
                 sb.Append("角色关系/交互: ");
                 sb.AppendLine(string.Join("; ", parts));
                 sb.AppendLine();
@@ -659,8 +679,10 @@ namespace RimLife.Infrastructure
 
             // 收尾：角色卡已含社交数据（social / colonyOpinion），无需单独伪造 get_relationships
             if (result.Count > 0)
-                result.Add(LlmMessage.Assistant("好的，我了解了一些基础信息，接下来将仔细阅读它们，然后按照推荐步骤开始工作。"));
+            {
+                result.Add(LlmMessage.Assistant("好的，信息已确认。接下来我将基于已有上下文，在同一个工具调用批次中完成全部台词、route_events 和 finish_round。"));
                 result.Add(LlmMessage.User("请继续"));
+            }
             return result;
         }
 
