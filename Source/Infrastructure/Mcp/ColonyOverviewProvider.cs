@@ -2,6 +2,8 @@
 using NPCLife.Core;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
+using NPCLife.Workspace;
+using RimLife.Data;
 using RimLife.Mappers;
 using RimWorld;
 using System;
@@ -15,6 +17,11 @@ namespace RimLife.Infrastructure.Mcp
     /// 殖民地全局 Skill 的 Hook Provider。
     /// 提供殖民地概览、近期事件、活跃目标、资源库存四个工具。
     /// </summary>
+    [SkillDefinition(
+        Id = "colony_overview",
+        Name = "游戏全局状态",
+        Description = "获取全局叙事事实",
+        DefaultRoles = new[] { WorkspaceRole.Director })]
     public class ColonyOverviewProvider : IMcpHookProvider
     {
         public string HookId => "colony_overview";
@@ -46,37 +53,6 @@ namespace RimLife.Infrastructure.Mcp
             {
                 RimLifeCore.Logger?.Warning($"[RimLife.ColonyOverviewProvider] get_colony_overview failed: {e.Message}");
                 return "{}";
-            }
-        }
-
-        /// <summary>
-        /// 获取最近 N 条事件。
-        /// </summary>
-        [McpTool(Name = "get_recent_events",
-                 Description = "获取最近 N 条事件，用于快速了解当前局势。")]
-        public static string GetRecentEvents(
-            [McpParam(Description = "返回条数，默认 10")] int limit = 10)
-        {
-            try
-            {
-                var eventLog = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-                if (eventLog == null) return "[]";
-
-                var all = eventLog.Query(EventQuery.All);
-                int count = all.Count;
-                if (count == 0) return "[]";
-
-                int take = Math.Min(limit, count);
-                var recent = new List<IGameEvent>(take);
-                for (int i = count - take; i < count; i++)
-                    recent.Add(all[i]);
-
-                return CardSerializer.Default.SerializeEventList(recent);
-            }
-            catch (Exception e)
-            {
-                RimLifeCore.Logger?.Warning($"[RimLife.ColonyOverviewProvider] get_recent_events failed: {e.Message}");
-                return "[]";
             }
         }
 
@@ -114,8 +90,7 @@ namespace RimLife.Infrastructure.Mcp
         {
             try
             {
-                Map map = mapId == 0 ? Find.CurrentMap
-                    : Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
+                Map map = SemanticLabels.ResolveMap(mapId);
                 if (map == null) return "{}";
 
                 var keyResources = new HashSet<string>

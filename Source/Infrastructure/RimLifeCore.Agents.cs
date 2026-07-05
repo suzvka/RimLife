@@ -27,9 +27,6 @@ namespace RimLife.Infrastructure
         private static IAgentOrchestrator _orchestrator;
         private static readonly object _orchestratorLock = new object();
 
-        /// <summary>当前上下文中收集的推荐角色 ID，供 preQueriedProvider 读取。</summary>
-        private static HashSet<string> _currentPawnIds;
-
         /// <summary>
         /// Agent 编排器。框架负责 Agent 生命周期，游戏侧通过 InitializeAgentOrchestrator
         /// 注册 AgentFactory 委托（注入系统提示词、动态上下文等游戏特定内容）。
@@ -69,8 +66,7 @@ namespace RimLife.Infrastructure
                     workspace: ws,
                     deps: BuildAgentDeps(),
                     systemPrompt: BuildDirectorSystemPrompt(),
-                    contextProvider: () => BuildDirectorWorkspaceSummary(mgr),
-                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
+                    contextProvider: () => BuildDirectorWorkspaceSummary(mgr));
             });
 
             // 即兴编剧 Agent 工厂
@@ -81,8 +77,7 @@ namespace RimLife.Infrastructure
                     workspace: ws,
                     deps: BuildAgentDeps(),
                     systemPrompt: BuildImproviserSystemPrompt(ws),
-                    contextProvider: () => BuildImproviserContext(ws),
-                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
+                    contextProvider: () => BuildImproviserContext(ws));
             });
 
             // 编剧 Agent 工厂
@@ -93,8 +88,7 @@ namespace RimLife.Infrastructure
                     workspace: ws,
                     deps: BuildAgentDeps(),
                     systemPrompt: BuildScreenwriterSystemPrompt(ws),
-                    contextProvider: () => BuildScreenwriterContext(ws),
-                    preQueriedProvider: () => BuildPreQueriedMessages(_currentPawnIds));
+                    contextProvider: () => BuildScreenwriterContext(ws));
             });
 
             _orchestrator = orchestrator;
@@ -111,22 +105,6 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>
-        /// 获取导演工作空间（兼容旧 API，委托给 Orchestrator）。
-        /// </summary>
-        public static NPCLife.Workspace.IWorkspace GetDirectorWorkspace()
-        {
-            return Orchestrator?.GetOrCreateWorkspace(WorkspaceRole.Director);
-        }
-
-        /// <summary>
-        /// 获取即兴编剧工作空间（兼容旧 API，委托给 Orchestrator）。
-        /// </summary>
-        public static NPCLife.Workspace.IWorkspace GetImproviserWorkspace()
-        {
-            return Orchestrator?.GetOrCreateWorkspace(WorkspaceRole.Improviser);
-        }
-
-        /// <summary>
         /// 构建 AgentLoop 共享基础设施依赖。
         /// 所有角色共用同一组 LLM 服务、凭证存储、日志、序列化器、行为配置。
         /// </summary>
@@ -138,8 +116,7 @@ namespace RimLife.Infrastructure
                 CredentialStore = CredentialManager,
                 Logger = Logger,
                 Serializer = CardSerializer.Default,
-                MaxRounds = DriverConfig.MaxAgentRounds,
-                Temperature = PromptAdditions.Temperature
+                MaxRounds = DriverConfig.MaxAgentRounds
             };
         }
 
@@ -210,8 +187,8 @@ namespace RimLife.Infrastructure
                     sb.AppendLine();
                 }
 
-                _currentPawnIds = pawnIds;
                 AppendRelationshipSummary(sb, pawnIds);
+                InjectPreQueriedData(sb, pawnIds);
             }
             catch { }
 
@@ -305,12 +282,6 @@ namespace RimLife.Infrastructure
             return sb.ToString();
         }
 
-        private static string TruncateForSummary(string text, int maxLen)
-        {
-            if (string.IsNullOrEmpty(text)) return "";
-            return text.Length <= maxLen ? text : text.Substring(0, maxLen) + "...";
-        }
-
         /// <summary>
         /// 构建编剧激活时的动态上下文：殖民地快照、当前时间、聚焦角色摘要。
         /// 每轮激活时注入，替代 get_colony_overview 等工具查询。
@@ -363,13 +334,13 @@ namespace RimLife.Infrastructure
                 var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
                 if (!string.IsNullOrEmpty(summary) && summary != "[]")
                 {
-                    sb.AppendLine("## 推荐本轮叙事主角");
+                    sb.AppendLine("## 推荐角色 自由主体");
                     sb.AppendLine(summary);
                     sb.AppendLine();
                 }
 
-                _currentPawnIds = pawnIds;
                 AppendRelationshipSummary(sb, pawnIds);
+                InjectPreQueriedData(sb, pawnIds);
             }
             catch { }
 
@@ -391,7 +362,7 @@ namespace RimLife.Infrastructure
                     }
                     if (cards.Count > 0)
                     {
-                        sb.AppendLine("## 导演指定聚焦角色");
+                        sb.AppendLine("## 推荐角色 事件主体");
                         sb.AppendLine(PawnQueryHelper.SerializeJsonArray(cards));
                         sb.AppendLine();
                     }
@@ -433,94 +404,12 @@ namespace RimLife.Infrastructure
         }
 
         /// <summary>
-        /// 构建即兴编剧激活时的动态上下文：当前时间、殖民地快照、聚焦角色摘要。
-        /// 与 Screenwriter 完全相同（即兴编剧只是不保存长期上下文的编剧，能力无区别）。
+        /// 构建即兴编剧激活时的动态上下文。当前与 Screenwriter 共享相同实现。
+        /// 保留独立方法签名作为扩展点，便于未来可能的分化。
         /// </summary>
         private static string BuildImproviserContext(NPCLife.Workspace.IWorkspace ws)
         {
-            var sb = new StringBuilder();
-
-            // 当前时间
-            try
-            {
-                var timeStr = TimeProvider?.Invoke();
-                if (!string.IsNullOrEmpty(timeStr))
-                {
-                    sb.AppendLine($"当前时间：{timeStr}");
-                    sb.AppendLine();
-                }
-            }
-            catch { }
-
-            // 当前全局状态
-            try
-            {
-                var state = GlobalStateMapper.Create();
-                if (state != null)
-                {
-                    sb.AppendLine("## 当前全局状态");
-                    sb.AppendLine(GlobalStateMapper.Serialize(state));
-                    sb.AppendLine();
-                }
-            }
-            catch { }
-
-            // 推荐角色：随机选取 1-3 个可见人类角色作为叙事引子
-            // 不依赖事件关联，让编剧自行从推荐角色出发探索周围角色构建场景
-            try
-            {
-                var rng = new System.Random();
-                var allPawns = new List<Pawn>();
-                foreach (var map in Find.Maps)
-                {
-                    if (map?.mapPawns?.AllPawnsSpawned == null) continue;
-                    allPawns.AddRange(map.mapPawns.AllPawnsSpawned.Where(p =>
-                        p != null && !p.Dead && p.RaceProps.Humanlike));
-                }
-                // 随机洗牌取 1-3 个
-                var selected = allPawns.OrderBy(_ => rng.Next()).Take(rng.Next(1, 4)).ToList();
-                var pawnIds = new HashSet<string>(selected.Select(p => p.ThingID));
-
-                var summary = CharacterQueryProvider.GetPawnsByIds(pawnIds);
-                if (!string.IsNullOrEmpty(summary) && summary != "[]")
-                {
-                    sb.AppendLine("## 推荐本轮叙事主角");
-                    sb.AppendLine(summary);
-                    sb.AppendLine();
-                }
-
-                _currentPawnIds = pawnIds;
-                AppendRelationshipSummary(sb, pawnIds);
-            }
-            catch { }
-
-            // 聚焦角色摘要（导演指定的关联角色，static view）
-            if (ws.FocusCharacterIds != null && ws.FocusCharacterIds.Count > 0)
-            {
-                try
-                {
-                    var cards = new List<string>();
-                    foreach (var id in ws.FocusCharacterIds)
-                    {
-                        var pawn = PawnQueryHelper.FindPawnById(id);
-                        if (pawn != null)
-                        {
-                            var card = PawnQueryHelper.BuildCharacterCard(pawn, "static");
-                            var json = CardSerializer.Default.SerializeCharacterCard(card, "static", ContentProviders);
-                            cards.Add(json);
-                        }
-                    }
-                    if (cards.Count > 0)
-                    {
-                        sb.AppendLine("## 导演指定聚焦角色");
-                        sb.AppendLine(PawnQueryHelper.SerializeJsonArray(cards));
-                        sb.AppendLine();
-                    }
-                }
-                catch { }
-            }
-
-            return sb.ToString();
+            return BuildScreenwriterContext(ws);
         }
 
         /// <summary>将角色附加指令追加到系统提示词中（仅在非空时生效）。</summary>
@@ -621,70 +510,19 @@ namespace RimLife.Infrastructure
             catch { return "?"; }
         }
 
+        /// <summary>
+        /// 获取角色的交互历史数量。
+        /// TODO: RimWorld 1.6 交互历史需通过 InteractionLog 查询，当前返回 0。
+        /// </summary>
         private static int GetInteractionCount(Pawn p)
         {
-            try
-            {
-                if (p?.interactions == null) return 0;
-                return 0; // RimWorld 1.6 交互历史需通过 InteractionLog 查询，留作占位
-            }
-            catch { return 0; }
+            return 0;
         }
 
         // ================================================================
         // Phase 1 预注入：角色卡 + 关系 + 派系词条
-        // 模拟 LLM 已自行查询这些数据，消除轮次 0-1 的机械查询开销。
+        // 以 InjectPreQueriedData 方式注入到 user message 中。
         // ================================================================
-
-        /// <summary>
-        /// 构建伪造的工具调用对话链，使 LLM 相信自己已查询过推荐角色的信息。
-        /// 返回的消息列表会被注入到 AgentLoop 的初始消息中。
-        /// </summary>
-        private static List<LlmMessage> BuildPreQueriedMessages(HashSet<string> pawnIds)
-        {
-            var result = new List<LlmMessage>();
-            if (pawnIds == null || pawnIds.Count == 0) return result;
-
-            // --- 第一段：get_character_card ---
-            var charToolCalls = new List<LlmToolCall>();
-            var charResults = new List<(string toolCallId, string json)>();
-            foreach (var id in pawnIds)
-            {
-                try
-                {
-                    var pawn = PawnQueryHelper.FindPawnById(id);
-                    if (pawn == null) continue;
-                    var card = PawnQueryHelper.BuildCharacterCard(pawn, "static");
-                    var json = CardSerializer.Default.SerializeCharacterCard(card, "static", ContentProviders);
-                    if (json == null || json == "{}") continue;
-
-                    var tcId = $"pq_char_{id}";
-                    charToolCalls.Add(new LlmToolCall
-                    {
-                        Id = tcId,
-                        Name = "get_character_card",
-                        Arguments = $"{{\"pawnId\":\"{id}\",\"view\":\"static\"}}"
-                    });
-                    charResults.Add((tcId, json));
-                }
-                catch { }
-            }
-
-            if (charToolCalls.Count > 0)
-            {
-                result.Add(LlmMessage.AssistantWithTools(charToolCalls));
-                foreach (var (tcId, json) in charResults)
-                    result.Add(LlmMessage.ToolResult(tcId, json));
-            }
-
-            // 收尾：角色卡已含社交数据（social / colonyOpinion），无需单独伪造 get_relationships
-            if (result.Count > 0)
-            {
-                result.Add(LlmMessage.Assistant("好的，信息已确认。接下来我将基于已有上下文，在同一个工具调用批次中完成全部台词、route_events 和 finish_round。"));
-                result.Add(LlmMessage.User("请继续"));
-            }
-            return result;
-        }
 
         /// <summary>
         /// 为推荐的 pawnIds 注入完整角色卡和关系数据到 user message。
@@ -707,7 +545,7 @@ namespace RimLife.Infrastructure
                 }
                 if (cards.Count > 0)
                 {
-                    sb.AppendLine("## 角色详情（系统已查询）");
+                    sb.AppendLine("## 角色详情");
                     sb.AppendLine(PawnQueryHelper.SerializeJsonArray(cards));
                     sb.AppendLine();
                 }
@@ -726,7 +564,7 @@ namespace RimLife.Infrastructure
                 }
                 if (rels.Count > 0)
                 {
-                    sb.AppendLine("## 角色关系（系统已查询）");
+                    sb.AppendLine("## 角色关系");
                     sb.AppendLine(PawnQueryHelper.SerializeJsonArray(rels));
                     sb.AppendLine();
                 }
@@ -765,7 +603,7 @@ namespace RimLife.Infrastructure
                     }
                     if (factionLookups.Count > 0)
                     {
-                        sb.AppendLine("## 派系背景（系统已查询）");
+                        sb.AppendLine("## 派系背景");
                         sb.AppendLine(PawnQueryHelper.SerializeJsonArray(factionLookups));
                         sb.AppendLine();
                     }

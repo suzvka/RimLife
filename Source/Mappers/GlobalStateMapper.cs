@@ -22,7 +22,7 @@ namespace RimLife.Mappers
         {
             try
             {
-                var map = ResolveMap(mapId);
+                var map = SemanticLabels.ResolveMap(mapId);
                 if (map == null) return null;
 
                 var snap = new GlobalStateSnapshot();
@@ -72,12 +72,6 @@ namespace RimLife.Mappers
         // ================================================================
         // 子映射
         // ================================================================
-
-        private static Map ResolveMap(int mapId)
-        {
-            if (mapId == 0) return Find.CurrentMap;
-            return Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
-        }
 
         private static void MapTimeWeather(GlobalStateSnapshot snap, Map map)
         {

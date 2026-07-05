@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using Verse;
 using NPCLife.Core;
 using NPCLife.Framework;
-using NPCLife.Infrastructure.Mcp;
 
 namespace RimLife
 {

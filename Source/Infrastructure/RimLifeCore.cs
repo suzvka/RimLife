@@ -7,12 +7,15 @@ using NPCLife.Framework.Mcp;
 using NPCLife.Infrastructure;
 using NPCLife.Infrastructure.Knowledge;
 using NPCLife.Infrastructure.Llm;
-using NPCLife.Infrastructure.Mcp;
+using NPCLife.Skills;
 using NPCLife.Workspace;
 using RimLife.Infrastructure.Knowledge;
 using RimLife.Mappers;
+using RimLife.Skills;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using Verse;
 
 namespace RimLife.Infrastructure
@@ -225,6 +228,7 @@ namespace RimLife.Infrastructure
             _eventBuffer?.Reset();
             _eventBuffer = null;
             _skillRegistryInitialized = false;
+            SkillRegistry.Clear();
 
             // 清理知识服务
             _knowledgeService = null;
@@ -295,10 +299,6 @@ namespace RimLife.Infrastructure
                     Logger?.Message($"[RimLife.DIAG] DirectionMcpProvider registered: {dirCount} tools.");
                     count += dirCount;
 
-                    int dirSlimCount = RegisterHookProvider(new DirectionMcpSlimProvider(() => Workspaces, Logger));
-                    Logger?.Message($"[RimLife.DIAG] DirectionMcpSlimProvider registered: {dirSlimCount} tools.");
-                    count += dirSlimCount;
-
                     int wriCount = RegisterHookProvider(new WritingMcpProvider(() => Workspaces, Logger));
                     Logger?.Message($"[RimLife.DIAG] WritingMcpProvider registered: {wriCount} tools.");
                     count += wriCount;
@@ -323,6 +323,22 @@ namespace RimLife.Infrastructure
                     int memCount = RegisterHookProvider(new RimLife.Infrastructure.Mcp.PawnMemoryProvider());
                     Logger?.Message($"[RimLife.DIAG] PawnMemoryProvider registered: {memCount} tools.");
                     count += memCount;
+
+                    // ---- Skill 模块自动发现（Skills/ 目录） ----
+                    // 扫描 Skills/ 目录，自动加载内置 + 第三方技能模块。
+                    // 已通过硬编码路径注册的模块不会被重复注册（McpSkillRegistry 按工具名去重）。
+                    try
+                    {
+                        string skillsDir = ResolveSkillsDirectory();
+                        var loader = new SkillModuleLoader(Logger);
+                        int moduleCount = loader.DiscoverAndLoad(skillsDir, ff.Skills);
+                        Logger?.Message($"[RimLife.Core] SkillModuleLoader: {moduleCount} module(s) auto-discovered from '{skillsDir}'.");
+                        count += moduleCount;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.Warning($"[RimLife.Core] SkillModuleLoader failed: {ex.Message}");
+                    }
 
                     Logger?.Message($"[RimLife.Core] SkillRegistry initialized: {FrameworkFactory.Skills.SkillCount} skills, {count} tools registered. TotalToolCount={FrameworkFactory.Skills.TotalToolCount}");
                 }
@@ -381,6 +397,13 @@ namespace RimLife.Infrastructure
                         () => KnowledgeService,
                         Logger),
                     priority: 10);
+
+                // ---- 第二轮警告注入 ----
+                // Agent 循环 Round >= 1 时，向 LLM 注入补救提示词，防止 LLM 在中间轮次"开新对话"。
+                // 优先级 5（在知识注入之前），确保提示词尽早生效。
+                FrameworkFactory.Pipeline.AddInterceptor(
+                    new RoundTwoWarningInterceptor(),
+                    priority: 1000);
 
                 // ---- 运行时度量系统（永久启用） ----
                 {
@@ -470,6 +493,34 @@ namespace RimLife.Infrastructure
         }
 
         // ----------------------------------------------------------------
+        // Skill 模块自动发现辅助
+        // ----------------------------------------------------------------
+
+        /// <summary>
+        /// 解析 Skills/ 目录的绝对路径。
+        /// 从 RimLife.dll 所在位置向上两级找到 Mod 根目录，再拼接 Skills/。
+        /// </summary>
+        private static string ResolveSkillsDirectory()
+        {
+            try
+            {
+                // RimLife.dll 位于 {ModRoot}/1.6/Assemblies/
+                var asmDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                if (string.IsNullOrEmpty(asmDir))
+                    return Path.Combine(".", "Skills");
+
+                // 向上一级到 1.6/，再上一级到 Mod 根目录
+                var modRoot = Path.GetFullPath(Path.Combine(asmDir, "..", ".."));
+                var skillsDir = Path.Combine(modRoot, "Skills");
+                return skillsDir;
+            }
+            catch
+            {
+                return Path.Combine(".", "Skills");
+            }
+        }
+
+        // ----------------------------------------------------------------
         // Hook Provider 注册
         // ----------------------------------------------------------------
 
@@ -543,6 +594,9 @@ namespace RimLife.Infrastructure
                     _frameworkConfig = null;    // 重新从新 CacheStore 加载
                     _promptAdditions = null;    // 重新从新 CacheStore 加载
                     _frameworkFactory = null;   // 重新以新 DriverConfig 创建
+
+                    // 清理模型发现缓存（避免跨存档残留）
+                    DiscoveredModels.Clear();
 
                     // [DIAG] 关键观察：_skillRegistryInitialized 未被重置！
                     // 如果之前注册失败或只部分成功，后续调用 EnsureSkillRegistryInitialized 会被短路
@@ -724,6 +778,13 @@ namespace RimLife.Infrastructure
                 return _credentialManager;
             }
         }
+
+        /// <summary>
+        /// 所有已发现的模型索引（凭证名 → 模型名列表）。
+        /// ConnectionPage 在模型发现后写入，RunStrategyPage 读取以构建模型选择列表。
+        /// </summary>
+        public static readonly Dictionary<string, List<string>> DiscoveredModels
+            = new Dictionary<string, List<string>>();
 
         private static IWorkspaceManager _workspaces;
         private static readonly object _workspacesLock = new object();

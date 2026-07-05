@@ -162,7 +162,7 @@ namespace RimLife.UI
             }
 
             // 精确计算卡片高度：顶部填充 + 标题行 + 释义预览 + 底部填充
-            var defPreview = Truncate(entry.Definition ?? "", 100);
+            var defPreview = UIHelper.Truncate(entry.Definition ?? "", 100);
             var contentWidth = listing.ColumnWidth - 16f;
             var defHeight = CalcTextHeight(defPreview, contentWidth);
             // 4(顶) + 22(标题) + defHeight(预览) + 4(底)
@@ -576,12 +576,6 @@ namespace RimLife.UI
         // ================================================================
         // 辅助
         // ================================================================
-
-        private static string Truncate(string value, int maxLength)
-        {
-            if (string.IsNullOrEmpty(value)) return "";
-            return value.Length <= maxLength ? value : value.Substring(0, maxLength) + "...";
-        }
 
         private void SetStatus(string message)
         {

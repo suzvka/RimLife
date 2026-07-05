@@ -295,6 +295,7 @@ namespace RimLife.Mappers
                 EventID = $"timer_pulse_{role.ToString().ToLowerInvariant()}_{tick}",
                 DefName = "TimerPulse",
                 Importance = importance,
+                TTL = 1,
                 Actors = new List<EventActorRef>(),
                 Payload = new Dictionary<string, string>
                 {
@@ -346,6 +347,7 @@ namespace RimLife.Mappers
             public string EventID { get; set; }
             public string DefName { get; set; }
             public float Importance { get; set; }
+            public int TTL { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public IDictionary<string, string> Payload { get; set; }
         }

@@ -1,6 +1,10 @@
+using NPCLife.Core;
 using NPCLife.Driver;
 using NPCLife.Framework;
+using NPCLife.Framework.Llm;
+using NPCLife.Workspace;
 using RimLife.Infrastructure;
+using System.Collections.Generic;
 using UnityEngine;
 using Verse;
 using static RimLife.UI.UIHelper;
@@ -51,6 +55,12 @@ namespace RimLife.UI
         private string _statusMessage;
         private float _statusMessageTime;
 
+        // ---- 模型选择下拉状态 ----
+        private bool _directorModelDropdownOpen;
+        private bool _improviserModelDropdownOpen;
+        private bool _screenwriterModelDropdownOpen;
+        private List<(string Cred, string Model, string Json)> _cachedModelIndices;
+
         public void Draw(Rect rect, Listing_Standard listing)
         {
             InitializeIfNeeded();
@@ -60,6 +70,9 @@ namespace RimLife.UI
             // ================================================================
             BeginSection(listing, "导演策略");
 
+            listing.Gap(GapTiny);
+
+            DrawModelSelector(listing, "模型:", WorkspaceRole.Director, ref _directorModelDropdownOpen);
             listing.Gap(GapTiny);
 
             DrawLabeledIntRow(listing, "事件数阈值:", ref _directorCountThreshold, 1, 999,
@@ -77,6 +90,9 @@ namespace RimLife.UI
             // ================================================================
             BeginSection(listing, "即兴编剧策略");
 
+            DrawModelSelector(listing, "模型:", WorkspaceRole.Improviser, ref _improviserModelDropdownOpen);
+            listing.Gap(GapTiny);
+
             DrawLabeledIntRow(listing, "事件数阈值:", ref _improviserCountThreshold, 1, 999,
                 "");
             DrawLabeledIntRow(listing, "重要度阈值:", ref _improviserImportanceThreshold, 1, 999,
@@ -91,6 +107,9 @@ namespace RimLife.UI
             // 剧情编剧策略
             // ================================================================
             BeginSection(listing, "剧情编剧策略");
+
+            DrawModelSelector(listing, "模型:", WorkspaceRole.Screenwriter, ref _screenwriterModelDropdownOpen);
+            listing.Gap(GapTiny);
 
             DrawLabeledIntRow(listing, "事件数阈值:", ref _screenwriterCountThreshold, 1, 999,
                 "");
@@ -272,6 +291,155 @@ namespace RimLife.UI
 
             if (Widgets.ButtonText(new Rect(rect.x + btnW + textW + 4f, rect.y, btnW, rect.height), "+"))
                 value = Mathf.Min(max, value + 1);
+        }
+
+        // ================================================================
+        // 模型选择器
+        // ================================================================
+
+        /// <summary>
+        /// 绘制模型选择下拉框。显示当前选中模型名，点击展开可选模型列表。
+        /// 每项显示模型名，悬浮 Tooltip 显示来源凭证名。
+        /// </summary>
+        private void DrawModelSelector(Listing_Standard listing, string label, WorkspaceRole role, ref bool dropdownOpen)
+        {
+            RefreshModelCache();
+
+            var ws = RimLifeCore.Orchestrator?.GetOrCreateWorkspace(role);
+            var currentModelJson = ws?.CurrentModel;
+            var currentModelName = ParseModelName(currentModelJson);
+            var currentCredName = ParseCredName(currentModelJson);
+
+            var displayText = string.IsNullOrEmpty(currentModelName)
+                ? "(未选择)"
+                : currentModelName;
+
+            var labelRect = listing.GetRect(24f);
+            var labelW = 50f;
+            Widgets.Label(new Rect(labelRect.x, labelRect.y, labelW, labelRect.height),
+                $"<color=#999999><size=11>{label}</size></color>");
+
+            var selectorRect = new Rect(labelRect.x + labelW, labelRect.y, labelRect.width - labelW, labelRect.height);
+            var btnLabel = dropdownOpen ? $"{displayText} ▲" : $"{displayText} ▼";
+
+            if (_cachedModelIndices == null || _cachedModelIndices.Count == 0)
+            {
+                Widgets.Label(selectorRect,
+                    "<color=#888888><size=11>请先在连接页配置凭证并发现模型</size></color>");
+                return;
+            }
+
+            // 主按钮
+            if (Widgets.ButtonText(selectorRect, btnLabel))
+            {
+                dropdownOpen = !dropdownOpen;
+            }
+
+            // 如果有当前模型，hover 显示来源凭证
+            if (!string.IsNullOrEmpty(currentCredName) && Mouse.IsOver(selectorRect))
+            {
+                TooltipHandler.TipRegion(selectorRect, $"API: {currentCredName}");
+            }
+
+            // 下拉列表
+            if (dropdownOpen)
+            {
+                var dropItemH = 22f;
+                var maxVisible = Mathf.Min(_cachedModelIndices.Count, 6);
+                var dropH = maxVisible * dropItemH + 4f;
+                var dropRect = listing.GetRect(dropH);
+
+                Widgets.DrawBoxSolid(dropRect, new Color(0.15f, 0.15f, 0.15f, 1f));
+                Widgets.DrawBox(dropRect, 1);
+
+                var innerY = dropRect.y + 2f;
+                foreach (var (cred, model, json) in _cachedModelIndices)
+                {
+                    var itemRect = new Rect(dropRect.x + 4f, innerY, dropRect.width - 8f, dropItemH);
+                    var isSelected = json == currentModelJson;
+
+                    if (isSelected)
+                    {
+                        Widgets.DrawBoxSolid(itemRect, new Color(ColorHighlight.r, ColorHighlight.g, ColorHighlight.b, 0.2f));
+                    }
+
+                    DrawHoverBackground(itemRect);
+                    if (Mouse.IsOver(itemRect))
+                        TooltipHandler.TipRegion(itemRect, $"API: {cred}");
+
+                    Widgets.Label(itemRect, $"<size=12>{model}</size>");
+
+                    if (Widgets.ButtonInvisible(itemRect))
+                    {
+                        // 选中此模型：同时更新 workspace 和凭证
+                        if (ws != null && RimLifeCore.Workspaces != null)
+                        {
+                            RimLifeCore.Workspaces.SetCurrentModel(ws.Id, json);
+                        }
+                        RimLifeCore.CredentialManager?.SetModel(cred, model);
+                        dropdownOpen = false;
+                    }
+
+                    innerY += dropItemH;
+                }
+            }
+        }
+
+        private void RefreshModelCache()
+        {
+            var mgr = RimLifeCore.CredentialManager;
+            if (mgr == null)
+            {
+                _cachedModelIndices = null;
+                return;
+            }
+
+            var result = new List<(string Cred, string Model, string Json)>();
+
+            foreach (var (name, cred) in mgr.GetAll())
+            {
+                if (cred == null) continue;
+                if (!cred.HasApiAccess()) continue;
+                if (cred.ModelNames == null || cred.ModelNames.Count == 0) continue;
+
+                foreach (var model in cred.ModelNames)
+                {
+                    if (string.IsNullOrEmpty(model)) continue;
+                    var json = $"{{\"cred\":\"{EscapeJson(name)}\",\"model\":\"{EscapeJson(model)}\"}}";
+                    result.Add((name, model, json));
+                }
+            }
+            _cachedModelIndices = result;
+        }
+
+        private static string EscapeJson(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        }
+
+        /// <summary>从模型索引 JSON 解析模型名。</summary>
+        private static string ParseModelName(string modelJson)
+        {
+            if (string.IsNullOrEmpty(modelJson)) return null;
+            try
+            {
+                var dict = NPCLife.Framework.JsonParser.ParseDict(modelJson);
+                return dict.TryGetValue("model", out var m) ? m : null;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>从模型索引 JSON 解析凭证名。</summary>
+        private static string ParseCredName(string modelJson)
+        {
+            if (string.IsNullOrEmpty(modelJson)) return null;
+            try
+            {
+                var dict = NPCLife.Framework.JsonParser.ParseDict(modelJson);
+                return dict.TryGetValue("cred", out var c) ? c : null;
+            }
+            catch { return null; }
         }
     }
 }

@@ -53,7 +53,7 @@ namespace RimLife.UI.Pages
 
         // 模型列表管理（每凭证）
         private readonly Dictionary<string, string[]> _availableModels = new Dictionary<string, string[]>();
-        private readonly Dictionary<string, HashSet<string>> _selectedModels = new Dictionary<string, HashSet<string>>();
+        private readonly Dictionary<string, string> _selectedModels = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _modelSearchText = new Dictionary<string, string>();
         private readonly Dictionary<string, Vector2> _modelScrollPos = new Dictionary<string, Vector2>();
         private readonly Dictionary<string, bool> _modelsExpanded = new Dictionary<string, bool>();
@@ -66,6 +66,7 @@ namespace RimLife.UI.Pages
         private string _newBaseUrl = "";
         private string _newApiKey = "";
         private string _newModelName = "";
+        private string _newChatEndpoint = "/v1/chat/completions";
         private LlmProviderType _newProviderType = LlmProviderType.OpenAI;
         private bool _newShowApiKey;
 
@@ -241,8 +242,9 @@ namespace RimLife.UI.Pages
             {
                 ["baseUrl"] = cred.BaseUrl ?? "",
                 ["apiKey"] = cred.ApiKey ?? "",
-                ["modelName"] = cred.ModelName ?? "",
-                ["providerType"] = cred.ProviderType.ToString()
+                ["modelName"] = (cred.ModelNames != null && cred.ModelNames.Count > 0) ? cred.ModelNames[0] : "",
+                ["providerType"] = cred.ProviderType.ToString(),
+                ["modelsEndpoint"] = cred.ModelsEndpoint ?? "/v1/models"
             };
         }
 
@@ -261,7 +263,9 @@ namespace RimLife.UI.Pages
             var baseUrl = buf.TryGetValue("baseUrl", out var bu) ? bu : "";
             var apiKey = buf.TryGetValue("apiKey", out var ak) ? ak : "";
             var modelName = buf.TryGetValue("modelName", out var mn) ? mn : "";
+            var chatEndpoint = buf.TryGetValue("chatEndpoint", out var ce) ? ce : "/v1/chat/completions";
             var providerStr = buf.TryGetValue("providerType", out var pt) ? pt : "OpenAI";
+            var modelsEndpoint = buf.TryGetValue("modelsEndpoint", out var me) ? me : "/v1/models";
 
             if (string.IsNullOrWhiteSpace(baseUrl))
             {
@@ -282,8 +286,10 @@ namespace RimLife.UI.Pages
             {
                 BaseUrl = baseUrl,
                 ApiKey = apiKey,
-                ModelName = string.IsNullOrWhiteSpace(modelName) ? null : modelName,
-                ProviderType = providerType
+                ModelNames = string.IsNullOrWhiteSpace(modelName) ? new List<string>() : new List<string> { modelName },
+                ProviderType = providerType,
+                ChatEndpoint = string.IsNullOrWhiteSpace(chatEndpoint) ? "/v1/chat/completions" : chatEndpoint,
+                ModelsEndpoint = string.IsNullOrWhiteSpace(modelsEndpoint) ? "/v1/models" : modelsEndpoint
             };
 
             Manager.Update(alias, cred);
@@ -313,8 +319,9 @@ namespace RimLife.UI.Pages
             {
                 BaseUrl = _newBaseUrl,
                 ApiKey = _newApiKey,
-                ModelName = string.IsNullOrWhiteSpace(_newModelName) ? null : _newModelName,
-                ProviderType = _newProviderType
+                ModelNames = string.IsNullOrWhiteSpace(_newModelName) ? new List<string>() : new List<string> { _newModelName },
+                ProviderType = _newProviderType,
+                ChatEndpoint = string.IsNullOrWhiteSpace(_newChatEndpoint) ? "/v1/chat/completions" : _newChatEndpoint
             };
 
             Manager.Create(_newName.Trim(), cred);
@@ -333,6 +340,7 @@ namespace RimLife.UI.Pages
             _newBaseUrl = "";
             _newApiKey = "";
             _newModelName = "";
+            _newChatEndpoint = "/v1/chat/completions";
             _newProviderType = LlmProviderType.OpenAI;
             _newShowApiKey = false;
         }
@@ -585,13 +593,6 @@ namespace RimLife.UI.Pages
             if (string.IsNullOrEmpty(key)) return "(未设置)";
             if (key.Length <= 8) return new string('*', key.Length);
             return key.Substring(0, 4) + new string('*', Math.Min(key.Length - 8, 8)) + key.Substring(key.Length - 4);
-        }
-
-        private static string TruncateUrl(string url, int maxLen)
-        {
-            if (string.IsNullOrEmpty(url)) return "(未设置)";
-            if (url.Length <= maxLen) return url;
-            return url.Substring(0, maxLen - 3) + "...";
         }
     }
 }

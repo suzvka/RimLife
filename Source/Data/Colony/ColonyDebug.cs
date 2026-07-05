@@ -41,14 +41,6 @@ namespace RimLife
                 action = () => DumpColonyContext()
             };
 
-            // EventLog dump
-            yield return new Command_Action
-            {
-                defaultLabel = "EventLog Dump",
-                defaultDesc = "Print recent events from log.",
-                icon = ContentFinder<Texture2D>.Get("UI/Commands/Forbid", false),
-                action = () => DumpEventLog()
-            };
 
             // ObjectiveCard dump
             yield return new Command_Action
@@ -133,51 +125,6 @@ namespace RimLife
             }
         }
 
-        // --- EventLog ---
-        private static void DumpEventLog()
-        {
-            try
-            {
-                var eventLog = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-                if (eventLog == null)
-                {
-                    Log.Message("[EventLog Dump] (no event log available - game not loaded?)");
-                    return;
-                }
-
-                var events = eventLog.Query(EventQuery.All);
-                var sb = new StringBuilder(2048);
-                sb.AppendLine($"[EventLog Dump] count={events.Count} total={eventLog.TotalAppended}");
-
-                if (events.Count == 0)
-                {
-                    sb.AppendLine("(no events)");
-                }
-                else
-                {
-                    foreach (var evt in events)
-                    {
-                        sb.AppendLine($"  {evt.DefName} imp={evt.Importance:F1}");
-                        if (evt.Actors != null)
-                        {
-                            foreach (var a in evt.Actors)
-                                sb.AppendLine($"    actor: {a.Name}({a.ID}) role={a.Role} type={a.RefType}");
-                        }
-                        if (evt.Payload != null && evt.Payload.Count > 0)
-                        {
-                            var pairs = evt.Payload.Select(kv => $"{kv.Key}={kv.Value}");
-                            sb.AppendLine($"    payload: {string.Join(", ", pairs)}");
-                        }
-                    }
-                }
-
-                Log.Message(sb.ToString());
-            }
-            catch (Exception e)
-            {
-                Log.Error($"[ColonyDebug] EventLog dump failed: {e}");
-            }
-        }
 
         // --- Objectives ---
         private static void DumpObjectives()

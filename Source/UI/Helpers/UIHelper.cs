@@ -459,5 +459,21 @@ namespace RimLife.UI
         public static readonly Color ColorTestFailed = new Color(0.9f, 0.3f, 0.3f);
         public static readonly Color ColorTestUntested = new Color(0.5f, 0.5f, 0.5f);
         public static readonly Color ColorTestRunning = new Color(0.35f, 0.65f, 1f);
+
+        // ================================================================
+        // 工具方法
+        // ================================================================
+
+        /// <summary>
+        /// 截断字符串至指定长度，超出部分替换为 "..."。
+        /// </summary>
+        /// <param name="value">原始字符串。</param>
+        /// <param name="maxLength">最大长度（不含省略号）。</param>
+        /// <param name="defaultValue">输入为 null 或空时返回的默认值。</param>
+        public static string Truncate(string value, int maxLength, string defaultValue = "")
+        {
+            if (string.IsNullOrEmpty(value)) return defaultValue;
+            return value.Length <= maxLength ? value : value.Substring(0, maxLength) + "...";
+        }
     }
 }

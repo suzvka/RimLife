@@ -1,6 +1,7 @@
 using RimLife;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
+using NPCLife.Workspace;
 using System;
 using System.Collections.Generic;
 using Verse;
@@ -11,6 +12,11 @@ namespace RimLife.Infrastructure.Mcp
     /// Pawn 个体记忆 Skill 的 Hook Provider。
     /// 提供记忆追加、心境写入两个工具。记忆查询通过 get_character_card 的 memory section 提供，此处仅负责写入。
     /// </summary>
+    [SkillDefinition(
+        Id = "pawn_memory",
+        Name = "个体记忆",
+        Description = "追加角色短期记忆，写入即时心境",
+        DefaultRoles = new[] { WorkspaceRole.Screenwriter, WorkspaceRole.Improviser })]
     public class PawnMemoryProvider : IMcpHookProvider
     {
         public string HookId => "pawn_memory";

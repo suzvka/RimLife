@@ -1,0 +1,7 @@
+{
+  "id": "colony_overview",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "entryPoint": "RimLife.Infrastructure.Mcp.ColonyOverviewProvider, RimLife",
+  "dependencies": []
+}

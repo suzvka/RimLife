@@ -1,3 +1,4 @@
+using RimLife.Data;
 using RimWorld;
 using System;
 using System.Collections.Generic;
@@ -49,11 +50,7 @@ namespace RimLife
                 if (ctx.CurrentTick < 0) return ctx;
 
                 // 获取地图以确定 tile
-                Map map = null;
-                if (mapId == 0)
-                    map = Find.CurrentMap;
-                else
-                    map = Find.Maps.Find(m => m.uniqueID == mapId);
+                Map map = SemanticLabels.ResolveMap(mapId);
 
                 if (map == null)
                     map = Find.AnyPlayerHomeMap;
@@ -80,7 +77,7 @@ namespace RimLife
 
                 // 本地时间（依赖经度）
                 try { ctx.Hour = GenDate.HourInteger(absTick, longitude); } catch { ctx.Hour = -1; }
-                ctx.TimeOfDay = ctx.Hour >= 0 ? MapTimeOfDay(ctx.Hour) : "Unknown";
+                ctx.TimeOfDay = ctx.Hour >= 0 ? SemanticLabels.MapTimeOfDay(ctx.Hour) : "Unknown";
             }
             catch (Exception e)
             {
@@ -96,14 +93,6 @@ namespace RimLife
         public static System.Threading.Tasks.Task<TimeContext> CurrentAsync(int mapId = 0)
         {
             return MainThreadDispatcher.EnqueueAsync(() => Current(mapId));
-        }
-
-        private static string MapTimeOfDay(int hour)
-        {
-            if (hour >= 5 && hour < 7) return "Dawn";
-            if (hour >= 7 && hour < 18) return "Day";
-            if (hour >= 18 && hour < 20) return "Dusk";
-            return "Night";
         }
     }
 }

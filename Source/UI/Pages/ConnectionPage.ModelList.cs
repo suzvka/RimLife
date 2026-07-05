@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using NPCLife.Framework.Llm;
+using RimLife.Infrastructure;
 using UnityEngine;
 using Verse;
 using static RimLife.UI.UIHelper;
@@ -54,8 +55,9 @@ namespace RimLife.UI.Pages
             }
 
             // 统计
-            var selected = _selectedModels.TryGetValue(alias, out var sel) ? sel : new HashSet<string>();
-            var summaryText = $"<color=#888888><size=10>{filtered.Length}/{allModels.Length} 个模型  |  已启用: {selected.Count}</size></color>";
+            var currentModel = _selectedModels.TryGetValue(alias, out var cm) ? cm : null;
+            var enabledCount = string.IsNullOrEmpty(currentModel) ? 0 : 1;
+            var summaryText = $"<color=#888888><size=10>{filtered.Length}/{allModels.Length} 个模型  |  当前: {(string.IsNullOrEmpty(currentModel) ? "无" : currentModel)}</size></color>";
             Widgets.Label(new Rect(x, y, w, 14f), summaryText);
             y += 14f;
 
@@ -82,27 +84,27 @@ namespace RimLife.UI.Pages
 
                 // 左对齐模型名
                 var nameRect = new Rect(entryRect.x + 4f, entryRect.y, entryRect.width - 36f, entryHeight);
-                var isSelected = selected.Contains(modelName);
+                var isSelected = modelName == currentModel;
                 var nameColor = isSelected ? "#FFFFFF" : "#AAAAAA";
                 Widgets.Label(nameRect, $"<color={nameColor}><size=11>{modelName}</size></color>");
 
-                // 右对齐开关
+                // 右对齐：单选切换（点击即设为当前模型，再次点击取消）
                 var toggleRect = new Rect(entryRect.x + entryRect.width - 28f, entryRect.y + 2f, 24f, 20f);
-                var toggleLabel = isSelected ? "<color=#88FF88>■</color>" : "<color=#666666>□</color>";
+                var toggleLabel = isSelected ? "<color=#88FF88>●</color>" : "<color=#666666>○</color>";
                 if (Widgets.ButtonText(toggleRect, toggleLabel))
                 {
-                    if (!_selectedModels.ContainsKey(alias))
-                        _selectedModels[alias] = new HashSet<string>();
-
                     if (isSelected)
-                        _selectedModels[alias].Remove(modelName);
+                    {
+                        // 取消选择
+                        _selectedModels.Remove(alias);
+                        Manager.SetModel(alias, null);
+                    }
                     else
-                        _selectedModels[alias].Add(modelName);
-
-                    // 将第一个选中的模型设为当前模型
-                    var firstSelected = _selectedModels[alias].FirstOrDefault();
-                    if (!string.IsNullOrEmpty(firstSelected))
-                        Manager.SetModel(alias, firstSelected);
+                    {
+                        // 选中此模型
+                        _selectedModels[alias] = modelName;
+                        Manager.SetModel(alias, modelName);
+                    }
                 }
             }
 
@@ -128,11 +130,11 @@ namespace RimLife.UI.Pages
             {
                 var models = await llm.ListModelsAsync(cred, CancellationToken.None);
                 _availableModels[alias] = models ?? new string[0];
-                // 初始化选中状态：当前模型的凭证自动选中
-                if (!_selectedModels.ContainsKey(alias))
-                    _selectedModels[alias] = new HashSet<string>();
-                if (!string.IsNullOrEmpty(cred.ModelName))
-                    _selectedModels[alias].Add(cred.ModelName);
+                // 同步到共享字典，供 RunStrategyPage 读取
+                RimLifeCore.DiscoveredModels[alias] = new List<string>(models ?? new string[0]);
+                // 初始化选中状态：当前凭证的第一个模型自动设为选中
+                if (cred.ModelNames != null && cred.ModelNames.Count > 0 && !_selectedModels.ContainsKey(alias))
+                    _selectedModels[alias] = cred.ModelNames[0];
                 _modelsExpanded[alias] = true;
                 SetStatus($"{alias}: 发现 {models?.Length ?? 0} 个模型");
             }

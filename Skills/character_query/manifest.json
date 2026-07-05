@@ -1,0 +1,7 @@
+{
+  "id": "character_query",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "entryPoint": "RimLife.Infrastructure.Mcp.CharacterQueryProvider, RimLife",
+  "dependencies": []
+}

@@ -1,0 +1,7 @@
+{
+  "id": "relationship_query",
+  "version": "1.0.0",
+  "apiVersion": "1.0",
+  "entryPoint": "RimLife.Infrastructure.Mcp.RelationshipQueryProvider, RimLife",
+  "dependencies": []
+}

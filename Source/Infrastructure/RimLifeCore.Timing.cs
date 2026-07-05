@@ -77,6 +77,7 @@ namespace RimLife.Infrastructure
             float addedScore = deltaTicks * scorePerTick;
 
             // 导演定时器（阈值由 DriverConfig 提供，单位为抽象积分；适配层映射为 1 现实秒 = 1 积分）
+            // 仅在事件池非空时注入：空池时跳过，避免唤醒 Agent 处理无实际事件的 TimerPulse。
             int dirInterval = dc.GetTimerInterval(NPCLife.Workspace.WorkspaceRole.Director);
             if (dirInterval > 0)
             {
@@ -87,7 +88,7 @@ namespace RimLife.Infrastructure
                 {
                     _directorAccumSec -= dirThreshold;
                     var directorWs = Orchestrator.GetOrCreateWorkspace(NPCLife.Workspace.WorkspaceRole.Director);
-                    if (directorWs != null)
+                    if (directorWs != null && directorWs.EventPool != null && directorWs.EventPool.PendingCount > 0)
                     {
                         var pulseEvt = EventCardMapper.CreateTimerPulse(
                             NPCLife.Workspace.WorkspaceRole.Director, currentTicks, dirImportanceThreshold);
@@ -141,6 +142,17 @@ namespace RimLife.Infrastructure
                             Logger?.Message($"[RimLife.Timing] TimerPulse injected (role=Screenwriter, interval={swInterval}s, pending={ws.EventPool.PendingCount})");
                         }
                     }
+                }
+            }
+
+            // 延迟激活检查：遍历所有活跃工作空间，触发已达 debounce 期满的阈值。
+            // 解决跨工作空间批量路由时首个事件即激活接收方 Agent 的竞态问题。
+            var activeWssDeferred = Workspaces?.List(NPCLife.Workspace.WorkspaceStatus.Active);
+            if (activeWssDeferred != null)
+            {
+                foreach (var ws in activeWssDeferred)
+                {
+                    ws.EventPool?.TryFireDeferred();
                 }
             }
         }

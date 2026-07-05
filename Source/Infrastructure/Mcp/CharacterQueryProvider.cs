@@ -2,6 +2,7 @@
 using NPCLife.Core;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
+using NPCLife.Workspace;
 using RimLife.Data;
 using RimWorld;
 using System;
@@ -15,6 +16,11 @@ namespace RimLife.Infrastructure.Mcp
     /// 角色查询 Skill 的 Hook Provider。
     /// 提供角色人物卡获取、按条件筛选殖民者、列出全部角色三个工具。
     /// </summary>
+    [SkillDefinition(
+        Id = "character_query",
+        Name = "角色与环境查询",
+        Description = "获取局部叙事事实",
+        DefaultRoles = new[] { WorkspaceRole.Director, WorkspaceRole.Screenwriter, WorkspaceRole.Improviser })]
     public class CharacterQueryProvider : IMcpHookProvider
     {
         public string HookId => "character_query";

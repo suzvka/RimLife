@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace RimLife.Data
 {
     /// <summary>
@@ -117,6 +119,30 @@ namespace RimLife.Data
             if (glow < 0.30f) return "Dim";
             if (glow < 0.60f) return "Lit";
             return "Bright";
+        }
+
+        /// <summary>
+        /// 一天中的时段标签。5-7点黎明、7-18点白天、18-20点黄昏、其余夜晚。
+        /// </summary>
+        public static string MapTimeOfDay(int hour)
+        {
+            if (hour >= 5 && hour < 7) return "Dawn";
+            if (hour >= 7 && hour < 18) return "Day";
+            if (hour >= 18 && hour < 20) return "Dusk";
+            return "Night";
+        }
+
+        // ============================================================
+        // 工具方法
+        // ============================================================
+
+        /// <summary>
+        /// 根据地图 ID 解析 Map 对象。mapId=0 时返回当前地图。
+        /// </summary>
+        public static Verse.Map ResolveMap(int mapId)
+        {
+            if (mapId == 0) return Verse.Find.CurrentMap;
+            return Verse.Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
         }
 
         // ============================================================

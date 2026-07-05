@@ -1,6 +1,5 @@
 ﻿using NPCLife.Core;
 using NPCLife.Framework.Script;
-using NPCLife.Infrastructure.Mcp;
 using RimLife.Infrastructure.Mcp;
 using System.Collections.Generic;
 using Verse;

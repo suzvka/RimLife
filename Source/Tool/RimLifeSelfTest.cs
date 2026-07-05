@@ -10,7 +10,6 @@ using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
 using RimLife.Data;
 using RimLife.Infrastructure;
-using NPCLife.Infrastructure.Mcp;
 using RimLife.Infrastructure.Mcp;
 using RimLife.Mappers;
 using RimLife.UI;
@@ -121,7 +120,6 @@ namespace RimLife.Tool
             TestInfrastructure();
             TestJsonRoundTrip();
             TestFramework();
-            TestEventLog();
             TestMappers();
             TestEventCardMapper();
             TestHarmonyStatus();
@@ -168,14 +166,8 @@ namespace RimLife.Tool
             else
                 Skip("SaveIdResolver 未设置 (可能是新档，FinalizeInit 尚未调用)");
 
-            var directorWs = RimLifeCore.GetDirectorWorkspace();
-            if (directorWs?.EventPool != null)
-            {
-                Pass($"EventPool 可用 ({directorWs.EventPool.GetType().Name})");
-                DumpObject("  TotalAppended", directorWs.EventPool.TotalAppended);
-            }
-            else
-                Skip("EventPool 未初始化 (无导演工作空间)");
+            
+        
         }
 
         // ================================================================
@@ -310,87 +302,7 @@ namespace RimLife.Tool
         // 4. EventLog 集成测试
         // ================================================================
 
-        public static void TestEventLog()
-        {
-            Section("4. EventLog 集成");
-
-            DumpObject("SaveStore", RimLifeCore.SaveStore != null ? "已注册" : "null");
-
-            var log = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-            if (log == null)
-            {
-                Skip("EventPool 为 null，无法测试 (无导演工作空间?)");
-                return;
-            }
-
-            DumpObject("EventLog 类型", log.GetType().Name);
-            DumpObject("当前 TotalAppended", log.TotalAppended);
-            DumpObject("当前 _events 数量", log.Count(EventQuery.All));
-
-            var testEvent = MakeTestEvent($"selftest_{DateTime.Now.Ticks}", 9999, 1f);
-            if (testEvent == null)
-            {
-                Fail("MakeTestEvent 返回 null");
-                return;
-            }
-
-            try
-            {
-                int before = log.TotalAppended;
-                log.Append(testEvent);
-                int after = log.TotalAppended;
-                if (after == before + 1)
-                    Pass($"Append 成功 (total: {before} → {after})");
-                else
-                    Fail("Append 后计数不正确", $"before={before} after={after} type={log.GetType().Name}");
-            }
-            catch (Exception e) { Fail("Append 异常", e.Message); }
-
-            try
-            {
-                var latest = log.Latest;
-                if (latest != null && latest.EventID == testEvent.EventID)
-                    Pass($"Latest 正确 ({latest.EventID})");
-                else
-                    Fail("Latest 不正确", latest?.EventID ?? "null");
-            }
-            catch (Exception e) { Fail("Latest 异常", e.Message); }
-
-            try
-            {
-                var all = log.Query(EventQuery.All);
-                if (all.Count > 0)
-                    Pass($"Query(All) 返回 {all.Count} 条");
-                else
-                    Fail("Query(All) 返回空");
-
-            }
-            catch (Exception e) { Fail("Query 异常", e.Message); }
-
-            try
-            {
-                int count = log.Count(EventQuery.All);
-                Pass($"Count(All) = {count}");
-            }
-            catch (Exception e) { Fail("Count 异常", e.Message); }
-
-            try
-            {
-                var latest = log.Latest;
-                if (latest != null)
-                {
-                    DumpObject("EventID", latest.EventID);
-                    DumpObject("DefName", latest.DefName);
-                    DumpObject("Importance", latest.Importance);
-                    if (latest.Actors != null)
-                        Log.Message($"    Actors: {latest.Actors.Count} 个");
-                    if (latest.Payload != null)
-                        Log.Message($"    Payload: {latest.Payload.Count} 个键");
-                }
-            }
-            catch (Exception e) { Fail("事件详情输出异常", e.Message); }
-        }
-
+        
         // ================================================================
         // 5. Mapper 集成测试
         // ================================================================
@@ -786,22 +698,7 @@ namespace RimLife.Tool
             }
             catch (Exception e) { Fail("get_colony_overview 异常", e.Message); }
 
-            // --- 9.2 get_recent_events ---
-            try
-            {
-                var eventLog = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-                if (eventLog != null && eventLog.TotalAppended > 0)
-                {
-                    var json = ColonyOverviewProvider.GetRecentEvents(5);
-                    if (json.StartsWith("[") && json.EndsWith("]"))
-                        Pass($"get_recent_events 成功");
-                    else
-                        Fail("get_recent_events 输出异常");
-                }
-                else
-                    Skip("get_recent_events — EventLog 为空");
-            }
-            catch (Exception e) { Fail("get_recent_events 异常", e.Message); }
+            
 
             // --- 9.3 get_active_objectives ---
             try
@@ -1142,110 +1039,10 @@ namespace RimLife.Tool
         {
             Section("11. AgentLoop");
 
-            // --- 11.1 EventPool 类型 ---
-            try
-            {
-                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-                if (pool != null)
-                {
-                    Pass($"EventPool 可用 ({pool.GetType().Name})");
-                    DumpObject("  PendingCount", pool.PendingCount);
-                    DumpObject("  TotalImportance", pool.TotalImportance);
-                    DumpObject("  RecentEvents", pool.Count(EventQuery.All));
-                    DumpObject("  TotalAppended", pool.TotalAppended);
-                }
-                else
-                    Fail("EventPool 不可用 (无导演工作空间)");
-            }
-            catch (Exception e) { Fail("EventPool 类型检查异常", e.Message); }
+           
+            
 
-            // --- 11.2 Pending/Drain 生命周期 ---
-            try
-            {
-                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-                if (pool == null) { Skip("EventPool 不可用"); return; }
-
-                int before = pool.PendingCount;
-
-                // 追加测试事件
-                var testEvt = MakeTestEvent("driver_test_1", 99999, 3f);
-                pool.Append(testEvt);
-
-                int afterAppend = pool.PendingCount;
-                if (afterAppend == before + 1)
-                    Pass($"Append 后 PendingCount: {before} → {afterAppend}");
-                else
-                    Fail("Append 未增加 PendingCount");
-
-                // Drain
-                var drained = pool.DrainPending();
-                if (drained.Count == afterAppend && pool.PendingCount == 0)
-                    Pass($"DrainPending 成功: drained={drained.Count}, pending={pool.PendingCount}");
-                else
-                    Fail($"DrainPending 后状态异常: drained={drained.Count}, pending={pool.PendingCount}");
-
-                // 把事件放回去（避免影响后续测试）
-                foreach (var evt in drained)
-                    pool.Append(evt);
-
-                // Drain 清空
-                pool.DrainPending();
-                if (pool.PendingCount == 0)
-                    Pass("DrainPending 清空成功");
-                else
-                    Fail("DrainPending 后 PendingCount != 0");
-            }
-            catch (Exception e) { Fail("Drain 测试异常", e.Message); }
-
-            // --- 11.3 重要度计算 ---
-            try
-            {
-                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-                if (pool == null) { Skip("EventPool 不可用"); return; }
-
-                pool.DrainPending();
-                pool.Append(MakeTestEvent("imp_1", 1, 1f));
-                pool.Append(MakeTestEvent("imp_2", 2, 3f));
-                pool.Append(MakeTestEvent("imp_3", 3, 5f));
-
-                float expected = 1f + 3f + 5f;
-
-                if (pool.TotalImportance == expected)
-                    Pass($"TotalImportance 计算正确: {pool.TotalImportance} (expected {expected})");
-                else
-                    Fail($"TotalImportance 不正确: {pool.TotalImportance} != {expected}");
-
-                pool.DrainPending();
-            }
-            catch (Exception e) { Fail("重要度计算异常", e.Message); }
-
-            // --- 11.4 OnThresholdReached 回调 ---
-            try
-            {
-                var pool = RimLifeCore.GetDirectorWorkspace()?.EventPool;
-                if (pool == null) { Skip("EventPool 不可用"); return; }
-
-                pool.DrainPending();
-
-                bool callbackFired = false;
-                Action handler = () => { callbackFired = true; };
-                pool.OnThresholdReached += handler;
-
-                // 添加少量 Minor 事件：数量达标
-                for (int i = 0; i < 3; i++)
-                    pool.Append(MakeTestEvent($"cnt_{i}", i, 1f));
-
-                if (callbackFired)
-                    Pass("OnThresholdReached: 数量达标触发回调");
-                else if (pool.PendingCount < RimLifeCore.DriverConfig.DirectorCountThreshold)
-                    Pass("OnThresholdReached: 未触发（数量未达标，预期行为）");
-                else
-                    Fail("OnThresholdReached: 数量达标但未触发");
-
-                pool.OnThresholdReached -= handler;
-                pool.DrainPending();
-            }
-            catch (Exception e) { Fail("OnThresholdReached 测试异常", e.Message); }
+            
 
             // --- 11.5 DirectorAgent 状态 ---
             try
@@ -1421,7 +1218,6 @@ namespace RimLife.Tool
                 new FloatMenuOption("1. 基础设施 (SaveStore/CacheStore/EventLog)", () => TestInfrastructure()),
                 new FloatMenuOption("2. JSON 往返 (ParseDict/Serialize/Writer)", () => TestJsonRoundTrip()),
                 new FloatMenuOption("3. Framework 纯逻辑 (SemanticLabels/RandomInt)", () => TestFramework()),
-                new FloatMenuOption("4. EventPool 集成 (Append/Query/Count)", () => TestEventLog()),
                 new FloatMenuOption("5. Mapper 数据采集 (CharacterCard/EnvironmentCard)", () => TestMappers()),
                 new FloatMenuOption("6. EventCardMapper 构造 (FromDeath/FromSocial/...)", () => TestEventCardMapper()),
                 new FloatMenuOption("7. Harmony Patch 状态", () => TestHarmonyStatus()),
@@ -1458,6 +1254,7 @@ namespace RimLife.Tool
             public string EventID { get; set; }
             public string DefName { get; set; }
             public float Importance { get; set; }
+            public int TTL { get; set; }
             public IReadOnlyList<EventActorRef> Actors { get; set; }
             public IDictionary<string, string> Payload { get; set; }
         }

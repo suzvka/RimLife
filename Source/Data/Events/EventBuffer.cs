@@ -57,16 +57,10 @@ namespace RimLife
             {
                 var parts = new List<string>();
                 foreach (var kv in evt.Payload)
-                    parts.Add($"{kv.Key}={Truncate(kv.Value, 30)}");
+                    parts.Add($"{kv.Key}={UIHelper.Truncate(kv.Value, 30)}");
                 payloadSummary = string.Join(", ", parts);
             }
             RimLifeLogger.Message($"[RimLife.DIAG] EventBuffer.Append: id={evt.EventID}, def={evt.DefName}, imp={evt.Importance:F1}, payload=[{payloadSummary}]");
-        }
-
-        private static string Truncate(string s, int maxLen)
-        {
-            if (string.IsNullOrEmpty(s)) return "";
-            return s.Length <= maxLen ? s : s.Substring(0, maxLen) + "...";
         }
 
         /// <summary>

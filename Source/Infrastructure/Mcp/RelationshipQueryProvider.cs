@@ -2,6 +2,7 @@ using NPCLife.Cards;
 using NPCLife.Core;
 using NPCLife.Framework;
 using NPCLife.Framework.Mcp;
+using NPCLife.Workspace;
 using RimLife.Data;
 using RimWorld;
 using System;
@@ -16,6 +17,11 @@ namespace RimLife.Infrastructure.Mcp
     /// 提供社交关系、牵绊动物、机械体从属关系的异构查询。
     /// 遵循"只收集已知信息，失败则忽略"原则，不同 Pawn 类型返回不同字段组合。
     /// </summary>
+    [SkillDefinition(
+        Id = "relationship_query",
+        Name = "关系网络",
+        Description = "查询角色社交关系、交互历史流水",
+        DefaultRoles = new[] { WorkspaceRole.Screenwriter, WorkspaceRole.Improviser })]
     public class RelationshipQueryProvider : IMcpHookProvider
     {
         public string HookId => "relationship_query";

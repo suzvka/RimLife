@@ -14,7 +14,6 @@ namespace RimLife.Mappers
 {
     /// <summary>
     /// 从 RimWorld 全局状态提取 ColonyContext。
-    /// 合并 ColonySnapshot.Create + TimeContext.Current 的逻辑。
     /// </summary>
     public static class ColonyContextMapper
     {
@@ -37,7 +36,7 @@ namespace RimLife.Mappers
                 MapFactionRelations(ctx);
 
                 // === 财富 / 食物 / 电力 / 威胁 ===
-                Map map = ResolveMap(mapId);
+                Map map = SemanticLabels.ResolveMap(mapId);
                 MapMapStats(ctx, map);
 
                 // === 叙事者 / 科技 / 生命周期 ===
@@ -66,12 +65,6 @@ namespace RimLife.Mappers
         // 子映射
         // ================================================================
 
-        private static Map ResolveMap(int mapId)
-        {
-            if (mapId == 0) return Find.CurrentMap;
-            return Find.Maps.FirstOrDefault(m => m.uniqueID == mapId);
-        }
-
         private static void MapTime(ColonyContext ctx, int mapId)
         {
             try
@@ -79,7 +72,7 @@ namespace RimLife.Mappers
                 ctx.CurrentTick = Find.TickManager?.TicksGame ?? -1;
                 if (ctx.CurrentTick < 0) return;
 
-                Map map = ResolveMap(mapId) ?? Find.AnyPlayerHomeMap;
+                Map map = SemanticLabels.ResolveMap(mapId) ?? Find.AnyPlayerHomeMap;
                 if (map == null)
                 {
                     ctx.TimeOfDay = "Unknown";
@@ -98,7 +91,7 @@ namespace RimLife.Mappers
                 try { ctx.Year = GenDate.Year(absTick, longitude); } catch { ctx.Year = 0; }
                 try { ctx.Hour = GenDate.HourInteger(absTick, longitude); } catch { ctx.Hour = -1; }
 
-                ctx.TimeOfDay = ctx.Hour >= 0 ? MapTimeOfDay(ctx.Hour) : "Unknown";
+                ctx.TimeOfDay = ctx.Hour >= 0 ? SemanticLabels.MapTimeOfDay(ctx.Hour) : "Unknown";
 
                 // 格式化人类可读时间字符串，由框架原样透传给 LLM
                 ctx.Timestamp = ctx.Hour >= 0
@@ -258,14 +251,6 @@ namespace RimLife.Mappers
             }
             catch (Exception e) { Log.Warning($"[RimLife.ColonyContextMapper] threats: {e.Message}"); }
             ctx.ActiveThreats = threats;
-        }
-
-        private static string MapTimeOfDay(int hour)
-        {
-            if (hour >= 5 && hour < 7) return "Dawn";
-            if (hour >= 7 && hour < 18) return "Day";
-            if (hour >= 18 && hour < 20) return "Dusk";
-            return "Night";
         }
 
         // ================================================================

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using NPCLife.Framework.Llm;
+using RimLife.Infrastructure;
 using UnityEngine;
 using Verse;
 using static RimLife.UI.UIHelper;
@@ -41,7 +42,7 @@ namespace RimLife.UI.Pages
             cursorX += providerW;
 
             // URL 摘要
-            var urlDisplay = TruncateUrl(cred.BaseUrl, 30);
+            var urlDisplay = Truncate(cred.BaseUrl, 30, "(未设置)");
             var urlW = w - (cursorX - x) - 180f;
             if (urlW > 40f)
                 Widgets.Label(new Rect(cursorX, rowY, urlW, rowH),
@@ -71,6 +72,7 @@ namespace RimLife.UI.Pages
                 if (Widgets.ButtonText(delRect, "确认?"))
                 {
                     Manager.Delete(alias);
+                    RimLifeCore.DiscoveredModels.Remove(alias);
                     CleanupCardState(alias);
                     SetStatus($"已删除: {alias}");
                     _pendingDeleteAlias = null;
@@ -149,7 +151,8 @@ namespace RimLife.UI.Pages
             cursorY += 28f + GapTiny;
 
             // ModelName
-            var modelDisplay = string.IsNullOrEmpty(cred.ModelName) ? "(未设置)" : cred.ModelName;
+            var modelDisplay = (cred.ModelNames != null && cred.ModelNames.Count > 0) 
+                ? string.Join(", ", cred.ModelNames) : "(未设置)";
             Widgets.Label(new Rect(x + 4f, cursorY, w - 8f, 22f),
                 $"<color=#999999><size=11>Model:</size></color> {modelDisplay}");
             cursorY += 22f;
@@ -218,6 +221,10 @@ namespace RimLife.UI.Pages
             h += GapTiny;
             h += lineH; // ModelName
             h += GapTiny;
+            h += lineH; // ModelsEndpoint
+            h += GapTiny;
+            h += lineH; // ChatEndpoint
+            h += GapTiny;
             h += 32f; // ProviderType
             h += GapMedium;
             h += 30f; // 按钮行
@@ -235,7 +242,7 @@ namespace RimLife.UI.Pages
             cursorY += 28f + GapTiny;
 
             // 获取编辑字段（从表单状态或凭证数据）
-            string editName, editBaseUrl, editApiKey, editModelName;
+            string editName, editBaseUrl, editApiKey, editModelName, editModelsEndpoint, editChatEndpoint;
             LlmProviderType editProviderType;
             bool editShowKey;
 
@@ -245,6 +252,8 @@ namespace RimLife.UI.Pages
                 editBaseUrl = _newBaseUrl;
                 editApiKey = _newApiKey;
                 editModelName = _newModelName;
+                editModelsEndpoint = "/v1/models";
+                editChatEndpoint = "/v1/chat/completions";
                 editProviderType = _newProviderType;
                 editShowKey = _newShowApiKey;
             }
@@ -254,7 +263,9 @@ namespace RimLife.UI.Pages
                 // 从编辑缓冲区读取，回退到凭证原始值
                 editBaseUrl = GetEditBuffer(alias, "baseUrl", cred.BaseUrl ?? "");
                 editApiKey = GetEditBuffer(alias, "apiKey", cred.ApiKey ?? "");
-                editModelName = GetEditBuffer(alias, "modelName", cred.ModelName ?? "");
+                editModelName = GetEditBuffer(alias, "modelName", (cred.ModelNames != null && cred.ModelNames.Count > 0) ? cred.ModelNames[0] : "");
+                editModelsEndpoint = GetEditBuffer(alias, "modelsEndpoint", cred.ModelsEndpoint ?? "/v1/models");
+                editChatEndpoint = GetEditBuffer(alias, "chatEndpoint", cred.ChatEndpoint ?? "/v1/chat/completions");
                 var ptStr = GetEditBuffer(alias, "providerType", cred.ProviderType.ToString());
                 editProviderType = ptStr == "Anthropic"
                     ? LlmProviderType.Anthropic
@@ -328,6 +339,22 @@ namespace RimLife.UI.Pages
                 var newModelVal = Widgets.TextField(modelRect, editModelName);
                 UpdateEditField(alias, "modelName", newModelVal);
             }
+            cursorY += 22f + GapTiny;
+
+            // ModelsEndpoint
+            Widgets.Label(new Rect(x + 4f, cursorY, 60f, 22f),
+                "<color=#999999><size=11>模型端点</size></color>");
+            var endpointRect = new Rect(x + 64f, cursorY, w - 68f, 22f);
+            var newEndpointVal = Widgets.TextField(endpointRect, editModelsEndpoint);
+            UpdateEditField(alias, "modelsEndpoint", newEndpointVal);
+            cursorY += 22f + GapTiny;
+
+            // ChatEndpoint
+            Widgets.Label(new Rect(x + 4f, cursorY, 60f, 22f),
+                "<color=#999999><size=11>对话端点</size></color>");
+            var chatEndpointRect = new Rect(x + 64f, cursorY, w - 68f, 22f);
+            var newChatEndpointVal = Widgets.TextField(chatEndpointRect, editChatEndpoint);
+            UpdateEditField(alias, "chatEndpoint", newChatEndpointVal);
             cursorY += 22f + GapTiny;
 
             // ProviderType

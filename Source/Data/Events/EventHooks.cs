@@ -2,6 +2,7 @@ using HarmonyLib;
 using NPCLife.Cards;
 using RimLife.Infrastructure;
 using RimLife.Mappers;
+using RimLife.UI;
 using RimWorld;
 using System;
 using System.Collections.Generic;
@@ -35,7 +36,7 @@ namespace RimLife
                 string text = ExtractLetterText(let);
                 
                 // 诊断日志
-                RimLife.UI.RimLifeLogger.Message($"[RimLife.DIAG] Letter hook: def={let.def?.defName}, label='{TruncateForLog(label, 60)}', text='{TruncateForLog(text, 60)}', type={let.GetType().Name}");
+                RimLife.UI.RimLifeLogger.Message($"[RimLife.DIAG] Letter hook: def={let.def?.defName}, label='{UIHelper.Truncate(label, 60, "(empty)")}', text='{UIHelper.Truncate(text, 60, "(empty)")}', type={let.GetType().Name}");
                 
                 RimLifeCore.EventBuffer?.Append(
                     EventCardMapper.FromLetter(let.def, label, text, let.lookTargets, let.relatedFaction));
@@ -102,12 +103,6 @@ namespace RimLife
             }
             catch { }
             return ""; // 无独立正文时不注入，避免与 label 重复浪费 Token
-        }
-
-        private static string TruncateForLog(string s, int maxLen)
-        {
-            if (string.IsNullOrEmpty(s)) return "(empty)";
-            return s.Length <= maxLen ? s : s.Substring(0, maxLen) + "...";
         }
     }
 
