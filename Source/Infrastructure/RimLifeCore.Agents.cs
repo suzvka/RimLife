@@ -6,9 +6,8 @@ using NPCLife.Agent;
 using NPCLife.Cards;
 using NPCLife.Core;
 using NPCLife.Framework;
-using NPCLife.Framework.Llm;
 using NPCLife.Framework.Mcp;
-using NPCLife.Framework.Script;
+using NPCLife.Framework.PromptBlocks;
 using NPCLife.Workspace;
 using RimLife.Data;
 using RimLife.Infrastructure.Mcp;
@@ -56,39 +55,27 @@ namespace RimLife.Infrastructure
             if (_orchestrator != null) return;
             if (Workspaces == null) return; // SaveStore 未就绪，等待 Workspaces 首次创建时自动触发
 
-            var orchestrator = FrameworkFactory.CreateAgentOrchestrator(Workspaces);
+            var orchestrator = FrameworkFactory.CreateAgentOrchestrator(Workspaces, BuildAgentDeps());
 
             // 导演 Agent 工厂
             orchestrator.Register(WorkspaceRole.Director, (ws, mgr) =>
             {
                 if (SaveStore == null || LlmAccessor == null) return null;
-                return new AgentLoop(
-                    workspace: ws,
-                    deps: BuildAgentDeps(),
-                    systemPrompt: BuildDirectorSystemPrompt(),
-                    contextProvider: () => BuildDirectorWorkspaceSummary(mgr));
+                return AgentConfig.FromPromptBuilder(new DirectorPromptBuilder(mgr));
             });
 
             // 即兴编剧 Agent 工厂
             orchestrator.Register(WorkspaceRole.Improviser, (ws, mgr) =>
             {
                 if (SaveStore == null || LlmAccessor == null) return null;
-                return new AgentLoop(
-                    workspace: ws,
-                    deps: BuildAgentDeps(),
-                    systemPrompt: BuildImproviserSystemPrompt(ws),
-                    contextProvider: () => BuildImproviserContext(ws));
+                return AgentConfig.FromPromptBuilder(new ImproviserPromptBuilder());
             });
 
             // 编剧 Agent 工厂
             orchestrator.Register(WorkspaceRole.Screenwriter, (ws, mgr) =>
             {
                 if (SaveStore == null || LlmAccessor == null) return null;
-                return new AgentLoop(
-                    workspace: ws,
-                    deps: BuildAgentDeps(),
-                    systemPrompt: BuildScreenwriterSystemPrompt(ws),
-                    contextProvider: () => BuildScreenwriterContext(ws));
+                return AgentConfig.FromPromptBuilder(new ScreenwriterPromptBuilder());
             });
 
             _orchestrator = orchestrator;
@@ -130,6 +117,68 @@ namespace RimLife.Infrastructure
         }
 
         // ================================================================
+        // IPromptBuilder 实现：将静态系统提示词与动态上下文组装为 PromptBuildResult
+        // ================================================================
+
+        /// <summary>导演 PromptBuilder：静态提示词 + 工作空间全景快照。</summary>
+        private class DirectorPromptBuilder : IPromptBuilder
+        {
+            private readonly IWorkspaceManager _mgr;
+            public DirectorPromptBuilder(IWorkspaceManager mgr) { _mgr = mgr; }
+            public PromptBuildResult Build(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            {
+                var sb = new System.Text.StringBuilder(BuildDirectorSystemPrompt());
+                var ctx = BuildDirectorWorkspaceSummary(_mgr);
+                if (!string.IsNullOrEmpty(ctx))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("---");
+                    sb.AppendLine();
+                    sb.Append(ctx);
+                }
+                return new PromptBuildResult { SystemPrompt = sb.ToString() };
+            }
+        }
+
+        /// <summary>编剧 PromptBuilder：静态提示词 + 殖民地快照 + 聚焦角色。</summary>
+        private class ScreenwriterPromptBuilder : IPromptBuilder
+        {
+            public PromptBuildResult Build(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            {
+                var sb = new System.Text.StringBuilder(BuildScreenwriterSystemPrompt(workspace));
+                var ctx = BuildScreenwriterContext(workspace);
+                if (!string.IsNullOrEmpty(ctx))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("---");
+                    sb.AppendLine();
+                    sb.AppendLine("## 动态上下文");
+                    sb.AppendLine(ctx);
+                }
+                return new PromptBuildResult { SystemPrompt = sb.ToString() };
+            }
+        }
+
+        /// <summary>即兴编剧 PromptBuilder：静态提示词 + 殖民地快照（当前同编剧）。</summary>
+        private class ImproviserPromptBuilder : IPromptBuilder
+        {
+            public PromptBuildResult Build(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            {
+                var sb = new System.Text.StringBuilder(BuildImproviserSystemPrompt(workspace));
+                var ctx = BuildImproviserContext(workspace);
+                if (!string.IsNullOrEmpty(ctx))
+                {
+                    sb.AppendLine();
+                    sb.AppendLine("---");
+                    sb.AppendLine();
+                    sb.AppendLine("## 动态上下文");
+                    sb.AppendLine(ctx);
+                }
+                return new PromptBuildResult { SystemPrompt = sb.ToString() };
+            }
+        }
+
+        // ================================================================
         // 系统提示词构建
         // ================================================================
 
@@ -145,6 +194,7 @@ namespace RimLife.Infrastructure
         private static string BuildDirectorWorkspaceSummary(IWorkspaceManager manager)
         {
             var sb = new StringBuilder();
+            GlobalStateSnapshot state = null;
 
             // 当前时间
             try
@@ -162,7 +212,7 @@ namespace RimLife.Infrastructure
             // 当前全局状态
             try
             {
-                var state = GlobalStateMapper.Create();
+                state = GlobalStateMapper.Create();
                 if (state != null)
                 {
                     sb.AppendLine("## 当前全局状态");
@@ -197,7 +247,7 @@ namespace RimLife.Infrastructure
                 }
 
                 AppendRelationshipSummary(sb, pawnIds);
-                InjectPreQueriedData(sb, pawnIds);
+                InjectPreQueriedData(sb, pawnIds, state);
             }
             catch { }
 
@@ -298,6 +348,7 @@ namespace RimLife.Infrastructure
         private static string BuildScreenwriterContext(NPCLife.Workspace.IWorkspace ws)
         {
             var sb = new StringBuilder();
+            GlobalStateSnapshot state = null;
 
             // 当前时间
             try
@@ -314,7 +365,7 @@ namespace RimLife.Infrastructure
             // 当前全局状态
             try
             {
-                var state = GlobalStateMapper.Create();
+                state = GlobalStateMapper.Create();
                 if (state != null)
                 {
                     sb.AppendLine("## 当前全局状态");
@@ -349,7 +400,7 @@ namespace RimLife.Infrastructure
                 }
 
                 AppendRelationshipSummary(sb, pawnIds);
-                InjectPreQueriedData(sb, pawnIds);
+                InjectPreQueriedData(sb, pawnIds, state);
             }
             catch { }
 
@@ -537,7 +588,9 @@ namespace RimLife.Infrastructure
         /// 为推荐的 pawnIds 注入完整角色卡和关系数据到 user message。
         /// （保留此方法用于备选路径：当 preQueriedProvider 不生效时回退）
         /// </summary>
-        private static void InjectPreQueriedData(StringBuilder sb, HashSet<string> pawnIds)
+        /// <param name="state">调用方已持有的全局状态快照。传入则复用，null 则自行创建。</param>
+        private static void InjectPreQueriedData(StringBuilder sb, HashSet<string> pawnIds,
+            GlobalStateSnapshot state = null)
         {
             // --- 角色卡 ---
             try
@@ -583,7 +636,7 @@ namespace RimLife.Infrastructure
             // --- 派系词条 ---
             try
             {
-                var state = GlobalStateMapper.Create();
+                state ??= GlobalStateMapper.Create();
                 var knSvc = KnowledgeService;
                 if (state?.MapFactionPresence != null && knSvc != null && state.MapFactionPresence.Count > 0)
                 {

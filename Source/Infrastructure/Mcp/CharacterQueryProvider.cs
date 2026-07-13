@@ -312,52 +312,53 @@ namespace RimLife.Infrastructure.Mcp
             if (p == null) return false;
             if (string.IsNullOrEmpty(typeFilter) || typeFilter == "All") return true;
 
-            string lower = typeFilter.ToLowerInvariant();
+            // 使用统一分类标签，与序列化/排序保持一致。
+            // distinguishEnemy=true：确保 "Guest" 筛选不包含敌对角色。
+            return string.Equals(
+                GetPawnRoleLabel(p, distinguishEnemy: true),
+                typeFilter,
+                StringComparison.OrdinalIgnoreCase);
+        }
 
-            switch (lower)
+        /// <summary>
+        /// 统一 Pawn 游戏角色分类标签。所有序列化/排序/筛选方法共用此唯一入口。
+        /// </summary>
+        /// <param name="distinguishEnemy">true 时将敌对 Humanlike 标为 "Enemy" 而非 "Guest"</param>
+        private static string GetPawnRoleLabel(Pawn p, bool distinguishEnemy = false)
+        {
+            if (p.IsColonist && !p.IsPrisoner) return "Colonist";
+            if (p.IsPrisoner) return "Prisoner";
+            if (p.RaceProps.Animal) return "Animal";
+            if (p.RaceProps.IsMechanoid) return "Mechanoid";
+            if (p.RaceProps.Humanlike)
             {
-                case "colonist":
-                    return p.IsColonist && !p.IsPrisoner;
-                case "prisoner":
-                    return p.IsPrisoner;
-                case "guest":
-                    return p.IsColonist == false && p.IsPrisoner == false
-                        && p.Faction != null && p.Faction != Faction.OfPlayer
-                        && !p.Faction.HostileTo(Faction.OfPlayer)
-                        && p.RaceProps.Humanlike;
-                case "animal":
-                    return p.RaceProps.Animal;
-                case "mechanoid":
-                    return p.RaceProps.IsMechanoid;
-                default:
-                    return true;
+                if (distinguishEnemy && p.Faction != null && p.Faction.HostileTo(Faction.OfPlayer))
+                    return "Enemy";
+                return "Guest";
             }
+            return "Other";
         }
 
         private static int GetPawnTypeOrder(Pawn p)
         {
-            if (p.IsColonist && !p.IsPrisoner) return 0;
-            if (p.IsPrisoner) return 1;
-            if (p.RaceProps.Humanlike) return 2;
-            if (p.RaceProps.Animal) return 3;
-            if (p.RaceProps.IsMechanoid) return 4;
-            return 5;
+            switch (GetPawnRoleLabel(p))
+            {
+                case "Colonist":  return 0;
+                case "Prisoner":  return 1;
+                case "Guest":
+                case "Enemy":     return 2;
+                case "Animal":    return 3;
+                case "Mechanoid": return 4;
+                default:          return 5;
+            }
         }
 
         private static string SerializePawnSummary(Pawn p)
         {
-            string pawnType;
-            if (p.IsColonist && !p.IsPrisoner) pawnType = "Colonist";
-            else if (p.IsPrisoner) pawnType = "Prisoner";
-            else if (p.RaceProps.Animal) pawnType = "Animal";
-            else if (p.RaceProps.IsMechanoid) pawnType = "Mechanoid";
-            else if (p.RaceProps.Humanlike) pawnType = "Guest";
-            else pawnType = "Other";
-
             var w = new NPCLife.Framework.JsonWriter(128);
             w.Prop("id", p.ThingID ?? "");
             w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
-            w.Prop("pawnType", pawnType);
+            w.Prop("pawnType", GetPawnRoleLabel(p));
             w.Prop("factionLabel", p.Faction?.Name ?? "None");
             return w.Close();
         }
@@ -365,23 +366,14 @@ namespace RimLife.Infrastructure.Mcp
         /// <summary>
         /// 序列化角色的极简摘要卡，供上下文注入使用。
         /// 仅含 id + name（~25 Token），其他数据通过伪造工具调用链注入。
+        /// 与 SerializePawnSummary 的区别：对敌对 Humanlike 输出 "Enemy" 而非 "Guest"。
         /// </summary>
         private static string SerializePawnCondensed(Pawn p)
         {
             var w = new NPCLife.Framework.JsonWriter(96);
-
-            string pawnType;
-            if (p.IsColonist && !p.IsPrisoner) pawnType = "Colonist";
-            else if (p.IsPrisoner) pawnType = "Prisoner";
-            else if (p.RaceProps.Animal) pawnType = "Animal";
-            else if (p.RaceProps.IsMechanoid) pawnType = "Mechanoid";
-            else if (p.RaceProps.Humanlike)
-                pawnType = p.Faction != null && p.Faction.HostileTo(Faction.OfPlayer) ? "Enemy" : "Guest";
-            else pawnType = "Other";
-
             w.Prop("id", p.ThingID ?? "");
             w.Prop("name", p.Name?.ToStringShort ?? p.LabelShortCap ?? "?");
-            w.Prop("pawnType", pawnType);
+            w.Prop("pawnType", GetPawnRoleLabel(p, distinguishEnemy: true));
             w.Prop("factionLabel", p.Faction?.Name ?? "None");
             return w.Close();
         }

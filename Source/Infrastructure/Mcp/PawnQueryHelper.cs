@@ -13,19 +13,40 @@ namespace RimLife.Infrastructure.Mcp
     /// </summary>
     public static class PawnQueryHelper
     {
+        // ---- FindPawnById 缓存 ----
+        // 单帧内 Pawn 集合不变，基于游戏 tick 自失效。
+        // 11 个 ContentProvider 对同一 Pawn 的重复查找由此消解为 O(1)。
+        private static int _cacheTick = -1;
+        private static readonly Dictionary<string, Pawn> _lookupCache = new Dictionary<string, Pawn>();
+
         /// <summary>
         /// 通过 ThingID 在所有地图中查找 Pawn。
+        /// 同 tick 内重复查询命中缓存，tick 变化时自动清空。
         /// </summary>
         public static Pawn FindPawnById(string id)
         {
             if (string.IsNullOrEmpty(id)) return null;
+
+            int currentTick = Find.TickManager?.TicksGame ?? 0;
+            if (currentTick != _cacheTick)
+            {
+                _lookupCache.Clear();
+                _cacheTick = currentTick;
+            }
+
+            if (_lookupCache.TryGetValue(id, out var cached))
+                return cached;
 
             foreach (var map in Find.Maps)
             {
                 if (map?.mapPawns?.AllPawnsSpawned == null) continue;
                 foreach (var pawn in map.mapPawns.AllPawnsSpawned)
                 {
-                    if (pawn?.ThingID == id) return pawn;
+                    if (pawn?.ThingID == id)
+                    {
+                        _lookupCache[id] = pawn;
+                        return pawn;
+                    }
                 }
             }
             return null;
