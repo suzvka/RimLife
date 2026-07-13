@@ -39,6 +39,12 @@ namespace RimLife.Settings
         /// </summary>
         public string FrameworkConfigJson;
 
+        /// <summary>
+        /// Agent 角色模型选择的 JSON 序列化字符串。
+        /// 由 AgentModelConfig 负责读写。
+        /// </summary>
+        public string AgentModelConfigJson;
+
         public RimLifeModSettings()
         {
             Instance = this;
@@ -51,6 +57,7 @@ namespace RimLife.Settings
             Scribe_Values.Look(ref DriverConfigJson, "driverConfigJson");
             Scribe_Values.Look(ref PromptAdditionsJson, "promptAdditionsJson");
             Scribe_Values.Look(ref FrameworkConfigJson, "frameworkConfigJson");
+            Scribe_Values.Look(ref AgentModelConfigJson, "agentModelConfigJson");
         }
 
         /// <summary>

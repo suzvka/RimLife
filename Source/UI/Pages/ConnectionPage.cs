@@ -53,7 +53,8 @@ namespace RimLife.UI.Pages
 
         // 模型列表管理（每凭证）
         private readonly Dictionary<string, string[]> _availableModels = new Dictionary<string, string[]>();
-        private readonly Dictionary<string, string> _selectedModels = new Dictionary<string, string>();
+        // 多选：每个凭证对应一组已激活的模型名集合
+        private readonly Dictionary<string, HashSet<string>> _selectedModels = new Dictionary<string, HashSet<string>>();
         private readonly Dictionary<string, string> _modelSearchText = new Dictionary<string, string>();
         private readonly Dictionary<string, Vector2> _modelScrollPos = new Dictionary<string, Vector2>();
         private readonly Dictionary<string, bool> _modelsExpanded = new Dictionary<string, bool>();
@@ -282,11 +283,19 @@ namespace RimLife.UI.Pages
                 ? LlmProviderType.Anthropic
                 : LlmProviderType.OpenAI;
 
+            // 合并手动输入的模型名到现有列表，避免覆盖 API 发现的模型
+            var existing = Manager.Get(alias);
+            var modelNames = existing?.ModelNames != null
+                ? new List<string>(existing.ModelNames)
+                : new List<string>();
+            if (!string.IsNullOrWhiteSpace(modelName) && !modelNames.Contains(modelName))
+                modelNames.Add(modelName);
+
             var cred = new LlmCredential
             {
                 BaseUrl = baseUrl,
                 ApiKey = apiKey,
-                ModelNames = string.IsNullOrWhiteSpace(modelName) ? new List<string>() : new List<string> { modelName },
+                ModelNames = modelNames,
                 ProviderType = providerType,
                 ChatEndpoint = string.IsNullOrWhiteSpace(chatEndpoint) ? "/v1/chat/completions" : chatEndpoint,
                 ModelsEndpoint = string.IsNullOrWhiteSpace(modelsEndpoint) ? "/v1/models" : modelsEndpoint

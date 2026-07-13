@@ -431,7 +431,8 @@ namespace RimLife.Tool
                 var pawns = Find.CurrentMap?.mapPawns?.AllPawnsSpawned?.Take(2).ToList();
                 if (pawns != null && pawns.Count >= 2)
                 {
-                    var intDef = DefDatabase<InteractionDef>.GetNamedSilentFail("Chat")
+                    var intDef = DefDatabase<InteractionDef>.GetNamedSilentFail("Chitchat")
+                              ?? DefDatabase<InteractionDef>.GetNamedSilentFail("Chat")
                               ?? DefDatabase<InteractionDef>.AllDefs.FirstOrDefault();
                     var evt = EventCardMapper.FromSocialInteraction(pawns[0], pawns[1], intDef, 1f);
                     if (evt != null)

@@ -8,17 +8,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Verse;
+using ILogger = NPCLife.Framework.ILogger; // 消除与 UnityEngine.ILogger 的歧义
 
 namespace RimLife.Infrastructure
 {
     /// <summary>
     /// 台词消费者 + 时间调度器。实现 IScriptConsumer 接收框架推送的台词，
-    /// 并按 RelativeTime 延迟消费，将 Dialogue 行写入 RimWorld 的 PlayLog。
+    /// 并按 RelativeTime 延迟消费（基于现实时间而非游戏 tick），将 Dialogue 行写入 RimWorld 的 PlayLog。
     /// 
     /// 职责：
     /// 1. 接收 OnScriptLinesReady 回调，将台词加入调度队列
-    /// 2. 每帧 Tick 检查队列，到达时间的行立即消费
-    /// 3. 为说话者写入 LogEntry_Dialogue，为听众写入 LogEntry_HeardDialogue
+    /// 2. 每帧 Tick 检查队列，按累积现实秒数到达时间的行立即消费
+    /// 3. 为说话者写入闲聊类型 LogEntry_Dialogue，为听众写入 LogEntry_HeardDialogue
     /// 4. 整轮消费完毕后释放 ScriptLines 内存
     /// </summary>
     public class DialogueConsumer : IScriptConsumer, IDisposable
@@ -26,14 +27,18 @@ namespace RimLife.Infrastructure
         private readonly Func<IWorkspaceManager> _getWorkspaceManager;
         private readonly ILogger _logger;
 
-        // 调度队列：按绝对 tick 排序
-        private readonly PriorityQueue<ScheduledLine, int> _queue = new PriorityQueue<ScheduledLine, int>();
+        // 调度队列：按现实秒排序
+        private readonly PriorityQueue<ScheduledLine, float> _queue = new PriorityQueue<ScheduledLine, float>();
 
         // 每个工作空间的时钟基准
         private readonly Dictionary<string, WorkspaceClock> _clocks = new Dictionary<string, WorkspaceClock>();
 
         // 已消费的轮次追踪（用于清理）
         private readonly HashSet<string> _consumedRounds = new HashSet<string>();
+
+        // 现实时间累积器：从游戏 tick 换算的现实秒数（暂停时冻结）
+        private float _accumulatedSec;
+        private int _lastTick;
 
         private bool _disposed;
 
@@ -48,7 +53,7 @@ namespace RimLife.Infrastructure
         // ================================================================
 
         /// <summary>
-        /// 框架推送一轮台词。将每行加入调度队列，按 RelativeTime 延迟消费。
+        /// 框架推送一轮台词。将每行按现实时间（accumulatedSec + RelativeTime）加入调度队列。
         /// 此方法由 ScriptDeliveryService 通过 MainThreadDispatcher 调用，保证主线程安全。
         /// </summary>
         public void OnScriptLinesReady(string workspaceId, int roundSeq, IReadOnlyList<ScriptLine> lines)
@@ -57,40 +62,32 @@ namespace RimLife.Infrastructure
 
             try
             {
-                int currentTick = Find.TickManager?.TicksGame ?? 0;
-
-                // 获取或创建工作空间时钟
+                // 获取或创建工作空间时钟（以当前累积现实秒为基准）
                 if (!_clocks.TryGetValue(workspaceId, out var clock))
                 {
-                    clock = new WorkspaceClock { BaseTick = currentTick, BaseSpeed = GetCurrentSpeedMultiplier() };
+                    clock = new WorkspaceClock { BaseTime = _accumulatedSec };
                     _clocks[workspaceId] = clock;
                 }
 
-                // 计算每行的绝对 tick
-                float speedMult = clock.BaseSpeed > 0 ? clock.BaseSpeed : GetCurrentSpeedMultiplier();
-                int ticksPerSecond = (int)(60f * speedMult);
-
+                // 按现实秒调度每行：BaseTime + RelativeTime（LLM 输出的 RelativeTime 单位为现实秒）
                 foreach (var line in lines)
                 {
-                    int ticksFromBase = (int)(line.RelativeTime * ticksPerSecond);
-                    int absoluteTick = clock.BaseTick + ticksFromBase;
+                    float scheduledTime = clock.BaseTime + line.RelativeTime;
 
                     var scheduled = new ScheduledLine
                     {
                         Line = line,
-                        AbsoluteTick = absoluteTick,
+                        ScheduledTime = scheduledTime,
                         WorkspaceId = workspaceId,
                         RoundSeq = roundSeq
                     };
 
-                    _queue.Enqueue(scheduled, absoluteTick);
+                    _queue.Enqueue(scheduled, scheduledTime);
                 }
 
-                // 更新时钟基准：以本轮最后一行的时间作为新基准
+                // 更新时钟基准：以本轮最后一行的时间作为新基准（确保连续轮次不过度重叠）
                 float maxRelativeTime = lines.Max(l => l.RelativeTime);
-                int maxTicksFromBase = (int)(maxRelativeTime * ticksPerSecond);
-                clock.BaseTick = clock.BaseTick + maxTicksFromBase;
-                clock.BaseSpeed = GetCurrentSpeedMultiplier();
+                clock.BaseTime += maxRelativeTime;
 
                 _logger?.Message($"[RimLife.Dialogue] Scheduled {lines.Count} lines for workspace={workspaceId}, round={roundSeq}");
             }
@@ -105,7 +102,8 @@ namespace RimLife.Infrastructure
         // ================================================================
 
         /// <summary>
-        /// 每帧调用。检查队列，消费已到达时间的台词行。
+        /// 每帧调用。计算本帧经过的现实秒数（暂停时冻结），消费已到达时间的台词行。
+        /// 现实秒换算公式与 TickTimerPulses 保持一致：deltaSec = deltaTicks / (60f × speedMult)
         /// 由 RimWorldAgentDriver.GameComponentUpdate 调用。
         /// </summary>
         public void Tick()
@@ -115,9 +113,18 @@ namespace RimLife.Infrastructure
             try
             {
                 int currentTick = Find.TickManager?.TicksGame ?? 0;
+                int deltaTicks = currentTick - _lastTick;
+                _lastTick = currentTick;
 
-                // 消费所有已到达时间的行
-                while (_queue.Count > 0 && _queue.Peek().AbsoluteTick <= currentTick)
+                if (deltaTicks <= 0) return; // 暂停 / 首帧
+
+                // 将游戏 tick 换算为现实秒，累加到全局时钟
+                float speedMult = GetCurrentSpeedMultiplier();
+                float deltaSec = deltaTicks / (60f * speedMult);
+                _accumulatedSec += deltaSec;
+
+                // 消费所有已到达现实时间的行
+                while (_queue.Count > 0 && _queue.Peek().ScheduledTime <= _accumulatedSec)
                 {
                     var scheduled = _queue.Dequeue();
                     ProcessLine(scheduled);
@@ -152,7 +159,7 @@ namespace RimLife.Infrastructure
                 return;
             }
 
-            // 写入说话者的日志条目
+            // 写入说话者的闲聊类型日志条目（标记 InteractionDef = "Chat"）
             Find.PlayLog?.Add(new LogEntry_Dialogue(speaker, line.Text));
 
             // 为工作空间中的所有参与角色写入"听见"条目
@@ -233,6 +240,8 @@ namespace RimLife.Infrastructure
             _queue.Clear();
             _clocks.Clear();
             _consumedRounds.Clear();
+            _accumulatedSec = 0f;
+            _lastTick = 0;
         }
 
         // ================================================================
@@ -242,15 +251,14 @@ namespace RimLife.Infrastructure
         private struct ScheduledLine
         {
             public ScriptLine Line;
-            public int AbsoluteTick;
+            public float ScheduledTime; // 现实秒
             public string WorkspaceId;
             public int RoundSeq;
         }
 
         private class WorkspaceClock
         {
-            public int BaseTick;
-            public float BaseSpeed;
+            public float BaseTime; // 现实秒基准
         }
     }
 

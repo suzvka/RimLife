@@ -305,8 +305,8 @@ namespace RimLife.UI
         {
             RefreshModelCache();
 
-            var ws = RimLifeCore.Orchestrator?.GetOrCreateWorkspace(role);
-            var currentModelJson = ws?.CurrentModel;
+            // 从全局配置读取当前模型选择（真相来源），而非从工作空间读取
+            var currentModelJson = RimLifeCore.AgentModelConfig?.GetModel(role);
             var currentModelName = ParseModelName(currentModelJson);
             var currentCredName = ParseCredName(currentModelJson);
 
@@ -371,11 +371,11 @@ namespace RimLife.UI
 
                     if (Widgets.ButtonInvisible(itemRect))
                     {
-                        // 选中此模型：同时更新 workspace 和凭证
-                        if (ws != null && RimLifeCore.Workspaces != null)
-                        {
-                            RimLifeCore.Workspaces.SetCurrentModel(ws.Id, json);
-                        }
+                        // 选中此模型：更新全局配置（真相来源），自动同步到工作空间
+                        var config = RimLifeCore.AgentModelConfig ?? AgentModelConfig.CreateDefault();
+                        config.SetModel(role, json);
+                        RimLifeCore.SetAgentModelConfig(config);
+                        // 同时更新凭证的 ModelNames（维持下拉列表数据源）
                         RimLifeCore.CredentialManager?.SetModel(cred, model);
                         dropdownOpen = false;
                     }

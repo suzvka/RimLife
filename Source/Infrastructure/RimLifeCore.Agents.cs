@@ -93,13 +93,22 @@ namespace RimLife.Infrastructure
 
             _orchestrator = orchestrator;
 
-            // 初始化即兴剧情线的标题和简介
+            // 创建常驻工作空间：导演 + 即兴编剧（编剧由导演按需创建，不在此预创建）
+            var directorWs = orchestrator.GetOrCreateWorkspace(WorkspaceRole.Director);
+            if (directorWs != null && Workspaces != null)
+            {
+                Workspaces.SetLabel(directorWs.Id, "导演");
+            }
+
             var improWs = orchestrator.GetOrCreateWorkspace(WorkspaceRole.Improviser);
             if (improWs != null && Workspaces != null)
             {
                 Workspaces.SetLabel(improWs.Id, "即兴剧情");
                 Workspaces.SetDirectorMessage(improWs.Id, "无长期记忆的常驻剧情线，可根据任意一组事件创作剧情。无论事件数量每个推送轮次都会触发");
             }
+
+            // 将全局模型配置同步到新创建的工作空间（导演 + 即兴编剧）
+            SyncModelConfigToWorkspaces();
 
             Logger?.Message("[RimLife.Core] AgentOrchestrator initialized with 3 role factories.");
         }

@@ -72,7 +72,6 @@ namespace RimLife.UI.Pages
                 if (Widgets.ButtonText(delRect, "确认?"))
                 {
                     Manager.Delete(alias);
-                    RimLifeCore.DiscoveredModels.Remove(alias);
                     CleanupCardState(alias);
                     SetStatus($"已删除: {alias}");
                     _pendingDeleteAlias = null;

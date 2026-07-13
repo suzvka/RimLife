@@ -1,14 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using NPCLife.Driver;
 using NPCLife.Framework;
+using NPCLife.Workspace;
 using RimLife.Settings;
 
 namespace RimLife.Infrastructure
 {
     /// <summary>
     /// RimLifeCore 的配置管理部分。
-    /// 包含 DriverConfig 和 PromptAdditions 的持久化加载与保存。
+    /// 包含 DriverConfig、PromptAdditions 和 AgentModelConfig 的持久化加载与保存。
     /// </summary>
     public static partial class RimLifeCore
     {
@@ -229,6 +231,120 @@ namespace RimLife.Infrastructure
             catch (Exception e)
             {
                 Logger?.Warning($"[RimLife.Core] Failed to save PromptAdditions: {e.Message}");
+            }
+        }
+
+        // ================================================================
+        // AgentModelConfig — Agent 角色模型选择（全局持久化，不绑定存档）
+        // ================================================================
+
+        private static AgentModelConfig _agentModelConfig;
+        private static readonly object _agentModelConfigLock = new object();
+
+        /// <summary>
+        /// Agent 角色模型选择配置。从 ModSettings 延迟加载。
+        /// 这是模型选择的唯一真相来源，工作空间从此配置同步。
+        /// </summary>
+        public static AgentModelConfig AgentModelConfig
+        {
+            get
+            {
+                lock (_agentModelConfigLock)
+                {
+                    if (_agentModelConfig == null)
+                        _agentModelConfig = LoadAgentModelConfig();
+                    return _agentModelConfig;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 更新 Agent 模型选择配置并持久化到 ModSettings。
+        /// 保存后自动同步到所有活跃工作空间。
+        /// 修改后需调用 RebuildAgents() 才能让新 Agent 使用新模型。
+        /// </summary>
+        public static void SetAgentModelConfig(AgentModelConfig config)
+        {
+            if (config == null) throw new ArgumentNullException(nameof(config));
+            lock (_agentModelConfigLock)
+            {
+                _agentModelConfig = config;
+                SaveAgentModelConfig(config);
+            }
+            // 自动同步到活跃工作空间
+            SyncModelConfigToWorkspaces();
+        }
+
+        /// <summary>
+        /// 将 AgentModelConfig 中的模型选择同步到所有活跃工作空间。
+        /// 应在工作空间创建/加载后调用，确保工作空间使用最新配置。
+        /// 仅当工作空间尚未设置 CurrentModel 时才写入（避免覆盖运行时变更）。
+        /// </summary>
+        public static void SyncModelConfigToWorkspaces()
+        {
+            var workspaces = Workspaces;
+            if (workspaces == null) return;
+
+            var config = AgentModelConfig;
+            if (config == null) return;
+
+            try
+            {
+                var actives = workspaces.GetActive();
+                if (actives == null) return;
+
+                foreach (var ws in actives)
+                {
+                    var modelJson = config.GetModel(ws.CreatedByRole);
+                    if (string.IsNullOrEmpty(modelJson)) continue;
+
+                    // 仅当工作空间尚未设置模型时才同步（避免覆盖可能的运行时变更）
+                    if (string.IsNullOrEmpty(ws.CurrentModel))
+                    {
+                        workspaces.SetCurrentModel(ws.Id, modelJson);
+                        Logger?.Message($"[RimLife.Core] Synced model for {ws.CreatedByRole} workspace '{ws.Id}': {modelJson}");
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Logger?.Warning($"[RimLife.Core] SyncModelConfigToWorkspaces failed: {e.Message}");
+            }
+        }
+
+        private static AgentModelConfig LoadAgentModelConfig()
+        {
+            try
+            {
+                var settings = RimLifeModSettings.Instance;
+                var json = settings?.AgentModelConfigJson;
+                if (!string.IsNullOrEmpty(json))
+                {
+                    Logger?.Message("[RimLife.Core] AgentModelConfig loaded from ModSettings.");
+                    return AgentModelConfig.FromJson(json);
+                }
+            }
+            catch
+            {
+                // 加载失败，返回默认
+            }
+            return AgentModelConfig.CreateDefault();
+        }
+
+        private static void SaveAgentModelConfig(AgentModelConfig config)
+        {
+            try
+            {
+                var settings = RimLifeModSettings.Instance;
+                if (settings != null)
+                {
+                    settings.AgentModelConfigJson = config.ToJson();
+                    settings.SaveNow();
+                }
+            }
+            catch (Exception e)
+            {
+                Logger?.Warning($"[RimLife.Core] Failed to save AgentModelConfig: {e.Message}");
             }
         }
     }

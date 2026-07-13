@@ -595,9 +595,6 @@ namespace RimLife.Infrastructure
                     _promptAdditions = null;    // 重新从新 CacheStore 加载
                     _frameworkFactory = null;   // 重新以新 DriverConfig 创建
 
-                    // 清理模型发现缓存（避免跨存档残留）
-                    DiscoveredModels.Clear();
-
                     // [DIAG] 关键观察：_skillRegistryInitialized 未被重置！
                     // 如果之前注册失败或只部分成功，后续调用 EnsureSkillRegistryInitialized 会被短路
                     Logger?.Message($"[RimLife.DIAG] SaveStore reset: _frameworkFactory=null, _skillRegistryInitialized={_skillRegistryInitialized} (NOT reset!)");
@@ -779,13 +776,6 @@ namespace RimLife.Infrastructure
             }
         }
 
-        /// <summary>
-        /// 所有已发现的模型索引（凭证名 → 模型名列表）。
-        /// ConnectionPage 在模型发现后写入，RunStrategyPage 读取以构建模型选择列表。
-        /// </summary>
-        public static readonly Dictionary<string, List<string>> DiscoveredModels
-            = new Dictionary<string, List<string>>();
-
         private static IWorkspaceManager _workspaces;
         private static readonly object _workspacesLock = new object();
 
@@ -813,6 +803,8 @@ namespace RimLife.Infrastructure
                                     var orch = _orchestrator;
                                     if (orch != null)
                                         orch.OnWorkspaceReady(wsId);
+                                    // 动态创建的工作空间（如编剧）需要同步模型配置
+                                    SyncModelConfigToWorkspaces();
                                 });
 
                             // 为存档中已加载的活跃工作空间补齐对应 Agent
@@ -824,6 +816,9 @@ namespace RimLife.Infrastructure
                             {
                                 _orchestrator.OnWorkspaceReady(ws.Id);
                             }
+
+                            // 将全局模型配置同步到工作空间
+                            SyncModelConfigToWorkspaces();
                         }
                     }
                 }

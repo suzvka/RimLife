@@ -55,9 +55,11 @@ namespace RimLife.UI.Pages
             }
 
             // 统计
-            var currentModel = _selectedModels.TryGetValue(alias, out var cm) ? cm : null;
-            var enabledCount = string.IsNullOrEmpty(currentModel) ? 0 : 1;
-            var summaryText = $"<color=#888888><size=10>{filtered.Length}/{allModels.Length} 个模型  |  当前: {(string.IsNullOrEmpty(currentModel) ? "无" : currentModel)}</size></color>";
+            var selectedSet = _selectedModels.TryGetValue(alias, out var ss) ? ss : null;
+            var enabledCount = selectedSet != null
+                ? filtered.Count(m => selectedSet.Contains(m))
+                : 0;
+            var summaryText = $"<color=#888888><size=10>{filtered.Length}/{allModels.Length} 个模型  |  已激活: {enabledCount}</size></color>";
             Widgets.Label(new Rect(x, y, w, 14f), summaryText);
             y += 14f;
 
@@ -84,27 +86,16 @@ namespace RimLife.UI.Pages
 
                 // 左对齐模型名
                 var nameRect = new Rect(entryRect.x + 4f, entryRect.y, entryRect.width - 36f, entryHeight);
-                var isSelected = modelName == currentModel;
+                var isSelected = selectedSet != null && selectedSet.Contains(modelName);
                 var nameColor = isSelected ? "#FFFFFF" : "#AAAAAA";
                 Widgets.Label(nameRect, $"<color={nameColor}><size=11>{modelName}</size></color>");
 
-                // 右对齐：单选切换（点击即设为当前模型，再次点击取消）
+                // 右对齐：多选勾选（点击切换激活状态，并立即持久化）
                 var toggleRect = new Rect(entryRect.x + entryRect.width - 28f, entryRect.y + 2f, 24f, 20f);
-                var toggleLabel = isSelected ? "<color=#88FF88>●</color>" : "<color=#666666>○</color>";
+                var toggleLabel = isSelected ? "<color=#88FF88>☑</color>" : "<color=#666666>☐</color>";
                 if (Widgets.ButtonText(toggleRect, toggleLabel))
                 {
-                    if (isSelected)
-                    {
-                        // 取消选择
-                        _selectedModels.Remove(alias);
-                        Manager.SetModel(alias, null);
-                    }
-                    else
-                    {
-                        // 选中此模型
-                        _selectedModels[alias] = modelName;
-                        Manager.SetModel(alias, modelName);
-                    }
+                    ToggleModelSelection(alias, modelName, cred);
                 }
             }
 
@@ -129,14 +120,23 @@ namespace RimLife.UI.Pages
             try
             {
                 var models = await llm.ListModelsAsync(cred, CancellationToken.None);
-                _availableModels[alias] = models ?? new string[0];
-                // 同步到共享字典，供 RunStrategyPage 读取
-                RimLifeCore.DiscoveredModels[alias] = new List<string>(models ?? new string[0]);
-                // 初始化选中状态：当前凭证的第一个模型自动设为选中
-                if (cred.ModelNames != null && cred.ModelNames.Count > 0 && !_selectedModels.ContainsKey(alias))
-                    _selectedModels[alias] = cred.ModelNames[0];
+                var modelArray = models ?? new string[0];
+                _availableModels[alias] = modelArray;
+
+                // 初始化多选集合：首次发现时自动激活所有模型
+                if (!_selectedModels.ContainsKey(alias))
+                    _selectedModels[alias] = new HashSet<string>();
+                var selectedSet = _selectedModels[alias];
+                foreach (var m in modelArray)
+                    selectedSet.Add(m);
+
+                // 将发现的模型同步到凭证并持久化
+                var updated = cred.Clone();
+                updated.ModelNames = new List<string>(modelArray);
+                Manager.Update(alias, updated);
+
                 _modelsExpanded[alias] = true;
-                SetStatus($"{alias}: 发现 {models?.Length ?? 0} 个模型");
+                SetStatus($"{alias}: 发现 {modelArray.Length} 个模型（已自动激活）");
             }
             catch (Exception ex)
             {
@@ -147,6 +147,37 @@ namespace RimLife.UI.Pages
             {
                 _fetchingModels[alias] = false;
             }
+        }
+
+        // ================================================================
+        // 模型多选切换（立即持久化）
+        // ================================================================
+
+        /// <summary>
+        /// 切换单个模型的激活状态：勾选 → 添加到凭证 ModelNames；取消 → 移除。
+        /// 立即通过 Manager.Update 持久化到 ModSettings。
+        /// </summary>
+        private void ToggleModelSelection(string alias, string modelName, LlmCredential cred)
+        {
+            if (!_selectedModels.TryGetValue(alias, out var selectedSet))
+            {
+                selectedSet = new HashSet<string>();
+                _selectedModels[alias] = selectedSet;
+            }
+
+            if (selectedSet.Contains(modelName))
+            {
+                selectedSet.Remove(modelName);
+            }
+            else
+            {
+                selectedSet.Add(modelName);
+            }
+
+            // 同步到凭证并持久化
+            var updated = cred.Clone();
+            updated.ModelNames = new List<string>(selectedSet);
+            Manager.Update(alias, updated);
         }
     }
 }

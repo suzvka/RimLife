@@ -7,6 +7,7 @@ namespace RimLife.Infrastructure
 {
     /// <summary>
     /// 本 Mod 专有的日志条目类型：记录角色"听见"了某句对话。
+    /// 标记为闲聊（Chat）交互类型。
     /// 当一轮台词中的 Dialogue 行被消费时，为所有参与角色（除说话者外）生成此条目。
     /// </summary>
     /// <remarks>
@@ -17,6 +18,7 @@ namespace RimLife.Infrastructure
         private Pawn listener;
         private Pawn speaker;
         private string text;
+        private InteractionDef interactionDef;
 
         public LogEntry_HeardDialogue() : base(null)
         {
@@ -28,7 +30,11 @@ namespace RimLife.Infrastructure
             this.listener = listener;
             this.speaker = speaker;
             this.text = text;
+            this.interactionDef = DefDatabase<InteractionDef>.GetNamedSilentFail("Chat");
         }
+
+        /// <summary>此台词关联的交互类型（Chat），供 Bubbles 等模组识别。</summary>
+        public InteractionDef InteractionDef => interactionDef;
 
         // RimWorld API: 返回此条目涉及的所有 Thing
         public override IEnumerable<Thing> GetConcerns()
@@ -55,6 +61,7 @@ namespace RimLife.Infrastructure
             Scribe_References.Look(ref listener, "listener");
             Scribe_References.Look(ref speaker, "speaker");
             Scribe_Values.Look(ref text, "text");
+            Scribe_Defs.Look(ref interactionDef, "interactionDef");
         }
     }
 }
