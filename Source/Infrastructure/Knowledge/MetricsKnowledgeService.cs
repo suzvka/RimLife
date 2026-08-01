@@ -26,7 +26,7 @@ namespace RimLife.Infrastructure.Knowledge
         public IReadOnlyList<KnowledgeEntry> Lookup(string term)
         {
             var results = _inner.Lookup(term);
-            var sessionId = MetricsInterceptor.CurrentSessionId;
+            var sessionId = RuntimeMetrics.CurrentSessionId;
             int hitLayer = results.Count > 0 ? 0 : -1;
             _metrics?.RecordKnowledgeLookup(term, hitLayer, sessionId);
             return results;

@@ -53,29 +53,34 @@ namespace RimLife.Infrastructure
         internal static void InitializeAgentOrchestrator()
         {
             if (_orchestrator != null) return;
-            if (Workspaces == null) return; // SaveStore 未就绪，等待 Workspaces 首次创建时自动触发
+            if (Workspaces == null) return;
 
             var orchestrator = FrameworkFactory.CreateAgentOrchestrator(Workspaces, BuildAgentDeps());
+
+            // Agent 不再需要自定义 PromptBuilder，系统提示词由框架的 PromptBlockRegistry
+            // 聚合所有已注册 ISkillModule 的 PromptInstruction 自动生成。
+            // 导演/编剧/即兴编剧的角色身份由框架内置的 role_* ISkillModule 提供，
+            // RimLife 的附加指令和动态上下文通过 RegisterModule() 注册为独立 Skill。
 
             // 导演 Agent 工厂
             orchestrator.Register(WorkspaceRole.Director, (ws, mgr) =>
             {
                 if (SaveStore == null || LlmAccessor == null) return null;
-                return AgentConfig.FromPromptBuilder(new DirectorPromptBuilder(mgr));
+                return AgentConfig.CreateDefault();
             });
 
             // 即兴编剧 Agent 工厂
             orchestrator.Register(WorkspaceRole.Improviser, (ws, mgr) =>
             {
                 if (SaveStore == null || LlmAccessor == null) return null;
-                return AgentConfig.FromPromptBuilder(new ImproviserPromptBuilder());
+                return AgentConfig.CreateDefault();
             });
 
             // 编剧 Agent 工厂
             orchestrator.Register(WorkspaceRole.Screenwriter, (ws, mgr) =>
             {
                 if (SaveStore == null || LlmAccessor == null) return null;
-                return AgentConfig.FromPromptBuilder(new ScreenwriterPromptBuilder());
+                return AgentConfig.CreateDefault();
             });
 
             _orchestrator = orchestrator;
@@ -112,69 +117,144 @@ namespace RimLife.Infrastructure
                 CredentialStore = CredentialManager,
                 Logger = Logger,
                 Serializer = CardSerializer.Default,
-                MaxRounds = DriverConfig.MaxAgentRounds
+                MaxRounds = DriverConfig.MaxAgentRounds,
+                // 轮间过渡钩子：Round >= 1 时注入补救提示词
+                GetRoundTransitionMessages = (round) =>
+                {
+                    if (round >= 1)
+                    {
+                        return new NPCLife.Framework.Llm.LlmMessage[]
+                        {
+                            NPCLife.Framework.Llm.LlmMessage.User(
+                                "你新开了一轮对话！这会导致大量扣分，你必须慎重考虑查更多信息。建议立即在下一轮中完成所有工作，并确保最后一个工具是结束工具。")
+                        };
+                    }
+                    return null;
+                },
+                // 会话追踪录制器：将全链路数据写入 SessionTraceStore
+                TraceRecorder = new SessionTraceRecorder(Logger),
             };
         }
 
         // ================================================================
-        // IPromptBuilder 实现：将静态系统提示词与动态上下文组装为 PromptBuildResult
+        // ISkillModule 实现：替代原 IPromptBuilder，将静态附加指令与动态上下文
+        // 通过统一的 ISkillModule 接口注入，框架自动聚合 PromptInstruction 和 GetDynamicContext
         // ================================================================
 
-        /// <summary>导演 PromptBuilder：静态提示词 + 工作空间全景快照。</summary>
-        private class DirectorPromptBuilder : IPromptBuilder
+        /// <summary>导演附加指令 Skill。提供静态附加文本 + 工作空间全景快照（动态上下文）。</summary>
+        private class DirectorAdditionsSkill : SkillModuleBase
         {
-            private readonly IWorkspaceManager _mgr;
-            public DirectorPromptBuilder(IWorkspaceManager mgr) { _mgr = mgr; }
-            public PromptBuildResult Build(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            public override string Id => "rimlife_director";
+            public override string Name => "RimLife 导演附加指令";
+            public override string Description => "RimWorld 特定的导演附加指令与动态殖民地上下文";
+            public override WorkspaceRole[] DefaultRoles => new[] { WorkspaceRole.Director };
+            public override string PromptInstruction
             {
-                var sb = new System.Text.StringBuilder(BuildDirectorSystemPrompt());
-                var ctx = BuildDirectorWorkspaceSummary(_mgr);
-                if (!string.IsNullOrEmpty(ctx))
+                get
                 {
-                    sb.AppendLine();
-                    sb.AppendLine("---");
-                    sb.AppendLine();
-                    sb.Append(ctx);
+                    var pa = PromptAdditions;
+                    if (pa == null) return null;
+                    var sb = new System.Text.StringBuilder();
+                    if (!string.IsNullOrEmpty(pa.DirectorAdditions))
+                    {
+                        sb.AppendLine("## RimWorld 导演附加指令");
+                        sb.AppendLine(pa.DirectorAdditions);
+                    }
+                    if (!string.IsNullOrEmpty(pa.StyleInstruction))
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("## 叙事风格");
+                        sb.AppendLine(pa.StyleInstruction);
+                    }
+                    return sb.Length > 0 ? sb.ToString() : null;
                 }
-                return new PromptBuildResult { SystemPrompt = sb.ToString() };
             }
+            public override string GetDynamicContext(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+                => BuildDirectorWorkspaceSummary(Workspaces);
         }
 
-        /// <summary>编剧 PromptBuilder：静态提示词 + 殖民地快照 + 聚焦角色。</summary>
-        private class ScreenwriterPromptBuilder : IPromptBuilder
+        /// <summary>编剧附加指令 Skill。提供静态附加文本 + 殖民地快照（动态上下文）。</summary>
+        private class ScreenwriterAdditionsSkill : SkillModuleBase
         {
-            public PromptBuildResult Build(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            public override string Id => "rimlife_screenwriter";
+            public override string Name => "RimLife 编剧附加指令";
+            public override string Description => "RimWorld 特定的编剧附加指令与动态殖民地上下文";
+            public override WorkspaceRole[] DefaultRoles => new[] { WorkspaceRole.Screenwriter };
+            public override string PromptInstruction
             {
-                var sb = new System.Text.StringBuilder(BuildScreenwriterSystemPrompt(workspace));
+                get
+                {
+                    var pa = PromptAdditions;
+                    if (pa == null) return null;
+                    var sb = new System.Text.StringBuilder();
+                    if (!string.IsNullOrEmpty(pa.ScreenwriterAdditions))
+                    {
+                        sb.AppendLine("## RimWorld 编剧附加指令");
+                        sb.AppendLine(pa.ScreenwriterAdditions);
+                    }
+                    if (!string.IsNullOrEmpty(pa.StyleInstruction))
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("## 叙事风格");
+                        sb.AppendLine(pa.StyleInstruction);
+                    }
+                    return sb.Length > 0 ? sb.ToString() : null;
+                }
+            }
+            public override string GetDynamicContext(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            {
+                var sb = new System.Text.StringBuilder();
                 var ctx = BuildScreenwriterContext(workspace);
                 if (!string.IsNullOrEmpty(ctx))
                 {
-                    sb.AppendLine();
-                    sb.AppendLine("---");
-                    sb.AppendLine();
                     sb.AppendLine("## 动态上下文");
                     sb.AppendLine(ctx);
                 }
-                return new PromptBuildResult { SystemPrompt = sb.ToString() };
+                // Skill 使用说明（来自已激活 Skill 的 PromptInstruction）
+                AppendSkillPrompts(sb, workspace);
+                return sb.Length > 0 ? sb.ToString() : null;
             }
         }
 
-        /// <summary>即兴编剧 PromptBuilder：静态提示词 + 殖民地快照（当前同编剧）。</summary>
-        private class ImproviserPromptBuilder : IPromptBuilder
+        /// <summary>即兴编剧附加指令 Skill。提供静态附加文本 + 殖民地快照（动态上下文）。</summary>
+        private class ImproviserAdditionsSkill : SkillModuleBase
         {
-            public PromptBuildResult Build(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            public override string Id => "rimlife_improviser";
+            public override string Name => "RimLife 即兴编剧附加指令";
+            public override string Description => "RimWorld 特定的即兴编剧附加指令与动态殖民地上下文";
+            public override WorkspaceRole[] DefaultRoles => new[] { WorkspaceRole.Improviser };
+            public override string PromptInstruction
             {
-                var sb = new System.Text.StringBuilder(BuildImproviserSystemPrompt(workspace));
+                get
+                {
+                    var pa = PromptAdditions;
+                    if (pa == null) return null;
+                    var sb = new System.Text.StringBuilder();
+                    if (!string.IsNullOrEmpty(pa.ImproviserAdditions))
+                    {
+                        sb.AppendLine("## RimWorld 即兴编剧附加指令");
+                        sb.AppendLine(pa.ImproviserAdditions);
+                    }
+                    if (!string.IsNullOrEmpty(pa.StyleInstruction))
+                    {
+                        sb.AppendLine();
+                        sb.AppendLine("## 叙事风格");
+                        sb.AppendLine(pa.StyleInstruction);
+                    }
+                    return sb.Length > 0 ? sb.ToString() : null;
+                }
+            }
+            public override string GetDynamicContext(IWorkspace workspace, IReadOnlyList<IGameEvent> events)
+            {
+                var sb = new System.Text.StringBuilder();
                 var ctx = BuildImproviserContext(workspace);
                 if (!string.IsNullOrEmpty(ctx))
                 {
-                    sb.AppendLine();
-                    sb.AppendLine("---");
-                    sb.AppendLine();
                     sb.AppendLine("## 动态上下文");
                     sb.AppendLine(ctx);
                 }
-                return new PromptBuildResult { SystemPrompt = sb.ToString() };
+                AppendSkillPrompts(sb, workspace);
+                return sb.Length > 0 ? sb.ToString() : null;
             }
         }
 

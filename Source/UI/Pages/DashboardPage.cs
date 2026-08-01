@@ -73,13 +73,13 @@ namespace RimLife.UI.Pages
 
         private void DrawControlBar(Listing_Standard listing)
         {
-            var enabledLabel = SessionTraceInterceptor.Enabled ? "追踪: ON" : "追踪: OFF";
+            var enabledLabel = SessionTraceStore.Enabled ? "追踪: ON" : "追踪: OFF";
             var btnResults = DrawButtonRow(listing,
                 new[] { enabledLabel, "清空追踪", "复制详情" },
                 new[] { BtnWidthMedium, BtnWidthMedium, BtnWidthMedium });
 
             if (btnResults[0])
-                SessionTraceInterceptor.Enabled = !SessionTraceInterceptor.Enabled;
+                SessionTraceStore.Enabled = !SessionTraceStore.Enabled;
 
             if (btnResults[1])
             {

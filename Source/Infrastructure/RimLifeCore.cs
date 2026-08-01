@@ -4,6 +4,7 @@ using NPCLife.Driver;
 using NPCLife.Framework;
 using NPCLife.Framework.Script;
 using NPCLife.Framework.Mcp;
+using NPCLife.Framework.PromptBlocks;
 using NPCLife.Infrastructure;
 using NPCLife.Infrastructure.Knowledge;
 using NPCLife.Infrastructure.Llm;
@@ -110,7 +111,7 @@ namespace RimLife.Infrastructure
         private static NPCLife.Core.IFrameworkFactory _frameworkFactory;
 
         /// <summary>
-        /// 框架组件工厂。封装 NPCLife 具体类的创建细节（WorkspaceManager、BuiltInKnowledgeBase、MetricsInterceptor）。
+        /// 框架组件工厂。封装 NPCLife 具体类的创建细节（WorkspaceManager、BuiltInKnowledgeBase）。
         /// 首次访问时自动以当前 DriverConfig 初始化。
         /// </summary>
         public static NPCLife.Core.IFrameworkFactory FrameworkFactory
@@ -324,6 +325,27 @@ namespace RimLife.Infrastructure
                     Logger?.Message($"[RimLife.DIAG] PawnMemoryProvider registered: {memCount} tools.");
                     count += memCount;
 
+                    // ---- RimLife ISkillModule 注册（替代原 IPromptBuilder） ----
+                    // 导演/编剧/即兴编剧的附加指令和动态上下文
+                    try
+                    {
+                        int rimCount = ff.Skills.RegisterModule(new DirectorAdditionsSkill());
+                        Logger?.Message($"[RimLife.DIAG] DirectorAdditionsSkill registered: {rimCount} tools.");
+                        count += rimCount;
+
+                        rimCount = ff.Skills.RegisterModule(new ScreenwriterAdditionsSkill());
+                        Logger?.Message($"[RimLife.DIAG] ScreenwriterAdditionsSkill registered: {rimCount} tools.");
+                        count += rimCount;
+
+                        rimCount = ff.Skills.RegisterModule(new ImproviserAdditionsSkill());
+                        Logger?.Message($"[RimLife.DIAG] ImproviserAdditionsSkill registered: {rimCount} tools.");
+                        count += rimCount;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger?.Warning($"[RimLife.Core] RimLife ISkillModule registration failed: {ex.Message}");
+                    }
+
                     // ---- Skill 模块自动发现（Skills/ 目录） ----
                     // 扫描 Skills/ 目录，自动加载内置 + 第三方技能模块。
                     // 已通过硬编码路径注册的模块不会被重复注册（McpSkillRegistry 按工具名去重）。
@@ -375,7 +397,7 @@ namespace RimLife.Infrastructure
                 FrameworkFactory.Events.Logger = Logger;
                 LifecycleManager.Logger = Logger;
                 ErrorHandler.Logger = Logger;
-                FrameworkFactory.Pipeline.Logger = Logger;
+                PromptBlockRegistry.Logger = Logger;
 
                 // 初始化生命周期管理器
                 LifecycleManager.Initialize();
@@ -389,39 +411,29 @@ namespace RimLife.Infrastructure
                 FrameworkFactory.Status.RegisterCapability("agent_pipeline", true);
                 FrameworkFactory.Status.RegisterCapability("lifecycle_hooks", true);
 
-                // ---- 知识上下文自动注入 ----
-                // 扫描事件 Payload 中的 knowledge_tags，自动查询知识库并注入到 LLM 提示词。
-                // 优先级 10（低于度量的 100），确保在度量采集前完成上下文构建。
-                FrameworkFactory.Pipeline.AddInterceptor(
-                    new NPCLife.Infrastructure.KnowledgeContextInterceptor(
-                        () => KnowledgeService,
-                        Logger),
-                    priority: 10);
-
-                // ---- 第二轮警告注入 ----
-                // Agent 循环 Round >= 1 时，向 LLM 注入补救提示词，防止 LLM 在中间轮次"开新对话"。
-                // 优先级 5（在知识注入之前），确保提示词尽早生效。
-                FrameworkFactory.Pipeline.AddInterceptor(
-                    new RoundTwoWarningInterceptor(),
-                    priority: 1000);
+                // ---- 知识上下文自动注入（PromptBlock 方式） ----
+                // 替代原先 KnowledgeContextInterceptor 的管线注入。
+                // KnowledgePreQueryBlock 作为 IToolPreQueryBlock 注册为全局块，
+                // 在每次 Prompt 构建时自动扫描事件 knowledge_tags 并查询知识库。
+                PromptBlockRegistry.RegisterGlobal(new NPCLife.Framework.PromptBlocks.KnowledgePreQueryBlock(
+                    () => KnowledgeService, Logger));
+                Logger?.Message("[RimLife.Core] KnowledgePreQueryBlock registered as global PromptBlock.");
 
                 // ---- 运行时度量系统（永久启用） ----
                 {
-                    // MetricsMcpTools 已从 NPCLife 移除，度量数据通过 RuntimeMetrics 静态类 + MetricsInterceptor 采集
+                    // 度量数据采集已内聚到 AgentLoop 内部：
+                    // - BeginSession / EndSession 在 RunOnceAsync 开始/结束时调用
+                    // - RecordToolCall 在工具调用完成后调用
+                    // - RecordLoopFinished 在循环结束时调用
+                    // - Token 消耗通过 EventBus 订阅 llm.response_received 采集
 
-                    // 为三种 Agent 角色分别注册度量拦截器
-                    FrameworkFactory.Pipeline.AddInterceptor(
-                        FrameworkFactory.CreateMetricsInterceptor(NPCLife.Framework.AgentRole.Director), priority: 100);
-                    FrameworkFactory.Pipeline.AddInterceptor(
-                        FrameworkFactory.CreateMetricsInterceptor(NPCLife.Framework.AgentRole.Screenwriter), priority: 100);
-                    FrameworkFactory.Pipeline.AddInterceptor(
-                        FrameworkFactory.CreateMetricsInterceptor(NPCLife.Framework.AgentRole.Improviser), priority: 100);
+                    // 为三种 Agent 角色注册度量拦截器（已移除：度量现在由 AgentLoop 直接调用 RuntimeMetrics）
 
                     // 订阅 LLM 响应事件，采集 Token 消耗
                     FrameworkFactory.Events.Subscribe(FrameworkEvents.LlmResponseReceived, args =>
                     {
                         if (args?.Payload == null) return;
-                        var sessionId = NPCLife.Framework.MetricsInterceptor.CurrentSessionId;
+                        var sessionId = RuntimeMetrics.CurrentSessionId;
                         if (sessionId == null) return;
 
                         args.Payload.TryGetValue("inputTokens", out var itStr);
@@ -460,9 +472,8 @@ namespace RimLife.Infrastructure
                     Logger?.Message("[RimLife.Core] RuntimeMetrics enabled.");
 
                     // ---- 会话追踪（全文记录，供 Dashboard 展示） ----
-                    // 单实例即可，内部用 ThreadStatic 拥有者模式避免 3x 重复采集。
-                    FrameworkFactory.Pipeline.AddInterceptor(
-                        new SessionTraceInterceptor(), priority: 200);
+                    // TraceRecorder 通过 AgentLoopDependencies 注入到 AgentLoop，
+                    // 在 AgentLoop 的关键节点直接调用，无需管线拦截器。
                     Logger?.Message("[RimLife.Core] SessionTrace enabled.");
                 }
             }

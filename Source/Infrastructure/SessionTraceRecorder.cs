@@ -1,45 +1,53 @@
+using NPCLife.Cards;
+using NPCLife.Core;
 using NPCLife.Framework;
 using NPCLife.Framework.Llm;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace RimLife.Infrastructure
 {
     /// <summary>
-    /// 会话追踪拦截器。以 RunId 为键分离不同 agent 的会话，
-    /// 解决 Director/Screenwriter/Improviser 交错执行时的 trace 混合。
+    /// 会话追踪录制器。实现 ISessionTraceRecorder，
+    /// 将 AgentLoop 全链路数据写入 SessionTraceStore，供 DashboardPage 展示。
     ///
-    /// 每个 OnBeforePrompt 创建新 trace，OnLoopFinished 归档。
+    /// 替代原先 SessionTraceInterceptor（基于 AgentPipeline 的拦截器方式）。
     /// </summary>
-    public class SessionTraceInterceptor : AgentInterceptorBase
+    internal class SessionTraceRecorder : ISessionTraceRecorder
     {
+        private readonly ILogger _logger;
+
         [ThreadStatic]
         private static Dictionary<string, RunTrace> _traces;
 
         [ThreadStatic]
         private static Dictionary<string, RoundTrace> _currentRounds;
 
-        public static bool Enabled = true;
-
-        public override void OnBeforePrompt(PromptContext ctx)
+        public SessionTraceRecorder(ILogger logger = null)
         {
-            if (!Enabled) return;
+            _logger = logger;
+        }
+
+        public void BeginRun(string runId, IReadOnlyList<IGameEvent> events, string userMessage)
+        {
+            if (!SessionTraceStore.Enabled) return;
 
             if (_traces == null)
                 _traces = new Dictionary<string, RunTrace>();
 
-            _traces[ctx.RunId] = new RunTrace
+            _traces[runId] = new RunTrace
             {
-                RunId = ctx.RunId,
+                RunId = runId,
                 Role = "Agent",
                 StartTime = DateTime.UtcNow,
-                UserMessage = ctx.UserMessage ?? ""
+                UserMessage = userMessage ?? ""
             };
 
-            if (ctx.Events != null)
+            if (events != null)
             {
-                var trace = _traces[ctx.RunId];
-                foreach (var evt in ctx.Events)
+                var trace = _traces[runId];
+                foreach (var evt in events)
                 {
                     trace.Events.Add(new EventSummary
                     {
@@ -51,18 +59,17 @@ namespace RimLife.Infrastructure
             }
         }
 
-        public override void OnAfterLlm(LlmContext ctx)
+        public void RecordLlmRound(string runId, int round,
+            IReadOnlyList<LlmMessage> requestMessages, LlmResponse response)
         {
-            if (!Enabled) return;
-            var trace = GetTrace(ctx.RunId);
-            if (trace == null) return;
+            if (!SessionTraceStore.Enabled) return;
+            var trace = GetTrace(runId);
+            if (trace == null || response == null) return;
 
-            var response = ctx.Response;
-            if (response == null) return;
-
-            if (trace.Rounds.Count == 0 && ctx.Request?.Messages != null)
+            // 首次 LLM 调用时从 system 消息解析工作空间信息
+            if (trace.Rounds.Count == 0 && requestMessages != null)
             {
-                foreach (var msg in ctx.Request.Messages)
+                foreach (var msg in requestMessages)
                 {
                     if (msg.Role == "system" && !string.IsNullOrEmpty(msg.Content))
                     {
@@ -72,9 +79,9 @@ namespace RimLife.Infrastructure
                 }
             }
 
-            var round = new RoundTrace
+            var roundTrace = new RoundTrace
             {
-                RoundIndex = ctx.Round,
+                RoundIndex = round,
                 ResponseContent = response.Content ?? "",
                 FinishReason = response.FinishReason ?? "",
                 InputTokens = response.UsageInputTokens ?? 0,
@@ -83,9 +90,9 @@ namespace RimLife.Infrastructure
                 Model = response.Model ?? ""
             };
 
-            if (ctx.Request?.Messages != null)
+            if (requestMessages != null)
             {
-                foreach (var msg in ctx.Request.Messages)
+                foreach (var msg in requestMessages)
                 {
                     var snap = new MessageSnapshot
                     {
@@ -94,51 +101,51 @@ namespace RimLife.Infrastructure
                     };
                     if (msg.ToolCalls != null && msg.ToolCalls.Count > 0)
                     {
-                        var sb = new System.Text.StringBuilder();
+                        var sb = new StringBuilder();
                         foreach (var tc in msg.ToolCalls)
                             sb.AppendLine($"[{tc.Name}] {tc.Arguments}");
                         snap.ToolCallsJson = sb.ToString().TrimEnd();
                     }
-                    round.RequestMessages.Add(snap);
+                    roundTrace.RequestMessages.Add(snap);
                 }
             }
 
-            trace.Rounds.Add(round);
+            trace.Rounds.Add(roundTrace);
 
             if (_currentRounds == null)
                 _currentRounds = new Dictionary<string, RoundTrace>();
-            _currentRounds[ctx.RunId] = round;
+            _currentRounds[runId] = roundTrace;
         }
 
-        public override void OnAfterToolCall(ToolCallContext ctx)
+        public void RecordToolCall(string runId, int round, string toolName,
+            string arguments, string result, bool cancelled)
         {
-            if (!Enabled || _currentRounds == null) return;
-            if (!_currentRounds.TryGetValue(ctx.RunId, out var round)) return;
+            if (!SessionTraceStore.Enabled || _currentRounds == null) return;
+            if (!_currentRounds.TryGetValue(runId, out var roundTrace)) return;
 
-            round.ToolCalls.Add(new ToolCallTrace
+            roundTrace.ToolCalls.Add(new ToolCallTrace
             {
-                ToolName = ctx.ToolName ?? "",
-                Arguments = ctx.Arguments ?? "",
-                Result = ctx.Result ?? "",
-                Cancelled = ctx.Cancelled
+                ToolName = toolName ?? "",
+                Arguments = arguments ?? "",
+                Result = result ?? "",
+                Cancelled = cancelled
             });
         }
 
-        public override void OnLoopFinished(LoopContext ctx)
+        public void EndRun(string runId, int rounds, int eventsProcessed, bool normalCompletion)
         {
-            var trace = GetTrace(ctx.RunId);
+            var trace = GetTrace(runId);
             if (trace == null) return;
 
-            trace.Role = RoleLabel(ctx.Role);
-            trace.TotalRounds = ctx.Rounds;
-            trace.EventsProcessed = ctx.EventsProcessed;
-            trace.NormalCompletion = ctx.NormalCompletion;
+            trace.TotalRounds = rounds;
+            trace.EventsProcessed = eventsProcessed;
+            trace.NormalCompletion = normalCompletion;
             trace.EndTime = DateTime.UtcNow;
 
             SessionTraceStore.Add(trace);
 
-            _traces.Remove(ctx.RunId);
-            _currentRounds?.Remove(ctx.RunId);
+            _traces?.Remove(runId);
+            _currentRounds?.Remove(runId);
         }
 
         private static RunTrace GetTrace(string runId)
@@ -159,17 +166,6 @@ namespace RimLife.Infrastructure
                     trace.WorkspaceId = t.Substring("工作空间 ID：".Length).Trim();
                 else if (t.StartsWith("工作空间："))
                     trace.WorkspaceLabel = t.Substring("工作空间：".Length).Trim();
-            }
-        }
-
-        private static string RoleLabel(AgentRole role)
-        {
-            switch (role)
-            {
-                case AgentRole.Director: return "导演";
-                case AgentRole.Screenwriter: return "编剧";
-                case AgentRole.Improviser: return "即兴编剧";
-                default: return role.ToString();
             }
         }
     }

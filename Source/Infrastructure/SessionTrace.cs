@@ -150,12 +150,15 @@ namespace RimLife.Infrastructure
 
     /// <summary>
     /// 会话追踪存储。线程安全，保留最近 N 条 RunTrace。
-    /// 由 SessionTraceInterceptor 写入，由 DashboardPage UI 读取。
+    /// 由 SessionTraceRecorder 写入，由 DashboardPage UI 读取。
     /// </summary>
     public static class SessionTraceStore
     {
         /// <summary>最大保留的 RunTrace 数量。</summary>
         public const int MaxTraces = 50;
+
+        /// <summary>是否启用会话追踪。</summary>
+        public static bool Enabled = true;
 
         private static readonly List<RunTrace> _traces = new List<RunTrace>();
         private static readonly object _lock = new object();
